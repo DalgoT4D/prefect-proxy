@@ -16,6 +16,13 @@ from dotenv import load_dotenv
 
 from helpers import cleaned_name_for_dbtblock
 from exception import PrefectException
+from schemas import (
+    AirbyteServerCreate,
+    AirbyteConnectionCreate,
+    PrefectShellSetup,
+    DbtCoreCreate,
+    RunFlow,
+)
 
 load_dotenv()
 
@@ -41,15 +48,15 @@ async def get_airbyte_server_block_id(blockname) -> str | None:
         return None
 
 
-async def create_airbyte_server_block(blockname) -> str:
+async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
     """Create airbyte server block in prefect"""
 
     airbyteservercblock = AirbyteServer(
-        server_host=os.getenv("AIRBYTE_SERVER_HOST"),
-        server_port=os.getenv("AIRBYTE_SERVER_PORT"),
-        api_version=os.getenv("AIRBYTE_SERVER_APIVER"),
+        server_host=payload.serverHost,
+        server_port=payload.serverPort,
+        api_version=payload.apiVersion,
     )
-    await airbyteservercblock.save(blockname)
+    await airbyteservercblock.save(payload.blockName)
     return _block_id(airbyteservercblock)
 
 
@@ -74,7 +81,7 @@ async def get_airbyte_connection_block_id(blockname) -> str | None:
 
 
 async def create_airbyte_connection_block(
-    conninfo,
+    conninfo: AirbyteConnectionCreate,
 ) -> str:
     """Create airbyte connection block"""
 
@@ -114,13 +121,13 @@ async def get_shell_block_id(blockname) -> str | None:
         return None
 
 
-async def create_shell_block(shell):
+async def create_shell_block(shell: PrefectShellSetup):
     """Create a prefect shell block"""
 
     shell_operation_block = ShellOperation(
         commands=shell.commands, env=shell.env, working_dir=shell.workingDir
     )
-    await shell_operation_block.save(shell.blockname)
+    await shell_operation_block.save(shell.blockName)
     return _block_id(shell_operation_block)
 
 
@@ -139,50 +146,56 @@ async def get_dbtcore_block_id(blockname) -> str | None:
         return None
 
 
-async def _create_dbt_cli_profile(profile, wtype: str, credentials: dict):
+async def _create_dbt_cli_profile(payload: DbtCoreCreate):
     """credentials are decrypted by now"""
 
-    if wtype == "postgres":
+    if payload.wtype == "postgres":
         dbcredentials = DatabaseCredentials(
             driver=SyncDriver.POSTGRESQL_PSYCOPG2,
-            username=credentials["username"],
-            password=credentials["password"],
-            database=credentials["database"],
-            host=credentials["host"],
-            port=credentials["port"],
+            username=payload.credentials["username"],
+            password=payload.credentials["password"],
+            database=payload.credentials["database"],
+            host=payload.credentials["host"],
+            port=payload.credentials["port"],
         )
         target_configs = PostgresTargetConfigs(
-            credentials=dbcredentials, schema=profile.target_configs_schema
+            credentials=dbcredentials, schema=payload.profile.target_configs_schema
         )
 
-    elif wtype == "bigquery":
-        dbcredentials = GcpCredentials(service_account_info=credentials)
+    elif payload.wtype == "bigquery":
+        dbcredentials = GcpCredentials(service_account_info=payload.credentials)
         target_configs = BigQueryTargetConfigs(
-            credentials=dbcredentials, schema=profile.target_configs_schema
+            credentials=dbcredentials, schema=payload.profile.target_configs_schema
         )
     else:
-        raise PrefectException("unknown wtype: " + wtype)
+        raise PrefectException("unknown wtype: " + payload.wtype)
 
     dbt_cli_profile = DbtCliProfile(
-        name=profile.name, target=profile.target, target_configs=target_configs
+        name=payload.profile.name,
+        target=payload.profile.target,
+        target_configs=target_configs,
     )
-    await dbt_cli_profile.save(cleaned_name_for_dbtblock(profile.name), overwrite=True)
+    await dbt_cli_profile.save(
+        cleaned_name_for_dbtblock(payload.profile.name), overwrite=True
+    )
     return dbt_cli_profile
 
 
-async def create_dbt_core_block(dbtcore, profile, wtype: str, credentials: dict):
+async def create_dbt_core_block(payload: DbtCoreCreate):
     """Create a dbt core block in prefect"""
 
-    dbt_cli_profile = await _create_dbt_cli_profile(profile, wtype, credentials)
+    dbt_cli_profile = await _create_dbt_cli_profile(payload)
     dbt_core_operation = DbtCoreOperation(
-        commands=dbtcore.commands,
-        env=dbtcore.env,
-        working_dir=dbtcore.working_dir,
-        profiles_dir=dbtcore.profiles_dir,
-        project_dir=dbtcore.project_dir,
+        commands=payload.commands,
+        env=payload.env,
+        working_dir=payload.working_dir,
+        profiles_dir=payload.profiles_dir,
+        project_dir=payload.project_dir,
         dbt_cli_profile=dbt_cli_profile,
     )
-    await dbt_core_operation.save(cleaned_name_for_dbtblock(dbtcore.block_name))
+    await dbt_core_operation.save(
+        cleaned_name_for_dbtblock(payload.blockName), overwrite=True
+    )
 
     return _block_id(dbt_core_operation)
 
@@ -194,14 +207,14 @@ def delete_dbt_core_block(block_id):
 
 # ================================================================================================
 @flow
-def run_airbyte_connection_prefect_flow(blockname):
+def run_airbyte_connection_prefect_flow(payload: RunFlow):
     """Prefect flow to run airbyte connection"""
-    airbyte_connection = AirbyteConnection.load(blockname)
+    airbyte_connection = AirbyteConnection.load(payload.blockName)
     return run_connection_sync(airbyte_connection)
 
 
 @flow
-def run_dbtcore_prefect_flow(blockname):
+def run_dbtcore_prefect_flow(payload: RunFlow):
     """Prefect flow to run dbt"""
-    dbt_op = DbtCoreOperation.load(blockname)
-    dbt_op.run()
+    dbt_op = DbtCoreOperation.load(payload.blockName)
+    return dbt_op.run()
