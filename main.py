@@ -11,8 +11,11 @@ from service import (
     create_dbt_core_block,
     get_shell_block_id,
     create_shell_block,
-    run_airbyte_connection_prefect_flow,
     run_dbtcore_prefect_flow,
+    post_deployment,
+    get_flow_runs_by_deployment_id,
+    run_airbyte_connection_prefect_flow,
+    get_deployments_by_org_slug,
 )
 from schemas import (
     AirbyteServerCreate,
@@ -20,6 +23,7 @@ from schemas import (
     PrefectShellSetup,
     DbtCoreCreate,
     RunFlow,
+    DeploymentCreate,
 )
 
 app = FastAPI()
@@ -109,3 +113,26 @@ async def sync_airbyte_connection_flow(payload: RunFlow):
 async def sync_dbtcore_flow(payload: RunFlow):
     """Prefect flow to run dbt"""
     return run_dbtcore_prefect_flow(payload)
+
+
+@app.post("/proxy/deployments/")
+async def post_dataflow(payload: DeploymentCreate):
+    """Create a deployment from an existing flow"""
+    await post_deployment(payload)
+    return {"success": "?"}
+
+
+@app.get("/proxy/flow_runs")
+def get_flow_runs(deployment_id: str, limit: int = 0):
+    """Get Flow Runs for a deployment"""
+
+    flow_runs = get_flow_runs_by_deployment_id(deployment_id, limit)
+    return {"flow_runs": flow_runs}
+
+
+@app.get("/proxy/deployments")
+def get_deployments(org_slug: str):
+    """Get Flow Runs for a deployment"""
+
+    deployments = get_deployments_by_org_slug(org_slug)
+    return {"deployments": deployments}

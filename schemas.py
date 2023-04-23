@@ -57,3 +57,14 @@ class RunFlow(BaseModel):
     """just a blockname"""
 
     blockName: str
+
+
+class DeploymentCreate(BaseModel):
+    """parameters to create a deployment from a flow"""
+
+    flow_name: str
+    deployment_name: str
+    org_slug: str
+    connection_blocks: list
+    dbt_blocks: list
+    cron: str

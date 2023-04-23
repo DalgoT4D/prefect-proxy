@@ -2,9 +2,11 @@
 import os
 import requests
 
-from prefect import flow
+
+from prefect.deployments import Deployment
+from prefect.server.schemas.schedules import CronSchedule
 from prefect_airbyte import AirbyteConnection, AirbyteServer
-from prefect_airbyte.flows import run_connection_sync
+
 from prefect_sqlalchemy import DatabaseCredentials, SyncDriver
 from prefect_gcp import GcpCredentials
 from prefect_dbt.cli.configs import PostgresTargetConfigs
@@ -21,10 +23,28 @@ from schemas import (
     AirbyteConnectionCreate,
     PrefectShellSetup,
     DbtCoreCreate,
+    DeploymentCreate,
     RunFlow,
+)
+from flows import (
+    deployment_schedule_flow,
+    run_airbyte_connection_flow,
+    run_dbtcore_flow,
 )
 
 load_dotenv()
+
+FLOW_RUN_FAILED = "FAILED"
+FLOW_RUN_COMPLETED = "COMPLETED"
+FLOW_RUN_SCHEDULED = "SCHEDULED"
+
+
+def prefect_post(endpoint, payload):
+    """POST request to prefect server"""
+    root = os.getenv("PREFECT_API_URL")
+    res = requests.post(f"{root}/{endpoint}", timeout=30, json=payload)
+    res.raise_for_status()
+    return res.json()
 
 
 def prefect_delete(endpoint):
@@ -206,15 +226,80 @@ def delete_dbt_core_block(block_id):
 
 
 # ================================================================================================
-@flow
 def run_airbyte_connection_prefect_flow(payload: RunFlow):
-    """Prefect flow to run airbyte connection"""
-    airbyte_connection = AirbyteConnection.load(payload.blockName)
-    return run_connection_sync(airbyte_connection)
+    """Run an Airbyte Connection sync"""
+
+    return run_airbyte_connection_flow(payload)
 
 
-@flow
 def run_dbtcore_prefect_flow(payload: RunFlow):
-    """Prefect flow to run dbt"""
-    dbt_op = DbtCoreOperation.load(payload.blockName)
-    return dbt_op.run()
+    """Run a dbt core flow"""
+
+    return run_dbtcore_flow(payload)
+
+
+async def post_deployment(payload: DeploymentCreate) -> None:
+    """create a deployment from a flow and a schedule"""
+    deployment = Deployment.build_from_flow(
+        flow=deployment_schedule_flow.with_options(name=payload.flow_name),
+        name=payload.deployment_name,
+        work_queue_name="ddp",
+        tags=[payload.org_slug],
+    )
+    deployment.parameters = {
+        "airbyte_blocks": payload.connection_blocks,
+        "dbt_blocks": payload.dbt_blocks,
+    }
+    deployment.schedule = CronSchedule(cron=payload.cron)
+    await deployment.apply()
+
+
+def get_flow_runs_by_deployment_id(deployment_id, limit):
+    """Fetch flow runs of a deployment that are FAILED/COMPLETED,
+    sorted by descending start time of each run"""
+    query = {
+        "sort": "START_TIME_DESC",
+        "deployments": {"id": {"any_": [deployment_id]}},
+        "flow_runs": {
+            "operator": "and_",
+            "state": {"type": {"any_": [FLOW_RUN_COMPLETED, FLOW_RUN_FAILED]}},
+        },
+    }
+
+    if limit > 0:
+        query["limit"] = limit
+
+    flow_runs = []
+
+    for flow_run in prefect_post("flow_runs/filter", query):
+        flow_runs.append(
+            {
+                "tags": flow_run["tags"],
+                "startTime": flow_run["start_time"],
+                "status": flow_run["state"]["type"],
+            }
+        )
+
+    return flow_runs
+
+
+def get_deployments_by_org_slug(org_slug):
+    """fetch all deployments by org"""
+    res = prefect_post(
+        "deployments/filter",
+        {"deployments": {"tags": {"all_": [org_slug]}}},
+    )
+
+    deployments = []
+
+    for deployment in res:
+        deployments.append(
+            {
+                "name": deployment["name"],
+                "id": deployment["id"],
+                "tags": deployment["tags"],
+                "cron": deployment["schedule"]["cron"],
+            }
+        )
+
+    return deployments
