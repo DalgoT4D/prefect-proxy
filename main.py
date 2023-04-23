@@ -6,6 +6,7 @@ from service import (
     get_airbyte_server_block_id,
     create_airbyte_server_block,
     get_airbyte_connection_block_id,
+    get_airbyte_connection_block,
     create_airbyte_connection_block,
     get_dbtcore_block_id,
     create_dbt_core_block,
@@ -46,11 +47,18 @@ async def post_airbyte_server(payload: AirbyteServerCreate):
 
 
 # =============================================================================
-@app.get("/proxy/blocks/airbyte/connection/{blockname}")
-async def get_airbyte_connection(blockname):
+@app.get("/proxy/blocks/airbyte/connection/byblockname/{blockname}")
+async def get_airbyte_connection_by_blockname(blockname):
     """look up airbyte connection block by name and return block_id"""
     block_id = await get_airbyte_connection_block_id(blockname)
     return {"block_id": block_id}
+
+
+@app.get("/proxy/blocks/airbyte/connection/byblockid/{blockid}")
+async def get_airbyte_connection_by_blockid(blockid):
+    """look up airbyte connection block by id and return block data"""
+    block = await get_airbyte_connection_block(blockid)
+    return block
 
 
 @app.post("/proxy/blocks/airbyte/connection/")

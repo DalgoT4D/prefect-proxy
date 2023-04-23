@@ -47,6 +47,14 @@ def prefect_post(endpoint, payload):
     return res.json()
 
 
+def prefect_get(endpoint):
+    """GET request to prefect server"""
+    root = os.getenv("PREFECT_API_URL")
+    res = requests.get(f"{root}/{endpoint}", timeout=30)
+    res.raise_for_status()
+    return res.json()
+
+
 def prefect_delete(endpoint):
     """DELETE request to prefect server"""
     root = os.getenv("PREFECT_API_URL")
@@ -98,6 +106,12 @@ async def get_airbyte_connection_block_id(blockname) -> str | None:
         return _block_id(block)
     except ValueError:
         return None
+
+
+async def get_airbyte_connection_block(blockid):
+    """look up and return block data for an airbyte connection"""
+    result = prefect_get(f"block_documents/{blockid}")
+    return result
 
 
 async def create_airbyte_connection_block(
