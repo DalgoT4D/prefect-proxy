@@ -17,6 +17,7 @@ from service import (
     get_flow_runs_by_deployment_id,
     run_airbyte_connection_prefect_flow,
     get_deployments_by_org_slug,
+    get_flow_run_logs,
 )
 from schemas import (
     AirbyteServerCreate,
@@ -144,3 +145,9 @@ def get_deployments(org_slug: str):
 
     deployments = get_deployments_by_org_slug(org_slug)
     return {"deployments": deployments}
+
+
+@app.get("/proxy/flow_runs/logs/{flow_run_id}")
+def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
+    """paginate the logs from a flow run"""
+    return get_flow_run_logs(flow_run_id, offset)

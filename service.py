@@ -43,6 +43,7 @@ def prefect_post(endpoint, payload):
     """POST request to prefect server"""
     root = os.getenv("PREFECT_API_URL")
     res = requests.post(f"{root}/{endpoint}", timeout=30, json=payload)
+    print(res.text)
     res.raise_for_status()
     return res.json()
 
@@ -317,3 +318,31 @@ def get_deployments_by_org_slug(org_slug):
         )
 
     return deployments
+
+
+def parse_log(log):
+    """select level, timestamp, message from ..."""
+    return {
+        "level": log["level"],
+        "timestamp": log["timestamp"],
+        "message": log["message"],
+    }
+
+
+def get_flow_run_logs(flow_run_id: str, offset: int):
+    """return logs from a flow run"""
+    logs = prefect_post(
+        "logs/filter",
+        {
+            "logs": {
+                "operator": "and_",
+                "flow_run_id": {"any_": [flow_run_id]},
+            },
+            "sort": "TIMESTAMP_ASC",
+            "offset": offset,
+        },
+    )
+    return {
+        "offset": offset,
+        "logs": list(map(parse_log, logs)),
+    }
