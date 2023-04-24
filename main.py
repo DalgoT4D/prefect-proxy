@@ -17,6 +17,7 @@ from service import (
     get_flow_runs_by_deployment_id,
     run_airbyte_connection_prefect_flow,
     get_deployments_by_filter,
+    get_flow_run_logs,
 )
 from schemas import (
     AirbyteServerCreate,
@@ -25,7 +26,7 @@ from schemas import (
     DbtCoreCreate,
     RunFlow,
     DeploymentCreate,
-    DeploymentFetch
+    DeploymentFetch,
 )
 
 app = FastAPI()
@@ -143,8 +144,17 @@ def get_flow_runs(deployment_id: str, limit: int = 0):
 def post_deployments(payload: DeploymentFetch):
     """Get deployments by various filters"""
 
-    deployments = get_deployments_by_filter(org_slug=payload.org_slug, deployment_ids=payload.deployment_ids)
+    deployments = get_deployments_by_filter(
+        org_slug=payload.org_slug, deployment_ids=payload.deployment_ids
+    )
     return {"deployments": deployments}
+
+
+@app.get("/proxy/flow_runs/logs/{flow_run_id}")
+def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
+    """paginate the logs from a flow run"""
+    return get_flow_run_logs(flow_run_id, offset)
+
 
 @app.delete("/proxy/deployments/{deployment_id}")
 def delete_deployment(deployment_id):
