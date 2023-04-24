@@ -145,3 +145,11 @@ def post_deployments(payload: DeploymentFetch):
 
     deployments = get_deployments_by_filter(org_slug=payload.org_slug, deployment_ids=payload.deployment_ids)
     return {"deployments": deployments}
+
+@app.delete("/proxy/deployments/{deployment_id}")
+def delete_deployment(deployment_id):
+    """Delete a deployment"""
+
+    root = os.getenv("PREFECT_API_URL")
+    res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
+    res.raise_for_status()

@@ -317,7 +317,7 @@ def get_deployments_by_filter(org_slug, deployment_ids=[]):
         deployments.append(
             {
                 "name": deployment["name"],
-                "id": deployment["id"],
+                "deploymentId": deployment["id"],
                 "tags": deployment["tags"],
                 "cron": deployment["schedule"]["cron"],
             }
