@@ -255,7 +255,7 @@ def run_dbtcore_prefect_flow(payload: RunFlow):
 
 async def post_deployment(payload: DeploymentCreate) -> None:
     """create a deployment from a flow and a schedule"""
-    deployment = Deployment.build_from_flow(
+    deployment = await Deployment.build_from_flow(
         flow=deployment_schedule_flow.with_options(name=payload.flow_name),
         name=payload.deployment_name,
         work_queue_name="ddp",
@@ -266,7 +266,11 @@ async def post_deployment(payload: DeploymentCreate) -> None:
         "dbt_blocks": payload.dbt_blocks,
     }
     deployment.schedule = CronSchedule(cron=payload.cron)
-    await deployment.apply()
+    deployment_id = await deployment.apply()
+    return {
+        'id': deployment_id,
+        'name': deployment.name
+    }
 
 
 def get_flow_runs_by_deployment_id(deployment_id, limit):
@@ -298,11 +302,14 @@ def get_flow_runs_by_deployment_id(deployment_id, limit):
     return flow_runs
 
 
-def get_deployments_by_org_slug(org_slug):
+def get_deployments_by_filter(org_slug, deployment_ids=[]):
+    # pylint: disable=dangerous-default-value
     """fetch all deployments by org"""
+    query = {"deployments": {"operator": "and_", "tags": {"all_": [org_slug]}, "id": {"any_": deployment_ids} }}
+
     res = prefect_post(
         "deployments/filter",
-        {"deployments": {"tags": {"all_": [org_slug]}}},
+        query,
     )
 
     deployments = []
@@ -311,7 +318,7 @@ def get_deployments_by_org_slug(org_slug):
         deployments.append(
             {
                 "name": deployment["name"],
-                "id": deployment["id"],
+                "deploymentId": deployment["id"],
                 "tags": deployment["tags"],
                 "cron": deployment["schedule"]["cron"],
             }

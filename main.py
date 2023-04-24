@@ -16,7 +16,7 @@ from service import (
     post_deployment,
     get_flow_runs_by_deployment_id,
     run_airbyte_connection_prefect_flow,
-    get_deployments_by_org_slug,
+    get_deployments_by_filter,
     get_flow_run_logs,
 )
 from schemas import (
@@ -26,6 +26,7 @@ from schemas import (
     DbtCoreCreate,
     RunFlow,
     DeploymentCreate,
+    DeploymentFetch,
 )
 
 app = FastAPI()
@@ -127,8 +128,8 @@ async def sync_dbtcore_flow(payload: RunFlow):
 @app.post("/proxy/deployments/")
 async def post_dataflow(payload: DeploymentCreate):
     """Create a deployment from an existing flow"""
-    await post_deployment(payload)
-    return {"success": "?"}
+    deployment = await post_deployment(payload)
+    return {"deployment": deployment}
 
 
 @app.get("/proxy/flow_runs")
@@ -139,11 +140,13 @@ def get_flow_runs(deployment_id: str, limit: int = 0):
     return {"flow_runs": flow_runs}
 
 
-@app.get("/proxy/deployments")
-def get_deployments(org_slug: str):
-    """Get Flow Runs for a deployment"""
+@app.post("/proxy/deployments/filter")
+def post_deployments(payload: DeploymentFetch):
+    """Get deployments by various filters"""
 
-    deployments = get_deployments_by_org_slug(org_slug)
+    deployments = get_deployments_by_filter(
+        org_slug=payload.org_slug, deployment_ids=payload.deployment_ids
+    )
     return {"deployments": deployments}
 
 
@@ -151,3 +154,12 @@ def get_deployments(org_slug: str):
 def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
     """paginate the logs from a flow run"""
     return get_flow_run_logs(flow_run_id, offset)
+
+
+@app.delete("/proxy/deployments/{deployment_id}")
+def delete_deployment(deployment_id):
+    """Delete a deployment"""
+
+    root = os.getenv("PREFECT_API_URL")
+    res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
+    res.raise_for_status()
