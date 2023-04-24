@@ -68,3 +68,9 @@ class DeploymentCreate(BaseModel):
     connection_blocks: list
     dbt_blocks: list
     cron: str
+
+class DeploymentFetch(BaseModel):
+    """parameters to filter deployments by while fetching"""
+
+    org_slug: str
+    deployment_ids: list[str] | None
