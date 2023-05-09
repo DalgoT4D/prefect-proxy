@@ -12,6 +12,12 @@ class AirbyteServerCreate(BaseModel):
     apiVersion: str
 
 
+class AirbyteServerBlockResponse(BaseModel):
+    """response from the airbyte server block"""
+
+    block_id: str
+
+
 class AirbyteConnectionCreate(BaseModel):
     """payload to create an airbyte connection block"""
 
@@ -19,6 +25,11 @@ class AirbyteConnectionCreate(BaseModel):
     connectionId: str
     connectionBlockName: str
 
+
+class AirbyteConnectionBlockResponse(BaseModel):
+    """response from the airbyte connection block"""
+
+    block_id: str
 
 class PrefectShellSetup(BaseModel):
     """payload to create a shell block"""
@@ -37,6 +48,14 @@ class DbtProfileCreate(BaseModel):
     target_configs_schema: str
 
 
+class DbtCliProfile(BaseModel):
+    """this is part of the dbt block creation payload"""
+
+    name: str
+    target: str
+    target_configs: str
+
+
 class DbtCoreCreate(BaseModel):
     """payload to create a dbt core command block"""
 
@@ -51,6 +70,11 @@ class DbtCoreCreate(BaseModel):
     working_dir: str
     profiles_dir: str
     project_dir: str
+
+class DbtCoreBlockResponse(BaseModel):
+    """response from the dbt block"""
+
+    block_id: str
 
 
 class RunFlow(BaseModel):
