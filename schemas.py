@@ -1,5 +1,6 @@
 """Schemas for requests"""
 
+from uuid import UUID
 from pydantic import BaseModel
 
 
@@ -77,11 +78,28 @@ class DbtCoreBlockResponse(BaseModel):
     block_id: str
 
 
+class DeploymentSchema(BaseModel):
+    """this is part of the deployment block creation payload"""
+
+    id: UUID
+    name: str
+
+class PostDeploymentResponse(BaseModel):
+    """response from the post deployment block"""
+
+    deployment: DeploymentSchema
+
+
 class RunFlow(BaseModel):
     """just a blockname"""
 
     blockName: str
 
+
+class FlowRunsResponse(BaseModel):
+    """response from the flow runs block"""
+
+    flow_runs: list
 
 class DeploymentCreate(BaseModel):
     """parameters to create a deployment from a flow"""
