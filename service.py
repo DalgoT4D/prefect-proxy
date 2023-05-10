@@ -7,9 +7,8 @@ from prefect.deployments import Deployment
 from prefect.server.schemas.schedules import CronSchedule
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 
-from prefect_sqlalchemy import DatabaseCredentials, SyncDriver
 from prefect_gcp import GcpCredentials
-from prefect_dbt.cli.configs import PostgresTargetConfigs
+from prefect_dbt.cli.configs import TargetConfigs
 from prefect_dbt.cli.configs import BigQueryTargetConfigs
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
@@ -185,22 +184,23 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate):
     """credentials are decrypted by now"""
 
     if payload.wtype == "postgres":
-        dbcredentials = DatabaseCredentials(
-            driver=SyncDriver.POSTGRESQL_PSYCOPG2,
-            username=payload.credentials["username"],
-            password=payload.credentials["password"],
-            database=payload.credentials["database"],
-            host=payload.credentials["host"],
-            port=payload.credentials["port"],
-        )
-        target_configs = PostgresTargetConfigs(
-            credentials=dbcredentials, schema=payload.profile.target_configs_schema
+        target_configs = TargetConfigs(
+            type="postgres",
+            schema=payload.profile.target_configs_schema,
+            extras={
+                "user": payload.credentials["username"],
+                "password": payload.credentials["password"],
+                "dbname": payload.credentials["database"],
+                "host": payload.credentials["host"],
+                "port": payload.credentials["port"],
+            },
         )
 
     elif payload.wtype == "bigquery":
         dbcredentials = GcpCredentials(service_account_info=payload.credentials)
         target_configs = BigQueryTargetConfigs(
-            credentials=dbcredentials, schema=payload.profile.target_configs_schema
+            credentials=dbcredentials,
+            schema=payload.profile.target_configs_schema,
         )
     else:
         raise PrefectException("unknown wtype: " + payload.wtype)
@@ -210,9 +210,9 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate):
         target=payload.profile.target,
         target_configs=target_configs,
     )
-    await dbt_cli_profile.save(
-        cleaned_name_for_dbtblock(payload.profile.name), overwrite=True
-    )
+    # await dbt_cli_profile.save(
+    #     cleaned_name_for_dbtblock(payload.profile.name), overwrite=True
+    # )
     return dbt_cli_profile
 
 
@@ -267,10 +267,7 @@ async def post_deployment(payload: DeploymentCreate) -> None:
     }
     deployment.schedule = CronSchedule(cron=payload.cron)
     deployment_id = await deployment.apply()
-    return {
-        'id': deployment_id,
-        'name': deployment.name
-    }
+    return {"id": deployment_id, "name": deployment.name}
 
 
 def get_flow_runs_by_deployment_id(deployment_id, limit):
@@ -305,7 +302,13 @@ def get_flow_runs_by_deployment_id(deployment_id, limit):
 def get_deployments_by_filter(org_slug, deployment_ids=[]):
     # pylint: disable=dangerous-default-value
     """fetch all deployments by org"""
-    query = {"deployments": {"operator": "and_", "tags": {"all_": [org_slug]}, "id": {"any_": deployment_ids} }}
+    query = {
+        "deployments": {
+            "operator": "and_",
+            "tags": {"all_": [org_slug]},
+            "id": {"any_": deployment_ids},
+        }
+    }
 
     res = prefect_post(
         "deployments/filter",
