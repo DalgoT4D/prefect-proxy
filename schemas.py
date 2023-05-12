@@ -1,5 +1,6 @@
 """Schemas for requests"""
 
+from uuid import UUID
 from pydantic import BaseModel
 
 
@@ -12,6 +13,12 @@ class AirbyteServerCreate(BaseModel):
     apiVersion: str
 
 
+class AirbyteServerBlockResponse(BaseModel):
+    """response from the airbyte server block"""
+
+    block_id: str
+
+
 class AirbyteConnectionCreate(BaseModel):
     """payload to create an airbyte connection block"""
 
@@ -19,6 +26,11 @@ class AirbyteConnectionCreate(BaseModel):
     connectionId: str
     connectionBlockName: str
 
+
+class AirbyteConnectionBlockResponse(BaseModel):
+    """response from the airbyte connection block"""
+
+    block_id: str
 
 class PrefectShellSetup(BaseModel):
     """payload to create a shell block"""
@@ -37,6 +49,14 @@ class DbtProfileCreate(BaseModel):
     target_configs_schema: str
 
 
+class DbtCliProfile(BaseModel):
+    """this is part of the dbt block creation payload"""
+
+    name: str
+    target: str
+    target_configs: str
+
+
 class DbtCoreCreate(BaseModel):
     """payload to create a dbt core command block"""
 
@@ -52,12 +72,34 @@ class DbtCoreCreate(BaseModel):
     profiles_dir: str
     project_dir: str
 
+class DbtCoreBlockResponse(BaseModel):
+    """response from the dbt block"""
+
+    block_id: str
+
+
+class DeploymentSchema(BaseModel):
+    """this is part of the deployment block creation payload"""
+
+    id: UUID
+    name: str
+
+class PostDeploymentResponse(BaseModel):
+    """response from the post deployment block"""
+
+    deployment: DeploymentSchema
+
 
 class RunFlow(BaseModel):
     """just a blockname"""
 
     blockName: str
 
+
+class FlowRunsResponse(BaseModel):
+    """response from the flow runs block"""
+
+    flow_runs: list
 
 class DeploymentCreate(BaseModel):
     """parameters to create a deployment from a flow"""
