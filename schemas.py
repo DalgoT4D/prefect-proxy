@@ -32,6 +32,7 @@ class AirbyteConnectionBlockResponse(BaseModel):
 
     block_id: str
 
+
 class PrefectShellSetup(BaseModel):
     """payload to create a shell block"""
 
@@ -72,6 +73,7 @@ class DbtCoreCreate(BaseModel):
     profiles_dir: str
     project_dir: str
 
+
 class DbtCoreBlockResponse(BaseModel):
     """response from the dbt block"""
 
@@ -84,6 +86,7 @@ class DeploymentSchema(BaseModel):
     id: UUID
     name: str
 
+
 class PostDeploymentResponse(BaseModel):
     """response from the post deployment block"""
 
@@ -94,12 +97,15 @@ class RunFlow(BaseModel):
     """just a blockname"""
 
     blockName: str
+    flowName: str = None
+    flowRunName: str = None
 
 
 class FlowRunsResponse(BaseModel):
     """response from the flow runs block"""
 
     flow_runs: list
+
 
 class DeploymentCreate(BaseModel):
     """parameters to create a deployment from a flow"""
@@ -110,6 +116,7 @@ class DeploymentCreate(BaseModel):
     connection_blocks: list
     dbt_blocks: list
     cron: str
+
 
 class DeploymentFetch(BaseModel):
     """parameters to filter deployments by while fetching"""
