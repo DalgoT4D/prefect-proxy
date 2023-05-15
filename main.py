@@ -99,8 +99,8 @@ async def get_dbtcore(blockname):
 async def post_dbtcore(payload: DbtCoreCreate):
     """create a new dbt_core block with this block name,
     raise an exception if the name is already in use"""
-    block_id = await create_dbt_core_block(payload)
-    return {"block_id": block_id}
+    block_id, cleaned_blockname = await create_dbt_core_block(payload)
+    return {"block_id": block_id, "block_name": cleaned_blockname}
 
 
 # =============================================================================
