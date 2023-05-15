@@ -228,11 +228,10 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         project_dir=payload.project_dir,
         dbt_cli_profile=dbt_cli_profile,
     )
-    await dbt_core_operation.save(
-        cleaned_name_for_dbtblock(payload.blockName), overwrite=True
-    )
+    cleaned_blockname = cleaned_name_for_dbtblock(payload.blockName)
+    await dbt_core_operation.save(cleaned_blockname, overwrite=True)
 
-    return _block_id(dbt_core_operation)
+    return _block_id(dbt_core_operation), cleaned_blockname
 
 
 def delete_dbt_core_block(block_id):
