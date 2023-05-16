@@ -243,13 +243,23 @@ def delete_dbt_core_block(block_id):
 def run_airbyte_connection_prefect_flow(payload: RunFlow):
     """Run an Airbyte Connection sync"""
 
-    return run_airbyte_connection_flow(payload)
+    flow = run_airbyte_connection_flow
+    if payload.flowName:
+        flow = flow.with_options(name=payload.flowName)
+    if payload.flowRunName:
+        flow = flow.with_options(flow_run_name=payload.flowRunName)
+    return flow(payload)
 
 
 def run_dbtcore_prefect_flow(payload: RunFlow):
     """Run a dbt core flow"""
 
-    return run_dbtcore_flow(payload)
+    flow = run_dbtcore_flow
+    if payload.flowName:
+        flow = flow.with_options(name=payload.flowName)
+    if payload.flowRunName:
+        flow = flow.with_options(flow_run_name=payload.flowRunName)
+    return flow(payload)
 
 
 async def post_deployment(payload: DeploymentCreate) -> None:
