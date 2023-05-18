@@ -28,6 +28,7 @@ from schemas import (
     DeploymentCreate,
     DeploymentFetch,
 )
+from logger import logger
 
 app = FastAPI()
 
@@ -37,6 +38,7 @@ app = FastAPI()
 async def get_airbyte_server(blockname):
     """look up an airbyte server block by name and return block_id"""
     block_id = await get_airbyte_server_block_id(blockname)
+    logger.info("Found airbyte server block with ID: %s", block_id)
     return {"block_id": block_id}
 
 
@@ -45,6 +47,7 @@ async def post_airbyte_server(payload: AirbyteServerCreate):
     """create a new airbyte server block with this block name,
     raise an exception if the name is already in use"""
     block_id = await create_airbyte_server_block(payload)
+    logger.info("Created new airbyte server block with ID: %s", block_id)
     return {"block_id": block_id}
 
 
@@ -53,6 +56,7 @@ async def post_airbyte_server(payload: AirbyteServerCreate):
 async def get_airbyte_connection_by_blockname(blockname):
     """look up airbyte connection block by name and return block_id"""
     block_id = await get_airbyte_connection_block_id(blockname)
+    logger.info("Found airbyte connection block by name: %s", block_id)
     return {"block_id": block_id}
 
 
@@ -60,6 +64,7 @@ async def get_airbyte_connection_by_blockname(blockname):
 async def get_airbyte_connection_by_blockid(blockid):
     """look up airbyte connection block by id and return block data"""
     block = await get_airbyte_connection_block(blockid)
+    logger.info("Found airbyte connection block by id: %s", block)
     return block
 
 
@@ -68,6 +73,7 @@ async def post_airbyte_connection(payload: AirbyteConnectionCreate):
     """create a new airbyte connection block with this block name,
     raise an exception if the name is already in use"""
     block_id = await create_airbyte_connection_block(payload)
+    logger.info("Created new airbyte connection block with ID: %s", block_id)
     return {"block_id": block_id}
 
 
@@ -76,14 +82,15 @@ async def post_airbyte_connection(payload: AirbyteConnectionCreate):
 async def get_shell(blockname):
     """look up a shell operation block by name and return block_id"""
     block_id = await get_shell_block_id(blockname)
+    logger.info("Found shell block with ID: %s", block_id)
     return {"block_id": block_id}
-
 
 @app.post("/proxy/blocks/shell/")
 async def post_shell(payload: PrefectShellSetup):
     """create a new shell block with this block name,
     raise an exception if the name is already in use"""
     block_id = await create_shell_block(payload)
+    logger.info("Created new shell block with ID: %s", block_id)
     return {"block_id": block_id}
 
 
@@ -92,6 +99,7 @@ async def post_shell(payload: PrefectShellSetup):
 async def get_dbtcore(blockname):
     """look up a dbt core operation block by name and return block_id"""
     block_id = await get_dbtcore_block_id(blockname)
+    logger.info("Found dbt_core block with ID: %s", block_id)
     return {"block_id": block_id}
 
 
@@ -100,6 +108,7 @@ async def post_dbtcore(payload: DbtCoreCreate):
     """create a new dbt_core block with this block name,
     raise an exception if the name is already in use"""
     block_id, cleaned_blockname = await create_dbt_core_block(payload)
+    logger.info("Created new dbt_core block with ID: %s and name: %s", block_id, cleaned_blockname)
     return {"block_id": block_id, "block_name": cleaned_blockname}
 
 
@@ -116,6 +125,7 @@ async def delete_block(block_id):
 @app.post("/proxy/flows/airbyte/connection/sync/")
 async def sync_airbyte_connection_flow(payload: RunFlow):
     """Prefect flow to run airbyte connection"""
+    logger.info("Running airbyte connection sync flow")
     return run_airbyte_connection_prefect_flow(payload)
 
 
@@ -129,6 +139,7 @@ async def sync_dbtcore_flow(payload: RunFlow):
 async def post_dataflow(payload: DeploymentCreate):
     """Create a deployment from an existing flow"""
     deployment = await post_deployment(payload)
+    logger.info("Created new deployment: %s", deployment)
     return {"deployment": deployment}
 
 
@@ -137,6 +148,7 @@ def get_flow_runs(deployment_id: str, limit: int = 0):
     """Get Flow Runs for a deployment"""
 
     flow_runs = get_flow_runs_by_deployment_id(deployment_id, limit)
+    logger.info("Found flow runs for deployment ID: %s", deployment_id)
     return {"flow_runs": flow_runs}
 
 
@@ -147,6 +159,7 @@ def post_deployments(payload: DeploymentFetch):
     deployments = get_deployments_by_filter(
         org_slug=payload.org_slug, deployment_ids=payload.deployment_ids
     )
+    logger.info("Found deployments with payload: %s", payload)
     return {"deployments": deployments}
 
 
@@ -163,3 +176,4 @@ def delete_deployment(deployment_id):
     root = os.getenv("PREFECT_API_URL")
     res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
     res.raise_for_status()
+    logger.info("Deleted deployment with ID: %s", deployment_id)
