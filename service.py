@@ -12,6 +12,7 @@ from prefect_dbt.cli.configs import TargetConfigs
 from prefect_dbt.cli.configs import BigQueryTargetConfigs
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
+from logger import logger
 
 from dotenv import load_dotenv
 
@@ -71,8 +72,10 @@ async def get_airbyte_server_block_id(blockname) -> str | None:
     """look up an airbyte server block by name and return block_id"""
     try:
         block = await AirbyteServer.load(blockname)
+        logger.info("found airbyte server block named %s", blockname)
         return _block_id(block)
     except ValueError:
+        logger.info("no airbyte server block named %s", blockname)
         return None
 
 
@@ -85,6 +88,7 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
         api_version=payload.apiVersion,
     )
     await airbyteservercblock.save(payload.blockName)
+    logger.info("created airbyte server block named %s", payload.blockName)
     return _block_id(airbyteservercblock)
 
 
@@ -95,6 +99,7 @@ def update_airbyte_server_block(blockname):
 
 def delete_airbyte_server_block(blockid):
     """Delete airbyte server block"""
+    logger.info("deleting airbyte server block %s", blockid)
     return prefect_delete(f"block_documents/{blockid}")
 
 
@@ -103,22 +108,29 @@ async def get_airbyte_connection_block_id(blockname) -> str | None:
     """look up airbyte connection block by name and return block_id"""
     try:
         block = await AirbyteConnection.load(blockname)
+        logger.info("found airbyte connection block named %s", blockname)
         return _block_id(block)
     except ValueError:
+        logger.info("no airbyte connection block named %s", blockname)
         return None
 
 
 async def get_airbyte_connection_block(blockid):
     """look up and return block data for an airbyte connection"""
-    result = prefect_get(f"block_documents/{blockid}")
-    return result
+    try:
+        result = prefect_get(f"block_documents/{blockid}")
+        logger.info("found airbyte connection block having id %s", blockid)
+        return result
+    except requests.exceptions.HTTPError:
+        logger.info("no airbyte connection block having id %s", blockid)
+    return None
 
 
 async def create_airbyte_connection_block(
     conninfo: AirbyteConnectionCreate,
 ) -> str:
     """Create airbyte connection block"""
-
+    logger.info(conninfo)
     try:
         serverblock = await AirbyteServer.load(conninfo.serverBlockName)
     except ValueError as exc:
@@ -131,6 +143,7 @@ async def create_airbyte_connection_block(
         connection_id=conninfo.connectionId,
     )
     await connection_block.save(conninfo.connectionBlockName)
+    logger.info("created airbyte connection block %s", conninfo.connectionBlockName)
 
     return _block_id(connection_block)
 
@@ -162,6 +175,7 @@ async def create_shell_block(shell: PrefectShellSetup):
         commands=shell.commands, env=shell.env, working_dir=shell.workingDir
     )
     await shell_operation_block.save(shell.blockName)
+    logger.info("created shell operation block %s", shell.blockName)
     return _block_id(shell_operation_block)
 
 
@@ -182,6 +196,7 @@ async def get_dbtcore_block_id(blockname) -> str | None:
 
 async def _create_dbt_cli_profile(payload: DbtCoreCreate):
     """credentials are decrypted by now"""
+    logger.info(payload)
 
     if payload.wtype == "postgres":
         target_configs = TargetConfigs(
@@ -218,6 +233,7 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate):
 
 async def create_dbt_core_block(payload: DbtCoreCreate):
     """Create a dbt core block in prefect"""
+    logger.info(payload)
 
     dbt_cli_profile = await _create_dbt_cli_profile(payload)
     dbt_core_operation = DbtCoreOperation(
@@ -230,6 +246,7 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
     )
     cleaned_blockname = cleaned_name_for_dbtblock(payload.blockName)
     await dbt_core_operation.save(cleaned_blockname, overwrite=True)
+    logger.info("created dbt core operation block %s", payload.blockName)
 
     return _block_id(dbt_core_operation), cleaned_blockname
 
@@ -242,6 +259,7 @@ def delete_dbt_core_block(block_id):
 # ================================================================================================
 def run_airbyte_connection_prefect_flow(payload: RunFlow):
     """Run an Airbyte Connection sync"""
+    logger.info(payload)
 
     flow = run_airbyte_connection_flow
     if payload.flowName:
@@ -253,6 +271,7 @@ def run_airbyte_connection_prefect_flow(payload: RunFlow):
 
 def run_dbtcore_prefect_flow(payload: RunFlow):
     """Run a dbt core flow"""
+    logger.info(payload)
 
     flow = run_dbtcore_flow
     if payload.flowName:
@@ -264,6 +283,8 @@ def run_dbtcore_prefect_flow(payload: RunFlow):
 
 async def post_deployment(payload: DeploymentCreate) -> None:
     """create a deployment from a flow and a schedule"""
+    logger.info(payload)
+
     deployment = await Deployment.build_from_flow(
         flow=deployment_schedule_flow.with_options(name=payload.flow_name),
         name=payload.deployment_name,

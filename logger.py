@@ -8,6 +8,8 @@ logger.setLevel(logging.INFO)
 
 handler = RotatingFileHandler(LOGFILE)
 handler.setLevel(logging.INFO)
-formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(name)s - %(message)s")
+formatter = logging.Formatter(
+    "%(asctime)s [%(levelname)s] {%(filename)s -> %(funcName)s} [%(message)s]"
+)
 handler.setFormatter(formatter)
 logger.addHandler(handler)
