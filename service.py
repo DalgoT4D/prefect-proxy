@@ -359,15 +359,16 @@ def get_deployments_by_filter(org_slug, deployment_ids=[]):
 
     return deployments
 
+
 async def post_deployment_flow_run(deployment_id):
-    #pylint: disable=broad-exception-caught
+    # pylint: disable=broad-exception-caught
     """Create deployment flow run"""
     try:
         flow_run = await run_deployment(deployment_id, timeout=0)
-        return {'flow_run_id': flow_run.id}
+        return {"flow_run_id": flow_run.id}
     except Exception as exc:
-        logger.info(exc)
-        return JSONResponse(content={'detail': 'Something went wrong creating a deployment flow run'}, status_code=500)
+        logger.exception(exc)
+        return JSONResponse(content={"detail": str(exc)}, status_code=500)
 
 
 def parse_log(log):
