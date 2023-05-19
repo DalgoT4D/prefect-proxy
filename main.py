@@ -18,6 +18,7 @@ from service import (
     run_airbyte_connection_prefect_flow,
     get_deployments_by_filter,
     get_flow_run_logs,
+    post_deployment_flow_run
 )
 from schemas import (
     AirbyteServerCreate,
@@ -177,3 +178,11 @@ def delete_deployment(deployment_id):
     res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
     res.raise_for_status()
     logger.info("Deleted deployment with ID: %s", deployment_id)
+
+@app.post("/proxy/deployments/{deployment_id}/flow_run")
+async def post_create_deployment_flow_run(deployment_id):
+    """Create a flow run from deployment"""
+
+    res = await post_deployment_flow_run(deployment_id)
+
+    return res
