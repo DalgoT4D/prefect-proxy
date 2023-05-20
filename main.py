@@ -39,7 +39,9 @@ app = FastAPI()
 async def get_airbyte_server(blockname):
     """look up an airbyte server block by name and return block_id"""
     block_id = await get_airbyte_server_block_id(blockname)
-    logger.info("Found airbyte server block with ID: %s", block_id)
+    if block_id is None:
+        raise HTTPException(status_code=400, detail="no block having name " + blockname)
+    logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
 
 
@@ -57,7 +59,9 @@ async def post_airbyte_server(payload: AirbyteServerCreate):
 async def get_airbyte_connection_by_blockname(blockname):
     """look up airbyte connection block by name and return block_id"""
     block_id = await get_airbyte_connection_block_id(blockname)
-    logger.info("Found airbyte connection block by name: %s", block_id)
+    if block_id is None:
+        raise HTTPException(status_code=400, detail="no block having name " + blockname)
+    logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
 
 
@@ -65,6 +69,8 @@ async def get_airbyte_connection_by_blockname(blockname):
 async def get_airbyte_connection_by_blockid(blockid):
     """look up airbyte connection block by id and return block data"""
     block = await get_airbyte_connection_block(blockid)
+    if block is None:
+        raise HTTPException(status_code=400, detail="no block having id " + blockid)
     logger.info("Found airbyte connection block by id: %s", block)
     return block
 
@@ -83,7 +89,9 @@ async def post_airbyte_connection(payload: AirbyteConnectionCreate):
 async def get_shell(blockname):
     """look up a shell operation block by name and return block_id"""
     block_id = await get_shell_block_id(blockname)
-    logger.info("Found shell block with ID: %s", block_id)
+    if block_id is None:
+        raise HTTPException(status_code=400, detail="no block having name " + blockname)
+    logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
 
 
@@ -101,7 +109,9 @@ async def post_shell(payload: PrefectShellSetup):
 async def get_dbtcore(blockname):
     """look up a dbt core operation block by name and return block_id"""
     block_id = await get_dbtcore_block_id(blockname)
-    logger.info("Found dbt_core block with ID: %s", block_id)
+    if block_id is None:
+        raise HTTPException(status_code=400, detail="no block having name " + blockname)
+    logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
 
 
