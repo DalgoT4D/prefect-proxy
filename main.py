@@ -1,7 +1,7 @@
 """Route handlers"""
 import os
 import requests
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from service import (
     get_airbyte_server_block_id,
     create_airbyte_server_block,
@@ -18,7 +18,7 @@ from service import (
     run_airbyte_connection_prefect_flow,
     get_deployments_by_filter,
     get_flow_run_logs,
-    post_deployment_flow_run
+    post_deployment_flow_run,
 )
 from schemas import (
     AirbyteServerCreate,
@@ -86,6 +86,7 @@ async def get_shell(blockname):
     logger.info("Found shell block with ID: %s", block_id)
     return {"block_id": block_id}
 
+
 @app.post("/proxy/blocks/shell/")
 async def post_shell(payload: PrefectShellSetup):
     """create a new shell block with this block name,
@@ -109,7 +110,11 @@ async def post_dbtcore(payload: DbtCoreCreate):
     """create a new dbt_core block with this block name,
     raise an exception if the name is already in use"""
     block_id, cleaned_blockname = await create_dbt_core_block(payload)
-    logger.info("Created new dbt_core block with ID: %s and name: %s", block_id, cleaned_blockname)
+    logger.info(
+        "Created new dbt_core block with ID: %s and name: %s",
+        block_id,
+        cleaned_blockname,
+    )
     return {"block_id": block_id, "block_name": cleaned_blockname}
 
 
@@ -126,6 +131,8 @@ async def delete_block(block_id):
 @app.post("/proxy/flows/airbyte/connection/sync/")
 async def sync_airbyte_connection_flow(payload: RunFlow):
     """Prefect flow to run airbyte connection"""
+    if payload.blockName == "":
+        raise HTTPException(status_code=400, detail="received empty blockName")
     logger.info("Running airbyte connection sync flow")
     return run_airbyte_connection_prefect_flow(payload)
 
@@ -133,6 +140,8 @@ async def sync_airbyte_connection_flow(payload: RunFlow):
 @app.post("/proxy/flows/dbtcore/run/")
 async def sync_dbtcore_flow(payload: RunFlow):
     """Prefect flow to run dbt"""
+    if payload.blockName == "":
+        raise HTTPException(status_code=400, detail="received empty blockName")
     return run_dbtcore_prefect_flow(payload)
 
 
@@ -178,6 +187,7 @@ def delete_deployment(deployment_id):
     res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
     res.raise_for_status()
     logger.info("Deleted deployment with ID: %s", deployment_id)
+
 
 @app.post("/proxy/deployments/{deployment_id}/flow_run")
 async def post_create_deployment_flow_run(deployment_id):
