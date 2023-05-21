@@ -1,5 +1,6 @@
 """Reusable flows"""
 
+import os
 from prefect import flow
 from prefect_airbyte.flows import run_connection_sync
 from prefect_airbyte import AirbyteConnection
@@ -18,6 +19,8 @@ def run_airbyte_connection_flow(payload: RunFlow):
 def run_dbtcore_flow(payload: RunFlow):
     """Prefect flow to run dbt"""
     dbt_op = DbtCoreOperation.load(payload.blockName)
+    if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
+        os.unlink(dbt_op.profiles_dir / "profiles.yml")
     return dbt_op.run()
 
 
