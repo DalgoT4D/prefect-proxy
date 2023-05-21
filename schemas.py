@@ -123,3 +123,9 @@ class DeploymentFetch(BaseModel):
 
     org_slug: str
     deployment_ids: list[str] | None
+
+
+class FlowRunRequest(BaseModel):
+    """search flow runs"""
+
+    name: str

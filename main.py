@@ -19,6 +19,7 @@ from service import (
     get_deployments_by_filter,
     get_flow_run_logs,
     post_deployment_flow_run,
+    get_flow_runs_by_name,
 )
 from schemas import (
     AirbyteServerCreate,
@@ -28,6 +29,7 @@ from schemas import (
     RunFlow,
     DeploymentCreate,
     DeploymentFetch,
+    FlowRunRequest,
 )
 from logger import logger
 
@@ -151,6 +153,18 @@ async def post_dataflow(payload: DeploymentCreate):
     deployment = await post_deployment(payload)
     logger.info("Created new deployment: %s", deployment)
     return {"deployment": deployment}
+
+
+@app.get("/proxy/flow_run/")
+async def get_flowrun(payload: FlowRunRequest):
+    """look up a flow run by name and return id if found"""
+    logger.info("flow run name=%s", payload.name)
+    flow_runs = get_flow_runs_by_name(payload.name)
+    if flow_runs:
+        if len(flow_runs) > 1:
+            logger.error("multiple flow names having name %s", payload.name)
+        return {"flow_run": flow_runs[0]}
+    raise HTTPException(status_code=400, detail="no such flow run")
 
 
 @app.get("/proxy/flow_runs")

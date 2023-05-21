@@ -12,9 +12,9 @@ from prefect_dbt.cli.configs import TargetConfigs
 from prefect_dbt.cli.configs import BigQueryTargetConfigs
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
+from dotenv import load_dotenv
 from logger import logger
 
-from dotenv import load_dotenv
 
 from helpers import cleaned_name_for_dbtblock
 from exception import PrefectException
@@ -397,3 +397,13 @@ def get_flow_run_logs(flow_run_id: str, offset: int):
         "offset": offset,
         "logs": list(map(parse_log, logs)),
     }
+
+
+def get_flow_runs_by_name(flow_run_name):
+    """Query flow run from the name"""
+    query = {
+        "flow_runs": {"operator": "and_", "name": {"any_": [flow_run_name]}},
+    }
+
+    flow_runs = prefect_post("flow_runs/filter", query)
+    return flow_runs
