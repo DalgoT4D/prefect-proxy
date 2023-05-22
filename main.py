@@ -2,6 +2,8 @@
 import os
 import requests
 from fastapi import FastAPI, HTTPException
+from celery import Celery
+
 from service import (
     get_airbyte_server_block_id,
     create_airbyte_server_block,
@@ -12,13 +14,12 @@ from service import (
     create_dbt_core_block,
     get_shell_block_id,
     create_shell_block,
-    run_dbtcore_prefect_flow,
     post_deployment,
     get_flow_runs_by_deployment_id,
-    run_airbyte_connection_prefect_flow,
     get_deployments_by_filter,
     get_flow_run_logs,
     post_deployment_flow_run,
+    get_flow_runs_by_name,
 )
 from schemas import (
     AirbyteServerCreate,
@@ -28,10 +29,42 @@ from schemas import (
     RunFlow,
     DeploymentCreate,
     DeploymentFetch,
+    FlowRunRequest,
 )
+from flows import run_airbyte_connection_flow, run_dbtcore_flow
+
 from logger import logger
 
+celery = Celery("main.celery", namespace="PROXY")
+celery.conf.broker_url = "redis://localhost:6379"
+celery.conf.result_backend = "redis://localhost:6379"
+
 app = FastAPI()
+
+
+# =============================================================================
+@celery.task(queue="proxy")
+def task_airbytesync(block_name, flow_name, flow_run_name):
+    """Run an Airbyte Connection sync"""
+    print(f"task_airbytesync {block_name} {flow_name} {flow_run_name}")
+    flow = run_airbyte_connection_flow
+    if flow_name:
+        flow = flow.with_options(name=flow_name)
+    if flow_run_name:
+        flow = flow.with_options(flow_run_name=flow_run_name)
+    return flow(block_name)
+
+
+@celery.task(queue="proxy")
+def task_dbtrun(block_name, flow_name, flow_run_name):
+    """Run a dbt core flow"""
+    print(f"task_dbtrun {block_name} {flow_name} {flow_run_name}")
+    flow = run_dbtcore_flow
+    if flow_name:
+        flow = flow.with_options(name=flow_name)
+    if flow_run_name:
+        flow = flow.with_options(flow_run_name=flow_run_name)
+    flow(block_name)
 
 
 # =============================================================================
@@ -149,7 +182,8 @@ async def sync_airbyte_connection_flow(payload: RunFlow):
     if payload.blockName == "":
         raise HTTPException(status_code=400, detail="received empty blockName")
     logger.info("Running airbyte connection sync flow")
-    return run_airbyte_connection_prefect_flow(payload)
+    task_airbytesync.delay(payload.blockName, payload.flowName, payload.flowRunName)
+    return {"success": True}
 
 
 @app.post("/proxy/flows/dbtcore/run/")
@@ -158,7 +192,9 @@ async def sync_dbtcore_flow(payload: RunFlow):
     logger.info(payload)
     if payload.blockName == "":
         raise HTTPException(status_code=400, detail="received empty blockName")
-    return run_dbtcore_prefect_flow(payload)
+    logger.info("running dbtcore/run/ for dbtcoreop %s", payload.blockName)
+    task_dbtrun.delay(payload.blockName, payload.flowName, payload.flowRunName)
+    return {"success": True}
 
 
 @app.post("/proxy/deployments/")
@@ -168,6 +204,18 @@ async def post_dataflow(payload: DeploymentCreate):
     deployment = await post_deployment(payload)
     logger.info("Created new deployment: %s", deployment)
     return {"deployment": deployment}
+
+
+@app.post("/proxy/flow_run/")
+async def get_flowrun(payload: FlowRunRequest):
+    """look up a flow run by name and return id if found"""
+    logger.info("flow run name=%s", payload.name)
+    flow_runs = get_flow_runs_by_name(payload.name)
+    if flow_runs:
+        if len(flow_runs) > 1:
+            logger.error("multiple flow names having name %s", payload.name)
+        return {"flow_run": flow_runs[0]}
+    raise HTTPException(status_code=400, detail="no such flow run")
 
 
 @app.get("/proxy/flow_runs")
