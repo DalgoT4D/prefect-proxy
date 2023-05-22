@@ -24,12 +24,9 @@ from schemas import (
     PrefectShellSetup,
     DbtCoreCreate,
     DeploymentCreate,
-    RunFlow,
 )
 from flows import (
     deployment_schedule_flow,
-    run_airbyte_connection_flow,
-    run_dbtcore_flow,
 )
 
 load_dotenv()
@@ -257,30 +254,6 @@ def delete_dbt_core_block(block_id):
 
 
 # ================================================================================================
-def run_airbyte_connection_prefect_flow(payload: RunFlow):
-    """Run an Airbyte Connection sync"""
-    logger.info(payload)
-
-    flow = run_airbyte_connection_flow
-    if payload.flowName:
-        flow = flow.with_options(name=payload.flowName)
-    if payload.flowRunName:
-        flow = flow.with_options(flow_run_name=payload.flowRunName)
-    return flow(payload)
-
-
-def run_dbtcore_prefect_flow(payload: RunFlow):
-    """Run a dbt core flow"""
-    logger.info(payload)
-
-    flow = run_dbtcore_flow
-    if payload.flowName:
-        flow = flow.with_options(name=payload.flowName)
-    if payload.flowRunName:
-        flow = flow.with_options(flow_run_name=payload.flowRunName)
-    return flow(payload)
-
-
 async def post_deployment(payload: DeploymentCreate) -> None:
     """create a deployment from a flow and a schedule"""
     logger.info(payload)
