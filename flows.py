@@ -12,8 +12,8 @@ from logger import logger
 @flow
 def run_airbyte_connection_flow(payload: RunFlow):
     """Prefect flow to run airbyte connection"""
-    airbyte_connection = AirbyteConnection.load(payload.blockName)
     try:
+        airbyte_connection = AirbyteConnection.load(payload.blockName)
         return run_connection_sync(airbyte_connection)
     except Exception as error:
         logger.exception(error)
@@ -23,8 +23,8 @@ def run_airbyte_connection_flow(payload: RunFlow):
 @flow
 def run_dbtcore_flow(payload: RunFlow):
     """Prefect flow to run dbt"""
-    dbt_op = DbtCoreOperation.load(payload.blockName)
     try:
+        dbt_op = DbtCoreOperation.load(payload.blockName)
         return dbt_op.run()
     except Exception as error:
         logger.exception(error)
