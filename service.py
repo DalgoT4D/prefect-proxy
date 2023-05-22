@@ -2,6 +2,7 @@
 import os
 import requests
 from fastapi.responses import JSONResponse
+from fastapi import HTTPException
 
 from prefect.deployments import Deployment, run_deployment
 from prefect.server.schemas.schedules import CronSchedule
@@ -41,7 +42,10 @@ def prefect_post(endpoint, payload):
     root = os.getenv("PREFECT_API_URL")
     res = requests.post(f"{root}/{endpoint}", timeout=30, json=payload)
     print(res.text)
-    res.raise_for_status()
+    try:
+        res.raise_for_status()
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=res.text) from error
     return res.json()
 
 
@@ -49,7 +53,10 @@ def prefect_get(endpoint):
     """GET request to prefect server"""
     root = os.getenv("PREFECT_API_URL")
     res = requests.get(f"{root}/{endpoint}", timeout=30)
-    res.raise_for_status()
+    try:
+        res.raise_for_status()
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=res.text) from error
     return res.json()
 
 
@@ -57,7 +64,10 @@ def prefect_delete(endpoint):
     """DELETE request to prefect server"""
     root = os.getenv("PREFECT_API_URL")
     res = requests.delete(f"{root}/{endpoint}", timeout=30)
-    res.raise_for_status()
+    try:
+        res.raise_for_status()
+    except Exception as error:
+        raise HTTPException(status_code=400, detail=res.text) from error
 
 
 def _block_id(block):
