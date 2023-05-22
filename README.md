@@ -9,6 +9,9 @@ These endpoints will be called only from the Django server or from testing scrip
     uvicorn main:app --reload --port <port number>
 
 make sure to add this port number into the .env for DDP_backend using the variable PREFECT_PROXY_API_URL
-  
+
+You also need to run a celery worker against the queue called "proxy"
+
+    celery -A main.celery worker -Q proxy
   
 More project documentation can be found at https://github.com/DevDataPlatform/prefect-proxy/wiki

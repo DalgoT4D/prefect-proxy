@@ -12,9 +12,9 @@ from prefect_dbt.cli.configs import TargetConfigs
 from prefect_dbt.cli.configs import BigQueryTargetConfigs
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
+from dotenv import load_dotenv
 from logger import logger
 
-from dotenv import load_dotenv
 
 from helpers import cleaned_name_for_dbtblock
 from exception import PrefectException
@@ -24,12 +24,9 @@ from schemas import (
     PrefectShellSetup,
     DbtCoreCreate,
     DeploymentCreate,
-    RunFlow,
 )
 from flows import (
     deployment_schedule_flow,
-    run_airbyte_connection_flow,
-    run_dbtcore_flow,
 )
 
 load_dotenv()
@@ -257,30 +254,6 @@ def delete_dbt_core_block(block_id):
 
 
 # ================================================================================================
-def run_airbyte_connection_prefect_flow(payload: RunFlow):
-    """Run an Airbyte Connection sync"""
-    logger.info(payload)
-
-    flow = run_airbyte_connection_flow
-    if payload.flowName:
-        flow = flow.with_options(name=payload.flowName)
-    if payload.flowRunName:
-        flow = flow.with_options(flow_run_name=payload.flowRunName)
-    return flow(payload)
-
-
-def run_dbtcore_prefect_flow(payload: RunFlow):
-    """Run a dbt core flow"""
-    logger.info(payload)
-
-    flow = run_dbtcore_flow
-    if payload.flowName:
-        flow = flow.with_options(name=payload.flowName)
-    if payload.flowRunName:
-        flow = flow.with_options(flow_run_name=payload.flowRunName)
-    return flow(payload)
-
-
 async def post_deployment(payload: DeploymentCreate) -> None:
     """create a deployment from a flow and a schedule"""
     logger.info(payload)
@@ -397,3 +370,13 @@ def get_flow_run_logs(flow_run_id: str, offset: int):
         "offset": offset,
         "logs": list(map(parse_log, logs)),
     }
+
+
+def get_flow_runs_by_name(flow_run_name):
+    """Query flow run from the name"""
+    query = {
+        "flow_runs": {"operator": "and_", "name": {"any_": [flow_run_name]}},
+    }
+
+    flow_runs = prefect_post("flow_runs/filter", query)
+    return flow_runs
