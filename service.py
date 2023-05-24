@@ -45,6 +45,7 @@ def prefect_post(endpoint, payload):
     try:
         res.raise_for_status()
     except Exception as error:
+        logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
     return res.json()
 
@@ -56,6 +57,7 @@ def prefect_get(endpoint):
     try:
         res.raise_for_status()
     except Exception as error:
+        logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
     return res.json()
 
@@ -67,6 +69,7 @@ def prefect_delete(endpoint):
     try:
         res.raise_for_status()
     except Exception as error:
+        logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
 
 
@@ -82,7 +85,7 @@ async def get_airbyte_server_block_id(blockname) -> str | None:
         logger.info("found airbyte server block named %s", blockname)
         return _block_id(block)
     except ValueError:
-        logger.info("no airbyte server block named %s", blockname)
+        logger.error("no airbyte server block named %s", blockname)
         return None
 
 
@@ -94,7 +97,11 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
         server_port=payload.serverPort,
         api_version=payload.apiVersion,
     )
-    await airbyteservercblock.save(payload.blockName)
+    try:
+        await airbyteservercblock.save(payload.blockName)
+    except Exception as error:
+        logger.exception(error)
+        raise
     logger.info("created airbyte server block named %s", payload.blockName)
     return _block_id(airbyteservercblock)
 
@@ -118,7 +125,7 @@ async def get_airbyte_connection_block_id(blockname) -> str | None:
         logger.info("found airbyte connection block named %s", blockname)
         return _block_id(block)
     except ValueError:
-        logger.info("no airbyte connection block named %s", blockname)
+        logger.error("no airbyte connection block named %s", blockname)
         return None
 
 
@@ -129,7 +136,7 @@ async def get_airbyte_connection_block(blockid):
         logger.info("found airbyte connection block having id %s", blockid)
         return result
     except requests.exceptions.HTTPError:
-        logger.info("no airbyte connection block having id %s", blockid)
+        logger.error("no airbyte connection block having id %s", blockid)
     return None
 
 
@@ -141,6 +148,7 @@ async def create_airbyte_connection_block(
     try:
         serverblock = await AirbyteServer.load(conninfo.serverBlockName)
     except ValueError as exc:
+        logger.exception(exc)
         raise PrefectException(
             f"could not find Airbyte Server block named {conninfo.serverBlockName}"
         ) from exc
@@ -149,7 +157,13 @@ async def create_airbyte_connection_block(
         airbyte_server=serverblock,
         connection_id=conninfo.connectionId,
     )
-    await connection_block.save(conninfo.connectionBlockName)
+    try:
+        await connection_block.save(conninfo.connectionBlockName)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException(
+            f"failed to create airbyte connection block for connection {conninfo.connectionId}"
+        ) from error
     logger.info("created airbyte connection block %s", conninfo.connectionBlockName)
 
     return _block_id(connection_block)
@@ -181,7 +195,11 @@ async def create_shell_block(shell: PrefectShellSetup):
     shell_operation_block = ShellOperation(
         commands=shell.commands, env=shell.env, working_dir=shell.workingDir
     )
-    await shell_operation_block.save(shell.blockName)
+    try:
+        await shell_operation_block.save(shell.blockName)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to create shell block") from error
     logger.info("created shell operation block %s", shell.blockName)
     return _block_id(shell_operation_block)
 
@@ -252,7 +270,12 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         dbt_cli_profile=dbt_cli_profile,
     )
     cleaned_blockname = cleaned_name_for_dbtblock(payload.blockName)
-    await dbt_core_operation.save(cleaned_blockname, overwrite=True)
+    try:
+        await dbt_core_operation.save(cleaned_blockname, overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to create dbt core op block") from error
+
     logger.info("created dbt core operation block %s", payload.blockName)
 
     return _block_id(dbt_core_operation), cleaned_blockname
@@ -279,7 +302,11 @@ async def post_deployment(payload: DeploymentCreate) -> None:
         "dbt_blocks": payload.dbt_blocks,
     }
     deployment.schedule = CronSchedule(cron=payload.cron)
-    deployment_id = await deployment.apply()
+    try:
+        deployment_id = await deployment.apply()
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to create deployment") from error
     return {"id": deployment_id, "name": deployment.name}
 
 
@@ -300,7 +327,14 @@ def get_flow_runs_by_deployment_id(deployment_id, limit):
 
     flow_runs = []
 
-    for flow_run in prefect_post("flow_runs/filter", query):
+    try:
+        result = prefect_post("flow_runs/filter", query)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException(
+            f"failed to fetch flow_runs for deployment {deployment_id}"
+        ) from error
+    for flow_run in result:
         flow_runs.append(
             {
                 "tags": flow_run["tags"],
@@ -323,10 +357,14 @@ def get_deployments_by_filter(org_slug, deployment_ids=[]):
         }
     }
 
-    res = prefect_post(
-        "deployments/filter",
-        query,
-    )
+    try:
+        res = prefect_post(
+            "deployments/filter",
+            query,
+        )
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to fetch deployments by filter") from error
 
     deployments = []
 
@@ -351,6 +389,7 @@ async def post_deployment_flow_run(deployment_id):
         return {"flow_run_id": flow_run.id}
     except Exception as exc:
         logger.exception(exc)
+        # why are we not just raising a prefect-exception here
         return JSONResponse(content={"detail": str(exc)}, status_code=500)
 
 
@@ -388,5 +427,9 @@ def get_flow_runs_by_name(flow_run_name):
         "flow_runs": {"operator": "and_", "name": {"any_": [flow_run_name]}},
     }
 
-    flow_runs = prefect_post("flow_runs/filter", query)
+    try:
+        flow_runs = prefect_post("flow_runs/filter", query)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to fetch flow-runs by name") from error
     return flow_runs
