@@ -1,8 +1,10 @@
 """Route handlers"""
 import os
+import re
 import requests
 from fastapi import FastAPI, HTTPException, Request
 from celery import Celery
+from redis import Redis
 
 from service import (
     get_airbyte_server_block_id,
@@ -43,8 +45,8 @@ app = FastAPI()
 
 
 # =============================================================================
-@celery.task(queue="proxy")
-def task_airbytesync(block_name, flow_name, flow_run_name):
+@celery.task(queue="proxy", bind=True)
+def task_airbytesync(self, block_name, flow_name, flow_run_name):
     """Run an Airbyte Connection sync"""
     logger.info("task_airbytesync %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_airbyte_connection_flow
@@ -52,11 +54,25 @@ def task_airbytesync(block_name, flow_name, flow_run_name):
         flow = flow.with_options(name=flow_name)
     if flow_run_name:
         flow = flow.with_options(flow_run_name=flow_run_name)
-    flow(block_name)
+    redis = Redis()
+    try:
+        redis.hset("taskprogress", self.request.id, "started")
+        flow(block_name)
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        # the error message may contain "Job <num> failed."
+        errormessage = str(error)
+        logger.error("celery task caught exception %s", errormessage)
+        pattern = re.compile("Job (\d+) failed.")
+        match = pattern.match(errormessage)
+        if match:
+            airbyte_job_num = match.groups()[0]
+            redis.hset(
+                "taskprogress", self.request.id, f"airbyte_job_num={airbyte_job_num}"
+            )
 
 
-@celery.task(queue="proxy")
-def task_dbtrun(block_name, flow_name, flow_run_name):
+@celery.task(queue="proxy", bind=True)
+def task_dbtrun(self, block_name, flow_name, flow_run_name):
     """Run a dbt core flow"""
     logger.info("task_dbtrun %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_dbtcore_flow
@@ -216,9 +232,11 @@ async def sync_airbyte_connection_flow(payload: RunFlow, request: Request):
         logger.error("received empty blockName")
         raise HTTPException(status_code=400, detail="received empty blockName")
     logger.info("Running airbyte connection sync flow")
-    task_airbytesync.delay(payload.blockName, payload.flowName, payload.flowRunName)
+    task = task_airbytesync.delay(
+        payload.blockName, payload.flowName, payload.flowRunName
+    )
     next_api_call = f"POST name={payload.flowRunName} to {request.client.host}:{request.client.port}/proxy/flow_run/"
-    return {"success": True, "next_api_call": next_api_call}
+    return {"success": True, "next_api_call": next_api_call, "celery_task_id": task.id}
 
 
 @app.post("/proxy/flows/dbtcore/run/")

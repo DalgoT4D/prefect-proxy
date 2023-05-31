@@ -17,8 +17,7 @@ def run_airbyte_connection_flow(block_name: str):
         return run_connection_sync(airbyte_connection)
     except Exception as error:
         # logger.exception(error)
-        logger.error("FAILED, see next line")
-        logger.error(str(error))
+        logger.error(str(error))  # "Job <num> failed."
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
