@@ -63,9 +63,10 @@ def task_airbytesync(self, block_name, flow_name, flow_run_name):
         flow(block_name)
         taskprogress.append({"step": "finished"})
         redis.hset("taskprogress", self.request.id, json.dumps(taskprogress))
-    except Exception as error:  # pylint: disable=broad-exception-caught
+
+    except HTTPException as error:
         # the error message may contain "Job <num> failed."
-        errormessage = str(error)
+        errormessage = error.detail
         logger.error("celery task caught exception %s", errormessage)
         pattern = re.compile("Job (\d+) failed.")
         match = pattern.match(errormessage)
@@ -84,6 +85,9 @@ def task_airbytesync(self, block_name, flow_name, flow_run_name):
                 self.request.id,
                 json.dumps(taskprogress),
             )
+
+    except Exception as error:
+        logger.exception(error)
 
 
 @celery.task(queue="proxy", bind=True)
