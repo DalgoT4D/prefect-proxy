@@ -46,19 +46,19 @@ app = FastAPI()
 @celery.task(queue="proxy")
 def task_airbytesync(block_name, flow_name, flow_run_name):
     """Run an Airbyte Connection sync"""
-    print(f"task_airbytesync {block_name} {flow_name} {flow_run_name}")
+    logger.info("task_airbytesync %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_airbyte_connection_flow
     if flow_name:
         flow = flow.with_options(name=flow_name)
     if flow_run_name:
         flow = flow.with_options(flow_run_name=flow_run_name)
-    return flow(block_name)
+    flow(block_name)
 
 
 @celery.task(queue="proxy")
 def task_dbtrun(block_name, flow_name, flow_run_name):
     """Run a dbt core flow"""
-    print(f"task_dbtrun {block_name} {flow_name} {flow_run_name}")
+    logger.info("task_dbtrun %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_dbtcore_flow
     if flow_name:
         flow = flow.with_options(name=flow_name)
