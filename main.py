@@ -1,6 +1,7 @@
 """Route handlers"""
 import os
 import re
+import json
 import requests
 from fastapi import FastAPI, HTTPException, Request
 from celery import Celery
@@ -55,9 +56,13 @@ def task_airbytesync(self, block_name, flow_name, flow_run_name):
     if flow_run_name:
         flow = flow.with_options(flow_run_name=flow_run_name)
     redis = Redis()
+    taskprogress = []
     try:
-        redis.hset("taskprogress", self.request.id, "started")
+        taskprogress.append({"step": "started"})
+        redis.hset("taskprogress", self.request.id, json.dumps(taskprogress))
         flow(block_name)
+        taskprogress.append({"step": "finished"})
+        redis.hset("taskprogress", self.request.id, json.dumps(taskprogress))
     except Exception as error:  # pylint: disable=broad-exception-caught
         # the error message may contain "Job <num> failed."
         errormessage = str(error)
@@ -65,9 +70,19 @@ def task_airbytesync(self, block_name, flow_name, flow_run_name):
         pattern = re.compile("Job (\d+) failed.")
         match = pattern.match(errormessage)
         if match:
+            taskprogress.append({"airbyte_job_num": airbyte_job_num})
             airbyte_job_num = match.groups()[0]
             redis.hset(
-                "taskprogress", self.request.id, f"airbyte_job_num={airbyte_job_num}"
+                "taskprogress",
+                self.request.id,
+                json.dumps(taskprogress),
+            )
+        else:
+            taskprogress.append({"status": "no match found for " + errormessage})
+            redis.hset(
+                "taskprogress",
+                self.request.id,
+                json.dumps(taskprogress),
             )
 
 
