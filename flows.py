@@ -16,7 +16,8 @@ def run_airbyte_connection_flow(block_name: str):
         airbyte_connection = AirbyteConnection.load(block_name)
         return run_connection_sync(airbyte_connection)
     except Exception as error:
-        logger.exception(error)
+        # logger.exception(error)
+        logger.error(str(error))  # "Job <num> failed."
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
@@ -29,7 +30,8 @@ def run_dbtcore_flow(block_name: str):
             os.unlink(dbt_op.profiles_dir / "profiles.yml")
         return dbt_op.run()
     except Exception as error:
-        logger.exception(error)
+        # logger.exception(error)
+        logger.error("FAILED")
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 

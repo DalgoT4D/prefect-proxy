@@ -1,8 +1,11 @@
 """Route handlers"""
 import os
+import re
+import json
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from celery import Celery
+from redis import Redis
 
 from service import (
     get_airbyte_server_block_id,
@@ -43,22 +46,54 @@ app = FastAPI()
 
 
 # =============================================================================
-@celery.task(queue="proxy")
-def task_airbytesync(block_name, flow_name, flow_run_name):
+@celery.task(queue="proxy", bind=True)
+def task_airbytesync(self, block_name, flow_name, flow_run_name):
     """Run an Airbyte Connection sync"""
-    print(f"task_airbytesync {block_name} {flow_name} {flow_run_name}")
+    logger.info("task_airbytesync %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_airbyte_connection_flow
     if flow_name:
         flow = flow.with_options(name=flow_name)
     if flow_run_name:
         flow = flow.with_options(flow_run_name=flow_run_name)
-    return flow(block_name)
+    redis = Redis()
+    taskprogress = []
+    try:
+        taskprogress.append({"step": "started"})
+        redis.hset("taskprogress", self.request.id, json.dumps(taskprogress))
+        flow(block_name)
+        taskprogress.append({"step": "finished"})
+        redis.hset("taskprogress", self.request.id, json.dumps(taskprogress))
+
+    except HTTPException as error:
+        # the error message may contain "Job <num> failed."
+        errormessage = error.detail
+        logger.error("celery task caught exception %s", errormessage)
+        pattern = re.compile("Job (\d+) failed.")
+        match = pattern.match(errormessage)
+        if match:
+            airbyte_job_num = match.groups()[0]
+            taskprogress.append({"airbyte_job_num": airbyte_job_num})
+            redis.hset(
+                "taskprogress",
+                self.request.id,
+                json.dumps(taskprogress),
+            )
+        else:
+            taskprogress.append({"status": "no match found for " + errormessage})
+            redis.hset(
+                "taskprogress",
+                self.request.id,
+                json.dumps(taskprogress),
+            )
+
+    except Exception as error:
+        logger.exception(error)
 
 
-@celery.task(queue="proxy")
-def task_dbtrun(block_name, flow_name, flow_run_name):
+@celery.task(queue="proxy", bind=True)
+def task_dbtrun(self, block_name, flow_name, flow_run_name):
     """Run a dbt core flow"""
-    print(f"task_dbtrun {block_name} {flow_name} {flow_run_name}")
+    logger.info("task_dbtrun %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_dbtcore_flow
     if flow_name:
         flow = flow.with_options(name=flow_name)
@@ -83,7 +118,13 @@ async def post_airbyte_server(payload: AirbyteServerCreate):
     """create a new airbyte server block with this block name,
     raise an exception if the name is already in use"""
     logger.info(payload)
-    block_id = await create_airbyte_server_block(payload)
+    try:
+        block_id = await create_airbyte_server_block(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create airbyte server block"
+        ) from error
     logger.info("Created new airbyte server block with ID: %s", block_id)
     return {"block_id": block_id}
 
@@ -94,6 +135,7 @@ async def get_airbyte_connection_by_blockname(blockname):
     """look up airbyte connection block by name and return block_id"""
     block_id = await get_airbyte_connection_block_id(blockname)
     if block_id is None:
+        logger.error("no airbyte connection block having name %s", blockname)
         raise HTTPException(status_code=400, detail="no block having name " + blockname)
     logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
@@ -104,6 +146,7 @@ async def get_airbyte_connection_by_blockid(blockid):
     """look up airbyte connection block by id and return block data"""
     block = await get_airbyte_connection_block(blockid)
     if block is None:
+        logger.error("no airbyte connection block having id %s", blockid)
         raise HTTPException(status_code=400, detail="no block having id " + blockid)
     logger.info("Found airbyte connection block by id: %s", block)
     return block
@@ -114,7 +157,13 @@ async def post_airbyte_connection(payload: AirbyteConnectionCreate):
     """create a new airbyte connection block with this block name,
     raise an exception if the name is already in use"""
     logger.info(payload)
-    block_id = await create_airbyte_connection_block(payload)
+    try:
+        block_id = await create_airbyte_connection_block(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create airbyte connection block"
+        ) from error
     logger.info("Created new airbyte connection block with ID: %s", block_id)
     return {"block_id": block_id}
 
@@ -125,6 +174,7 @@ async def get_shell(blockname):
     """look up a shell operation block by name and return block_id"""
     block_id = await get_shell_block_id(blockname)
     if block_id is None:
+        logger.error("no shell block having name %s", blockname)
         raise HTTPException(status_code=400, detail="no block having name " + blockname)
     logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
@@ -135,7 +185,13 @@ async def post_shell(payload: PrefectShellSetup):
     """create a new shell block with this block name,
     raise an exception if the name is already in use"""
     logger.info(payload)
-    block_id = await create_shell_block(payload)
+    try:
+        block_id = await create_shell_block(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create shell block"
+        ) from error
     logger.info("Created new shell block with ID: %s", block_id)
     return {"block_id": block_id}
 
@@ -146,6 +202,7 @@ async def get_dbtcore(blockname):
     """look up a dbt core operation block by name and return block_id"""
     block_id = await get_dbtcore_block_id(blockname)
     if block_id is None:
+        logger.error("no dbt core block having name %s", blockname)
         raise HTTPException(status_code=400, detail="no block having name " + blockname)
     logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
@@ -156,7 +213,13 @@ async def post_dbtcore(payload: DbtCoreCreate):
     """create a new dbt_core block with this block name,
     raise an exception if the name is already in use"""
     logger.info(payload)
-    block_id, cleaned_blockname = await create_dbt_core_block(payload)
+    try:
+        block_id, cleaned_blockname = await create_dbt_core_block(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create dbt core block"
+        ) from error
     logger.info(
         "Created new dbt_core block with ID: %s and name: %s",
         block_id,
@@ -170,38 +233,55 @@ async def post_dbtcore(payload: DbtCoreCreate):
 async def delete_block(block_id):
     """we can break this up into four different deleters later if we want to"""
     root = os.getenv("PREFECT_API_URL")
-    res = requests.delete(f"{root}/block_documents/{block_id}", timeout=30)
-    res.raise_for_status()
+    logger.info("DELETE %s/block_documents/%s", root, block_id)
+    res = requests.delete(f"{root}/block_documents/{block_id}", timeout=10)
+    try:
+        res.raise_for_status()
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=res.text) from error
 
 
 # =============================================================================
 @app.post("/proxy/flows/airbyte/connection/sync/")
-async def sync_airbyte_connection_flow(payload: RunFlow):
+async def sync_airbyte_connection_flow(payload: RunFlow, request: Request):
     """Prefect flow to run airbyte connection"""
     logger.info(payload)
     if payload.blockName == "":
+        logger.error("received empty blockName")
         raise HTTPException(status_code=400, detail="received empty blockName")
     logger.info("Running airbyte connection sync flow")
-    task_airbytesync.delay(payload.blockName, payload.flowName, payload.flowRunName)
-    return {"success": True}
+    task = task_airbytesync.delay(
+        payload.blockName, payload.flowName, payload.flowRunName
+    )
+    next_api_call = f"POST name={payload.flowRunName} to {request.client.host}:{request.client.port}/proxy/flow_run/"
+    return {"success": True, "next_api_call": next_api_call, "celery_task_id": task.id}
 
 
 @app.post("/proxy/flows/dbtcore/run/")
-async def sync_dbtcore_flow(payload: RunFlow):
+async def sync_dbtcore_flow(payload: RunFlow, request: Request):
     """Prefect flow to run dbt"""
     logger.info(payload)
     if payload.blockName == "":
+        logger.error("received empty blockName")
         raise HTTPException(status_code=400, detail="received empty blockName")
-    logger.info("running dbtcore/run/ for dbtcoreop %s", payload.blockName)
+    logger.info("running dbtcore/run/ for dbt-core-op %s", payload.blockName)
     task_dbtrun.delay(payload.blockName, payload.flowName, payload.flowRunName)
-    return {"success": True}
+    next_api_call = f"POST name={payload.flowRunName} to {request.client.host}:{request.client.port}/proxy/flow_run/"
+    return {"success": True, "next_api_call": next_api_call}
 
 
 @app.post("/proxy/deployments/")
 async def post_dataflow(payload: DeploymentCreate):
     """Create a deployment from an existing flow"""
     logger.info(payload)
-    deployment = await post_deployment(payload)
+    try:
+        deployment = await post_deployment(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create deployment"
+        ) from error
     logger.info("Created new deployment: %s", deployment)
     return {"deployment": deployment}
 
@@ -210,19 +290,31 @@ async def post_dataflow(payload: DeploymentCreate):
 async def get_flowrun(payload: FlowRunRequest):
     """look up a flow run by name and return id if found"""
     logger.info("flow run name=%s", payload.name)
-    flow_runs = get_flow_runs_by_name(payload.name)
+    try:
+        flow_runs = get_flow_runs_by_name(payload.name)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch flow_runs by name"
+        ) from error
     if flow_runs:
         if len(flow_runs) > 1:
             logger.error("multiple flow names having name %s", payload.name)
         return {"flow_run": flow_runs[0]}
+    logger.error("no flow_runs having name %s", payload.name)
     raise HTTPException(status_code=400, detail="no such flow run")
 
 
 @app.get("/proxy/flow_runs")
 def get_flow_runs(deployment_id: str, limit: int = 0):
     """Get Flow Runs for a deployment"""
-
-    flow_runs = get_flow_runs_by_deployment_id(deployment_id, limit)
+    try:
+        flow_runs = get_flow_runs_by_deployment_id(deployment_id, limit)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch flow_runs for deployment"
+        ) from error
     logger.info("Found flow runs for deployment ID: %s", deployment_id)
     return {"flow_runs": flow_runs}
 
@@ -231,9 +323,15 @@ def get_flow_runs(deployment_id: str, limit: int = 0):
 def post_deployments(payload: DeploymentFetch):
     """Get deployments by various filters"""
     logger.info(payload)
-    deployments = get_deployments_by_filter(
-        org_slug=payload.org_slug, deployment_ids=payload.deployment_ids
-    )
+    try:
+        deployments = get_deployments_by_filter(
+            org_slug=payload.org_slug, deployment_ids=payload.deployment_ids
+        )
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to filter deployments"
+        ) from error
     logger.info("Found deployments with payload: %s", payload)
     return {"deployments": deployments}
 
@@ -241,7 +339,13 @@ def post_deployments(payload: DeploymentFetch):
 @app.get("/proxy/flow_runs/logs/{flow_run_id}")
 def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
     """paginate the logs from a flow run"""
-    return get_flow_run_logs(flow_run_id, offset)
+    try:
+        return get_flow_run_logs(flow_run_id, offset)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch logs for flow_run"
+        ) from error
 
 
 @app.delete("/proxy/deployments/{deployment_id}")
@@ -250,7 +354,11 @@ def delete_deployment(deployment_id):
 
     root = os.getenv("PREFECT_API_URL")
     res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
-    res.raise_for_status()
+    try:
+        res.raise_for_status()
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=res.text) from error
     logger.info("Deleted deployment with ID: %s", deployment_id)
 
 
@@ -258,6 +366,12 @@ def delete_deployment(deployment_id):
 async def post_create_deployment_flow_run(deployment_id):
     """Create a flow run from deployment"""
 
-    res = await post_deployment_flow_run(deployment_id)
+    try:
+        res = await post_deployment_flow_run(deployment_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create flow_run for deployment"
+        ) from error
 
     return res
