@@ -71,8 +71,8 @@ def task_airbytesync(self, block_name, flow_name, flow_run_name):
         pattern = re.compile("Job (\d+) failed.")
         match = pattern.match(errormessage)
         if match:
-            taskprogress.append({"airbyte_job_num": airbyte_job_num})
             airbyte_job_num = match.groups()[0]
+            taskprogress.append({"airbyte_job_num": airbyte_job_num})
             redis.hset(
                 "taskprogress",
                 self.request.id,
