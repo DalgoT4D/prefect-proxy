@@ -115,7 +115,7 @@ class DeploymentCreate(BaseModel):
     org_slug: str
     connection_blocks: list
     dbt_blocks: list
-    cron: str
+    cron: str = None
 
 
 class DeploymentFetch(BaseModel):

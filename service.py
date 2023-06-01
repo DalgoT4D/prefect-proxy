@@ -301,7 +301,7 @@ async def post_deployment(payload: DeploymentCreate) -> None:
         "airbyte_blocks": payload.connection_blocks,
         "dbt_blocks": payload.dbt_blocks,
     }
-    deployment.schedule = CronSchedule(cron=payload.cron)
+    deployment.schedule = CronSchedule(cron=payload.cron) if payload.cron else None
     try:
         deployment_id = await deployment.apply()
     except Exception as error:
