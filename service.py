@@ -41,7 +41,7 @@ def prefect_post(endpoint, payload):
     """POST request to prefect server"""
     root = os.getenv("PREFECT_API_URL")
     res = requests.post(f"{root}/{endpoint}", timeout=30, json=payload)
-    print(res.text)
+    logger.info(res.text)
     try:
         res.raise_for_status()
     except Exception as error:
