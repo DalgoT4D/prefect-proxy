@@ -439,7 +439,7 @@ def get_flow_run_logs(flow_run_id: str, offset: int):
         {
             "logs": {
                 "operator": "and_",
-                "flow_run_id": {"any_": [flow_run_ids]},
+                "flow_run_id": {"any_": flow_run_ids},
             },
             "sort": "TIMESTAMP_ASC",
             "offset": offset,
