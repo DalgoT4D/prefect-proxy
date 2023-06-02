@@ -337,8 +337,11 @@ def get_flow_runs_by_deployment_id(deployment_id, limit):
     for flow_run in result:
         flow_runs.append(
             {
+                "id": flow_run["id"],
+                "name": flow_run["name"],
                 "tags": flow_run["tags"],
                 "startTime": flow_run["start_time"],
+                "totalRunTime": flow_run["total_run_time"],
                 "status": flow_run["state"]["type"],
             }
         )
@@ -402,14 +405,42 @@ def parse_log(log):
     }
 
 
+def traverse_flow_run_graph(flow_run_id: str, flow_runs: list):
+    """This recursive function will read through the graph
+    and return all sub flow run ids of the parent that can potentially have logs"""
+    flow_runs.append(flow_run_id)
+    if flow_run_id is None:
+        return flow_runs
+
+    res = prefect_get(f"flow_runs/{flow_run_id}/graph")
+    flow_graph_data = res.json()
+
+    if len(flow_graph_data) == 0:
+        return flow_runs
+
+    for flow in flow_graph_data:
+        if (
+            "state" in flow
+            and "state_details" in flow["state"]
+            and flow["state"]["state_details"]["child_flow_run_id"]
+        ):
+            traverse_flow_run_graph(
+                flow["state"]["state_details"]["child_flow_run_id"], flow_runs
+            )
+
+    return flow_runs
+
+
 def get_flow_run_logs(flow_run_id: str, offset: int):
     """return logs from a flow run"""
+    flow_run_ids = traverse_flow_run_graph(flow_run_id, [])
+
     logs = prefect_post(
         "logs/filter",
         {
             "logs": {
                 "operator": "and_",
-                "flow_run_id": {"any_": [flow_run_id]},
+                "flow_run_id": {"any_": [flow_run_ids]},
             },
             "sort": "TIMESTAMP_ASC",
             "offset": offset,
