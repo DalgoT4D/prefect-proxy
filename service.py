@@ -412,8 +412,7 @@ def traverse_flow_run_graph(flow_run_id: str, flow_runs: list):
     if flow_run_id is None:
         return flow_runs
 
-    res = prefect_get(f"flow_runs/{flow_run_id}/graph")
-    flow_graph_data = res.json()
+    flow_graph_data = prefect_get(f"flow_runs/{flow_run_id}/graph")
 
     if len(flow_graph_data) == 0:
         return flow_runs
