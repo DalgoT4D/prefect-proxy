@@ -14,7 +14,10 @@ def run_airbyte_connection_flow(block_name: str):
     """Prefect flow to run airbyte connection"""
     try:
         airbyte_connection = AirbyteConnection.load(block_name)
-        return run_connection_sync(airbyte_connection)
+        result = run_connection_sync(airbyte_connection)  # has three tasks
+        logger.info("airbyte connection sync result=")
+        logger.info(result)
+        return result
     except Exception as error:
         # logger.exception(error)
         logger.error(str(error))  # "Job <num> failed."
@@ -49,7 +52,7 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
     for block in airbyte_blocks:
         airbyte_connection = AirbyteConnection.load(block["blockName"])
         try:
-            return run_connection_sync(airbyte_connection)
+            run_connection_sync(airbyte_connection)
         except Exception as error:
             logger.exception(error)
             raise HTTPException(status_code=400, detail=str(error)) from error
@@ -58,7 +61,7 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
     for block in dbt_blocks:
         dbt_op = DbtCoreOperation.load(block["blockName"])
         try:
-            return dbt_op.run()
+            dbt_op.run()
         except Exception as error:
             logger.exception(error)
             raise HTTPException(status_code=400, detail=str(error)) from error
