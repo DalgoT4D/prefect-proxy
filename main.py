@@ -1,11 +1,9 @@
 """Route handlers"""
 import os
 import re
-import json
 import requests
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from celery import Celery
-from redis import Redis
 
 from service import (
     get_airbyte_server_block_id,
