@@ -3,7 +3,6 @@ import os
 import re
 import requests
 from fastapi import FastAPI, HTTPException
-from celery import Celery
 
 from service import (
     get_airbyte_server_block_id,
@@ -35,10 +34,6 @@ from schemas import (
 from flows import run_airbyte_connection_flow, run_dbtcore_flow
 
 from logger import logger
-
-celery = Celery("main.celery", namespace="PROXY")
-celery.conf.broker_url = "redis://localhost:6379"
-celery.conf.result_backend = "redis://localhost:6379"
 
 app = FastAPI()
 
