@@ -33,9 +33,10 @@ from schemas import (
 )
 from flows import run_airbyte_connection_flow, run_dbtcore_flow
 
-from logger import logger
+from logger import setup_logger, logger
 
 app = FastAPI()
+setup_logger()
 
 
 # =============================================================================
