@@ -60,6 +60,8 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
     # run dbt blocks
     for block in dbt_blocks:
         dbt_op = DbtCoreOperation.load(block["blockName"])
+        if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
+            os.unlink(dbt_op.profiles_dir / "profiles.yml")
         try:
             dbt_op.run()
         except Exception as error:
