@@ -76,7 +76,24 @@ def prefect_delete(endpoint):
 def _block_id(block):
     return str(block.dict()["_block_document_id"])
 
+# ================================================================================================
+def post_filter_blocks(block_names):
+    """Filter and fetch prefect blocks based on the query parameter"""
+    try:
+        query = {
+                "block_documents": {
+                "operator": "and_",
+                "name": {"any_": []},
+            }
+        }
+        if block_names:
+            query["block_documents"]["name"]["any_"] = block_names
 
+        return prefect_post("block_documents/filter", query)
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException("failed to create deployment") from err
+    
 # ================================================================================================
 async def get_airbyte_server_block_id(blockname) -> str | None:
     """look up an airbyte server block by name and return block_id"""
