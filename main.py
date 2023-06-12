@@ -20,7 +20,7 @@ from service import (
     get_flow_run_logs,
     post_deployment_flow_run,
     get_flow_runs_by_name,
-    post_filter_blocks
+    post_filter_blocks,
 )
 from schemas import (
     AirbyteServerCreate,
@@ -32,7 +32,7 @@ from schemas import (
     DeploymentFetch,
     FlowRunRequest,
     PrefectBlocksDelete,
-    AirbyteConnectionBlocksFetch
+    AirbyteConnectionBlocksFetch,
 )
 from flows import run_airbyte_connection_flow, run_dbtcore_flow
 
@@ -88,22 +88,29 @@ def dbtrun(block_name, flow_name, flow_run_name):
     result = flow(block_name)
     return result
 
+
 # =============================================================================
 @app.post("/proxy/blocks/bulk/delete/")
 async def post_bulk_delete_blocks(payload: PrefectBlocksDelete):
     """Delete all airbyte connection blocks in the payload array"""
     root = os.getenv("PREFECT_API_URL")
+    deleted_blockids = []
     for block_id in payload.block_ids:
-        logger.info(f"deleting block_id : %s ", block_id)
+        logger.info("deleting block_id : %s ", block_id)
+        res = requests.delete(f"{root}/block_documents/{block_id}", timeout=10)
         try:
-            res = requests.delete(f"{root}/block_documents/{block_id}", timeout=10)
             res.raise_for_status()
-            logger.info(f"deleted block with block_id : %s ", block_id)
-        except Exception as error:
-            logger.info(f"something went wrong deleteing block_id : %s ", block_id)
+        except requests.exceptions.HTTPError as error:
+            logger.error(
+                "something went wrong deleteing block_id %s: %s", block_id, res.text
+            )
             logger.exception(error)
+            continue
+        logger.info("deleted block with block_id : %s", block_id)
+        deleted_blockids.append(block_id)
 
-    
+    return {"deleted_blockids": deleted_blockids}
+
 
 # =============================================================================
 @app.post("/proxy/blocks/airbyte/connection/filter")
@@ -114,12 +121,15 @@ def post_airbyte_connection_blocks(payload: AirbyteConnectionBlocksFetch):
     # we only care about the block name and its connection id
     response = []
     for blk in blocks:
-        connection_id = ''
-        if 'data' in blk and 'connection_id' in blk['data']:
-            connection_id = blk['data']['connection_id']
-        response.append({"name": blk["name"], "connectionId": connection_id, "id": blk["id"]})
+        connection_id = ""
+        if "data" in blk and "connection_id" in blk["data"]:
+            connection_id = blk["data"]["connection_id"]
+        response.append(
+            {"name": blk["name"], "connectionId": connection_id, "id": blk["id"]}
+        )
 
     return response
+
 
 # =============================================================================
 @app.get("/proxy/blocks/airbyte/server/{blockname}")
