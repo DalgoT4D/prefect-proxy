@@ -1,11 +1,8 @@
 """Route handlers"""
 import os
 import re
-import json
 import requests
-from fastapi import FastAPI, HTTPException, Request
-from celery import Celery
-from redis import Redis
+from fastapi import FastAPI, HTTPException
 
 from service import (
     get_airbyte_server_block_id,
@@ -36,35 +33,31 @@ from schemas import (
 )
 from flows import run_airbyte_connection_flow, run_dbtcore_flow
 
-from logger import logger
-
-celery = Celery("main.celery", namespace="PROXY")
-celery.conf.broker_url = "redis://localhost:6379"
-celery.conf.result_backend = "redis://localhost:6379"
+from logger import setup_logger, logger
 
 app = FastAPI()
+setup_logger()
 
 
 # =============================================================================
-@celery.task(queue="proxy", bind=True)
-def task_airbytesync(self, block_name, flow_name, flow_run_name):
+def airbytesync(block_name, flow_name, flow_run_name):
     """Run an Airbyte Connection sync"""
-    logger.info("task_airbytesync %s %s %s", block_name, flow_name, flow_run_name)
+    logger.info("airbytesync %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_airbyte_connection_flow
     if flow_name:
         flow = flow.with_options(name=flow_name)
     if flow_run_name:
         flow = flow.with_options(flow_run_name=flow_run_name)
-    redis = Redis()
-    taskprogress = []
+
     try:
-        taskprogress.append({"step": "started"})
-        redis.hset("taskprogress", self.request.id, json.dumps(taskprogress))
-        flow(block_name)
-        taskprogress.append({"step": "finished"})
-        redis.hset("taskprogress", self.request.id, json.dumps(taskprogress))
+        logger.info("START")
+        result = flow(block_name)
+        logger.info("END")
+        logger.info(result)
+        return {"status": "success", "result": result}
 
     except HTTPException as error:
+        logger.info("ERR-1")
         # the error message may contain "Job <num> failed."
         errormessage = error.detail
         logger.error("celery task caught exception %s", errormessage)
@@ -72,34 +65,25 @@ def task_airbytesync(self, block_name, flow_name, flow_run_name):
         match = pattern.match(errormessage)
         if match:
             airbyte_job_num = match.groups()[0]
-            taskprogress.append({"airbyte_job_num": airbyte_job_num})
-            redis.hset(
-                "taskprogress",
-                self.request.id,
-                json.dumps(taskprogress),
-            )
+            return {"status": "failed", "airbyte_job_num": airbyte_job_num}
         else:
-            taskprogress.append({"status": "no match found for " + errormessage})
-            redis.hset(
-                "taskprogress",
-                self.request.id,
-                json.dumps(taskprogress),
-            )
+            raise
 
     except Exception as error:
         logger.exception(error)
+        raise
 
 
-@celery.task(queue="proxy", bind=True)
-def task_dbtrun(self, block_name, flow_name, flow_run_name):
+def dbtrun(block_name, flow_name, flow_run_name):
     """Run a dbt core flow"""
-    logger.info("task_dbtrun %s %s %s", block_name, flow_name, flow_run_name)
+    logger.info("dbtrun %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_dbtcore_flow
     if flow_name:
         flow = flow.with_options(name=flow_name)
     if flow_run_name:
         flow = flow.with_options(flow_run_name=flow_run_name)
-    flow(block_name)
+    result = flow(block_name)
+    return result
 
 
 # =============================================================================
@@ -244,31 +228,37 @@ async def delete_block(block_id):
 
 # =============================================================================
 @app.post("/proxy/flows/airbyte/connection/sync/")
-async def sync_airbyte_connection_flow(payload: RunFlow, request: Request):
-    """Prefect flow to run airbyte connection"""
+async def sync_airbyte_connection_flow(payload: RunFlow):
+    """Prefect flow to sync an airbyte connection"""
     logger.info(payload)
     if payload.blockName == "":
         logger.error("received empty blockName")
         raise HTTPException(status_code=400, detail="received empty blockName")
     logger.info("Running airbyte connection sync flow")
-    task = task_airbytesync.delay(
-        payload.blockName, payload.flowName, payload.flowRunName
-    )
-    next_api_call = f"POST name={payload.flowRunName} to {request.client.host}:{request.client.port}/proxy/flow_run/"
-    return {"success": True, "next_api_call": next_api_call, "celery_task_id": task.id}
+    try:
+        result = airbytesync(payload.blockName, payload.flowName, payload.flowRunName)
+        logger.info(result)
+        return result
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @app.post("/proxy/flows/dbtcore/run/")
-async def sync_dbtcore_flow(payload: RunFlow, request: Request):
+async def sync_dbtcore_flow(payload: RunFlow):
     """Prefect flow to run dbt"""
     logger.info(payload)
     if payload.blockName == "":
         logger.error("received empty blockName")
         raise HTTPException(status_code=400, detail="received empty blockName")
-    logger.info("running dbtcore/run/ for dbt-core-op %s", payload.blockName)
-    task_dbtrun.delay(payload.blockName, payload.flowName, payload.flowRunName)
-    next_api_call = f"POST name={payload.flowRunName} to {request.client.host}:{request.client.port}/proxy/flow_run/"
-    return {"success": True, "next_api_call": next_api_call}
+    logger.info("running dbtcore-run for dbt-core-op %s", payload.blockName)
+    try:
+        result = dbtrun(payload.blockName, payload.flowName, payload.flowRunName)
+        logger.info(result)
+        return {"status": "success", "result": result}
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
 
 
 @app.post("/proxy/deployments/")
