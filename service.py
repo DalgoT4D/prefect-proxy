@@ -341,6 +341,7 @@ def get_flow_runs_by_deployment_id(deployment_id, limit):
                 "name": flow_run["name"],
                 "tags": flow_run["tags"],
                 "startTime": flow_run["start_time"],
+                "expectedStartTime": flow_run["expected_start_time"],
                 "totalRunTime": flow_run["total_run_time"],
                 "status": flow_run["state"]["type"],
             }
