@@ -21,6 +21,7 @@ from service import (
     post_deployment_flow_run,
     get_flow_runs_by_name,
     post_filter_blocks,
+    set_deployment_schedule
 )
 from schemas import (
     AirbyteServerCreate,
@@ -410,3 +411,24 @@ async def post_create_deployment_flow_run(deployment_id):
         ) from error
 
     return res
+
+
+@app.post("/proxy/deployments/{deployment_id}/set_schedule/{status}")
+def post_deployment_set_schedule(deployment_id, status):
+    """Create a flow run from deployment"""
+
+    if (status is None) or (isinstance(status, str) is not True) or (status not in ["active", "inactive"]):
+        raise HTTPException(
+            status_code=422, detail="incorrect status value"
+        )
+
+    try:
+        set_deployment_schedule(deployment_id, status)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to set schedule"
+        ) from error
+
+    return {"success": 1}
+

@@ -482,3 +482,16 @@ def get_flow_runs_by_name(flow_run_name):
         logger.exception(error)
         raise PrefectException("failed to fetch flow-runs by name") from error
     return flow_runs
+
+
+def set_deployment_schedule(deployment_id, status):
+    """Set deployment schedule to active or inactive"""
+
+    # both the apis return null below
+    if status == 'active':
+        prefect_post(f"deployments/{deployment_id}/set_schedule_active", {})
+
+    if status == 'inactive':
+        prefect_post(f"deployments/{deployment_id}/set_schedule_inactive", {})
+
+    return None
