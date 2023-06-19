@@ -1,4 +1,5 @@
 """interface with prefect's python client api"""
+from http import HTTPStatus
 import os
 import requests
 from fastapi.responses import JSONResponse
@@ -52,7 +53,7 @@ def prefect_post(endpoint, payload):
         res.raise_for_status()
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(status_code=400, detail=res.text) from error
+        raise HTTPException(status_code=400, detail="Invalid input data") from error
     return res.json()
 
 
@@ -68,7 +69,7 @@ def prefect_get(endpoint):
         res.raise_for_status()
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(status_code=400, detail=res.text) from error
+        raise HTTPException(status_code=400, detail="Invalid request") from error
     return res.json()
 
 
@@ -84,13 +85,11 @@ def prefect_delete(endpoint):
         res.raise_for_status()
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(status_code=400, detail=res.text) from error
+        raise HTTPException(status_code=400, detail="Invalid request") from error
+    return res.json()
 
 
 def _block_id(block):
-
-    if not isinstance(block, Deployment):
-        raise TypeError("block must be a prefect Deployment")
     return str(block.dict()["_block_document_id"])
 
 
@@ -123,7 +122,7 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
         await airbyteservercblock.save(payload.blockName)
     except Exception as error:
         logger.exception(error)
-        raise
+        raise PrefectException("failed to create airbyte server block") from error
     logger.info("created airbyte server block named %s", payload.blockName)
     return _block_id(airbyteservercblock)
 
@@ -156,7 +155,7 @@ async def get_airbyte_connection_block_id(blockname) -> str | None:
         return _block_id(block)
     except ValueError:
         logger.error("no airbyte connection block named %s", blockname)
-        return None
+        raise HTTPException(status_code=404, detail=f"No airbyte connection block named {blockname}")
 
 
 async def get_airbyte_connection_block(blockid):
@@ -169,7 +168,7 @@ async def get_airbyte_connection_block(blockid):
         return result
     except requests.exceptions.HTTPError:
         logger.error("no airbyte connection block having id %s", blockid)
-    return None
+        raise HTTPException(status_code=404, detail=f"No airbyte connection block having id {blockid}")
 
 
 async def create_airbyte_connection_block(
@@ -232,7 +231,7 @@ async def get_shell_block_id(blockname) -> str | None:
         block = await ShellOperation.load(blockname)
         return _block_id(block)
     except ValueError:
-        return None
+        raise HTTPException(status_code=404, detail=f"No shell operation block named {blockname}")
 
 
 async def create_shell_block(shell: PrefectShellSetup):
@@ -272,7 +271,7 @@ async def get_dbtcore_block_id(blockname) -> str | None:
         block = await DbtCoreOperation.load(blockname)
         return _block_id(block)
     except ValueError:
-        return None
+        raise HTTPException(status_code=404, detail=f"No dbt core operation block named {blockname}")
 
 
 async def _create_dbt_cli_profile(payload: DbtCoreCreate):
