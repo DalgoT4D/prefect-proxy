@@ -39,6 +39,12 @@ FLOW_RUN_SCHEDULED = "SCHEDULED"
 
 def prefect_post(endpoint, payload):
     """POST request to prefect server"""
+
+    if not isinstance(endpoint, str):
+        raise TypeError("endpoint must be a string")
+    if not isinstance(payload, dict):
+        raise TypeError("payload must be a dictionary")
+    
     root = os.getenv("PREFECT_API_URL")
     res = requests.post(f"{root}/{endpoint}", timeout=30, json=payload)
     logger.info(res.text)
@@ -52,6 +58,10 @@ def prefect_post(endpoint, payload):
 
 def prefect_get(endpoint):
     """GET request to prefect server"""
+
+    if not isinstance(endpoint, str):
+        raise TypeError("endpoint must be a string")
+
     root = os.getenv("PREFECT_API_URL")
     res = requests.get(f"{root}/{endpoint}", timeout=30)
     try:
@@ -64,6 +74,10 @@ def prefect_get(endpoint):
 
 def prefect_delete(endpoint):
     """DELETE request to prefect server"""
+
+    if not isinstance(endpoint, str):
+        raise TypeError("endpoint must be a string")
+    
     root = os.getenv("PREFECT_API_URL")
     res = requests.delete(f"{root}/{endpoint}", timeout=30)
     try:
@@ -74,12 +88,17 @@ def prefect_delete(endpoint):
 
 
 def _block_id(block):
+
+    if not isinstance(block, Deployment):
+        raise TypeError("block must be a prefect Deployment")
     return str(block.dict()["_block_document_id"])
 
 
 # ================================================================================================
 async def get_airbyte_server_block_id(blockname) -> str | None:
     """look up an airbyte server block by name and return block_id"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
     try:
         block = await AirbyteServer.load(blockname)
         logger.info("found airbyte server block named %s", blockname)
@@ -91,6 +110,9 @@ async def get_airbyte_server_block_id(blockname) -> str | None:
 
 async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
     """Create airbyte server block in prefect"""
+
+    if not isinstance(payload, AirbyteServerCreate):
+        raise TypeError("payload must be an AirbyteServerCreate")
 
     airbyteservercblock = AirbyteServer(
         server_host=payload.serverHost,
@@ -108,11 +130,16 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
 
 def update_airbyte_server_block(blockname):
     """We don't update server blocks"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
     raise PrefectException("not implemented")
 
 
 def delete_airbyte_server_block(blockid):
     """Delete airbyte server block"""
+    if not isinstance(blockid, str):
+        raise TypeError("blockid must be a string")
+    
     logger.info("deleting airbyte server block %s", blockid)
     return prefect_delete(f"block_documents/{blockid}")
 
@@ -120,6 +147,9 @@ def delete_airbyte_server_block(blockid):
 # ================================================================================================
 async def get_airbyte_connection_block_id(blockname) -> str | None:
     """look up airbyte connection block by name and return block_id"""
+
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
     try:
         block = await AirbyteConnection.load(blockname)
         logger.info("found airbyte connection block named %s", blockname)
@@ -131,6 +161,8 @@ async def get_airbyte_connection_block_id(blockname) -> str | None:
 
 async def get_airbyte_connection_block(blockid):
     """look up and return block data for an airbyte connection"""
+    if not isinstance(blockid, str):
+        raise TypeError("blockid must be a string")
     try:
         result = prefect_get(f"block_documents/{blockid}")
         logger.info("found airbyte connection block having id %s", blockid)
@@ -144,6 +176,9 @@ async def create_airbyte_connection_block(
     conninfo: AirbyteConnectionCreate,
 ) -> str:
     """Create airbyte connection block"""
+    if not isinstance(conninfo, AirbyteConnectionCreate):
+        raise TypeError("conninfo must be an AirbyteConnectionCreate")
+    
     logger.info(conninfo)
     try:
         serverblock = await AirbyteServer.load(conninfo.serverBlockName)
@@ -171,17 +206,28 @@ async def create_airbyte_connection_block(
 
 def update_airbyte_connection_block(blockname):
     """We don't update connection blocks"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
+    
     raise PrefectException("not implemented")
 
 
 def delete_airbyte_connection_block(blockid):
     """Delete airbyte connection block in prefect"""
+    if not isinstance(blockid, str):
+        raise TypeError("blockid must be a string")
+    
+    logger.info("deleting airbyte connection block %s", blockid)
+    
     return prefect_delete(f"block_documents/{blockid}")
 
 
 # ================================================================================================
 async def get_shell_block_id(blockname) -> str | None:
     """look up a shell operation block by name and return block_id"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
+    
     try:
         block = await ShellOperation.load(blockname)
         return _block_id(block)
@@ -191,6 +237,9 @@ async def get_shell_block_id(blockname) -> str | None:
 
 async def create_shell_block(shell: PrefectShellSetup):
     """Create a prefect shell block"""
+
+    if not isinstance(shell, PrefectShellSetup):
+        raise TypeError("shell must be a PrefectShellSetup")
 
     shell_operation_block = ShellOperation(
         commands=shell.commands, env=shell.env, working_dir=shell.workingDir
@@ -206,12 +255,19 @@ async def create_shell_block(shell: PrefectShellSetup):
 
 def delete_shell_block(blockid):
     """Delete a prefect shell block"""
+    if not isinstance(blockid, str):
+        raise TypeError("blockid must be a string")
+    
+    logger.info("deleting shell operation block %s", blockid)
     return prefect_delete(f"block_documents/{blockid}")
 
 
 # ================================================================================================
 async def get_dbtcore_block_id(blockname) -> str | None:
     """look up a dbt core operation block by name and return block_id"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
+    
     try:
         block = await DbtCoreOperation.load(blockname)
         return _block_id(block)
@@ -221,6 +277,8 @@ async def get_dbtcore_block_id(blockname) -> str | None:
 
 async def _create_dbt_cli_profile(payload: DbtCoreCreate):
     """credentials are decrypted by now"""
+    if not isinstance(payload, DbtCoreCreate):
+        raise TypeError("payload must be a DbtCoreCreate")
     logger.info(payload)
 
     if payload.wtype == "postgres":
@@ -258,6 +316,8 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate):
 
 async def create_dbt_core_block(payload: DbtCoreCreate):
     """Create a dbt core block in prefect"""
+    if not isinstance(payload, DbtCoreCreate):
+        raise TypeError("payload must be a DbtCoreCreate")
     logger.info(payload)
 
     dbt_cli_profile = await _create_dbt_cli_profile(payload)
@@ -283,12 +343,20 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
 
 def delete_dbt_core_block(block_id):
     """Delete a dbt core block in prefect"""
+    if not isinstance(block_id, str):
+        raise TypeError("block_id must be a string")
+    
+    logger.info("deleting dbt core operation block %s", block_id)
     return prefect_delete(f"block_documents/{block_id}")
 
 
 # ================================================================================================
 async def post_deployment(payload: DeploymentCreate) -> None:
     """create a deployment from a flow and a schedule"""
+    if not isinstance(payload, DeploymentCreate):
+        raise TypeError("payload must be a DeploymentCreate")
+    logger.info(payload)
+
     logger.info(payload)
 
     deployment = await Deployment.build_from_flow(
@@ -313,6 +381,14 @@ async def post_deployment(payload: DeploymentCreate) -> None:
 def get_flow_runs_by_deployment_id(deployment_id, limit):
     """Fetch flow runs of a deployment that are FAILED/COMPLETED,
     sorted by descending start time of each run"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    if not isinstance(limit, int):
+        raise TypeError("limit must be an integer")
+    if limit < 0:
+        raise ValueError("limit must be a positive integer")
+    logger.info("fetching flow runs for deployment %s", deployment_id)
+
     query = {
         "sort": "START_TIME_DESC",
         "deployments": {"id": {"any_": [deployment_id]}},
@@ -353,6 +429,10 @@ def get_flow_runs_by_deployment_id(deployment_id, limit):
 def get_deployments_by_filter(org_slug, deployment_ids=[]):
     # pylint: disable=dangerous-default-value
     """fetch all deployments by org"""
+    if not isinstance(org_slug, str):
+        raise TypeError("org_slug must be a string")
+    if not isinstance(deployment_ids, list):
+        raise TypeError("deployment_ids must be a list")
     query = {
         "deployments": {
             "operator": "and_",
@@ -388,6 +468,9 @@ def get_deployments_by_filter(org_slug, deployment_ids=[]):
 async def post_deployment_flow_run(deployment_id):
     # pylint: disable=broad-exception-caught
     """Create deployment flow run"""
+
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
     try:
         flow_run = await run_deployment(deployment_id, timeout=0)
         return {"flow_run_id": flow_run.id}
@@ -399,6 +482,9 @@ async def post_deployment_flow_run(deployment_id):
 
 def parse_log(log):
     """select level, timestamp, message from ..."""
+
+    if not isinstance(log, dict):
+        raise TypeError("log must be a dict")
     return {
         "level": log["level"],
         "timestamp": log["timestamp"],
@@ -409,6 +495,11 @@ def parse_log(log):
 def traverse_flow_run_graph(flow_run_id: str, flow_runs: list):
     """This recursive function will read through the graph
     and return all sub flow run ids of the parent that can potentially have logs"""
+
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+    if not isinstance(flow_runs, list):
+        raise TypeError("flow_runs must be a list")
     flow_runs.append(flow_run_id)
     if flow_run_id is None:
         return flow_runs
@@ -433,6 +524,10 @@ def traverse_flow_run_graph(flow_run_id: str, flow_runs: list):
 
 def get_flow_run_logs(flow_run_id: str, offset: int):
     """return logs from a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+    if not isinstance(offset, int):
+        raise TypeError("offset must be an integer")
     flow_run_ids = traverse_flow_run_graph(flow_run_id, [])
 
     logs = prefect_post(
@@ -454,6 +549,8 @@ def get_flow_run_logs(flow_run_id: str, offset: int):
 
 def get_flow_runs_by_name(flow_run_name):
     """Query flow run from the name"""
+    if not isinstance(flow_run_name, str):
+        raise TypeError("flow_run_name must be a string")
     query = {
         "flow_runs": {"operator": "and_", "name": {"any_": [flow_run_name]}},
     }
