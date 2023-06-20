@@ -20,7 +20,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - name: Create logs directory
-        run: mkdir -p logs
+        run: |
+          mkdir -p logs
+          echo "LOGS_PATH=logs" >> $GITHUB_ENV
+        env:
+          LOGDIR: ../logs
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
