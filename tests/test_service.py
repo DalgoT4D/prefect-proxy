@@ -1,14 +1,29 @@
 import asyncio
 import tempfile
-from fastapi import HTTPException
+from unittest.mock import AsyncMock, patch
+
 import pytest
 import requests
-from unittest.mock import AsyncMock, patch
-from exception import PrefectException
-from schemas import AirbyteConnectionCreate, AirbyteServerCreate, DbtCliProfile, DbtCoreCreate, DbtProfileCreate, DeploymentCreate, PrefectShellSetup
+from fastapi import HTTPException
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
-from service import _create_dbt_cli_profile, create_airbyte_connection_block, create_airbyte_server_block, create_dbt_core_block, create_shell_block, delete_airbyte_connection_block, delete_airbyte_server_block, delete_dbt_core_block, delete_shell_block, get_airbyte_connection_block, get_airbyte_connection_block_id, get_airbyte_server_block_id, get_dbtcore_block_id, get_deployments_by_filter, get_flow_run_logs, get_flow_runs_by_deployment_id, get_flow_runs_by_name, get_shell_block_id, parse_log, post_deployment, post_deployment_flow_run, prefect_delete, prefect_get, prefect_post, set_deployment_schedule, traverse_flow_run_graph
 
+from exception import PrefectException
+from schemas import (AirbyteConnectionCreate, AirbyteServerCreate,
+                     DbtCliProfile, DbtCoreCreate, DbtProfileCreate,
+                     DeploymentCreate, PrefectShellSetup)
+from service import (_create_dbt_cli_profile, create_airbyte_connection_block,
+                     create_airbyte_server_block, create_dbt_core_block,
+                     create_shell_block, delete_airbyte_connection_block,
+                     delete_airbyte_server_block, delete_dbt_core_block,
+                     delete_shell_block, get_airbyte_connection_block,
+                     get_airbyte_connection_block_id,
+                     get_airbyte_server_block_id, get_dbtcore_block_id,
+                     get_deployments_by_filter, get_flow_run_logs,
+                     get_flow_runs_by_deployment_id, get_flow_runs_by_name,
+                     get_shell_block_id, parse_log, post_deployment,
+                     post_deployment_flow_run, prefect_delete, prefect_get,
+                     prefect_post, set_deployment_schedule,
+                     traverse_flow_run_graph)
 
 
 def test_prefect_post_invalid_endpoint():
