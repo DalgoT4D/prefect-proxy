@@ -22,7 +22,7 @@ jobs:
       - name: Create logs directory
         run: |
           mkdir -p logs
-          echo "LOGS_PATH=logs" >> $GITHUB_ENV
+          echo "LOGDIR=logs" >> $GITHUB_ENV
         env:
           LOGDIR: ../logs
       - name: Install dependencies
