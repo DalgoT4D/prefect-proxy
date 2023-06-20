@@ -8,7 +8,8 @@ from proxy.main import (app, delete_block, delete_deployment,
                   get_airbyte_connection_by_blockid,
                   get_airbyte_connection_by_blockname, get_airbyte_server,
                   get_dbtcore, get_flow_run_logs_paginated, get_flow_runs, get_flowrun, get_shell,
-                  post_airbyte_connection, post_airbyte_connection_blocks, post_airbyte_server, post_bulk_delete_blocks, post_create_deployment_flow_run, post_dataflow,
+                  post_airbyte_connection, post_airbyte_connection_blocks, post_airbyte_server, 
+                  post_bulk_delete_blocks, post_create_deployment_flow_run, post_dataflow,
                   post_dbtcore, post_deployment_set_schedule, post_deployments, post_shell,
                   sync_airbyte_connection_flow, sync_dbtcore_flow)
 
