@@ -1,8 +1,8 @@
 import os
 import pytest
 from pydantic import ValidationError
-from main import delete_deployment
-from schemas import (
+from proxy.main import delete_deployment
+from proxy.schemas import (
     AirbyteConnectionBlockResponse,
     AirbyteConnectionCreate,
     AirbyteServerBlockResponse,
@@ -13,7 +13,7 @@ from schemas import (
     FlowRunsResponse,
     PostDeploymentResponse,
 )
-from service import (
+from proxy.service import (
     create_airbyte_connection_block,
     create_airbyte_server_block,
     create_dbt_core_block,

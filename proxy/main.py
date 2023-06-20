@@ -4,7 +4,7 @@ import re
 import requests
 from fastapi import FastAPI, HTTPException
 
-from service import (
+from proxy.service import (
     get_airbyte_server_block_id,
     create_airbyte_server_block,
     get_airbyte_connection_block_id,
@@ -23,7 +23,7 @@ from service import (
     post_filter_blocks,
     set_deployment_schedule
 )
-from schemas import (
+from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteConnectionCreate,
     PrefectShellSetup,
@@ -35,7 +35,7 @@ from schemas import (
     PrefectBlocksDelete,
     AirbyteConnectionBlocksFetch,
 )
-from flows import run_airbyte_connection_flow, run_dbtcore_flow
+from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
 
 from logger import setup_logger, logger
 

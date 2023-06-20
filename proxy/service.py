@@ -18,16 +18,16 @@ from dotenv import load_dotenv
 from logger import logger
 
 
-from helpers import cleaned_name_for_dbtblock
-from exception import PrefectException
-from schemas import (
+from proxy.helpers import cleaned_name_for_dbtblock
+from proxy.exception import PrefectException
+from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteConnectionCreate,
     PrefectShellSetup,
     DbtCoreCreate,
     DeploymentCreate,
 )
-from flows import (
+from proxy.flows import (
     deployment_schedule_flow,
 )
 

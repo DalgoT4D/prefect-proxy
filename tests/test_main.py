@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from main import (app, delete_block, delete_deployment,
+from proxy.main import (app, delete_block, delete_deployment,
                   get_airbyte_connection_by_blockid,
                   get_airbyte_connection_by_blockname, get_airbyte_server,
                   get_dbtcore, get_flow_run_logs_paginated, get_flow_runs, get_flowrun, get_shell,
@@ -12,7 +12,7 @@ from main import (app, delete_block, delete_deployment,
                   post_dbtcore, post_deployment_set_schedule, post_deployments, post_shell,
                   sync_airbyte_connection_flow, sync_dbtcore_flow)
 
-from schemas import (AirbyteConnectionBlocksFetch, AirbyteConnectionCreate, AirbyteServerCreate,
+from proxy.schemas import (AirbyteConnectionBlocksFetch, AirbyteConnectionCreate, AirbyteServerCreate,
                      DbtCoreCreate, DbtProfileCreate, DeploymentCreate,
                      DeploymentFetch, FlowRunRequest, PrefectBlocksDelete, PrefectShellSetup,
                      RunFlow)
@@ -24,27 +24,27 @@ client = TestClient(app)
 @pytest.mark.asyncio
 async def test_post_bulk_delete_blocks_success():
     payload = PrefectBlocksDelete(block_ids=['12345', '67890'])
-    with patch('main.requests.delete') as mock_delete:
+    with patch('proxy.main.requests.delete') as mock_delete:
         mock_delete.return_value.raise_for_status.return_value = None
         response = await post_bulk_delete_blocks(payload)
         assert response == {'deleted_blockids': ['12345', '67890']}
 
 def test_post_airbyte_connection_blocks_success():
     payload = AirbyteConnectionBlocksFetch(block_names=['test_block'])
-    with patch('main.post_filter_blocks', return_value=[{'name': 'test_block', 'data': {'connection_id': '12345'}, 'id': '67890'}]):
+    with patch('proxy.main.post_filter_blocks', return_value=[{'name': 'test_block', 'data': {'connection_id': '12345'}, 'id': '67890'}]):
         response = post_airbyte_connection_blocks(payload)
         assert response == [{'name': 'test_block', 'connectionId': '12345', 'id': '67890'}]
 
 
 @pytest.mark.asyncio
 async def test_get_airbyte_server_success():
-    with patch('main.get_airbyte_server_block_id', return_value='12345'):
+    with patch('proxy.main.get_airbyte_server_block_id', return_value='12345'):
         response = await get_airbyte_server('test_block')
         assert response == {'block_id': '12345'}
 
 @pytest.mark.asyncio
 async def test_get_airbyte_server_failure():
-    with patch('main.get_airbyte_server_block_id', return_value=None):
+    with patch('proxy.main.get_airbyte_server_block_id', return_value=None):
         with pytest.raises(HTTPException) as excinfo:
             await get_airbyte_server('test_block')
         assert excinfo.value.status_code == 400
@@ -52,7 +52,7 @@ async def test_get_airbyte_server_failure():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_server_invalid_blockname():
-    with patch("main.get_airbyte_server_block_id") as get_airbyte_server_block_id_mock:
+    with patch("proxy.main.get_airbyte_server_block_id") as get_airbyte_server_block_id_mock:
         get_airbyte_server_block_id_mock.return_value = None
         blockname = "invalid_blockname"
         with pytest.raises(HTTPException) as exc_info:
@@ -68,7 +68,7 @@ async def test_post_airbyte_server_success():
         serverPort=8000,
         apiVersion='v1'
     )
-    with patch('main.create_airbyte_server_block', return_value='12345'):
+    with patch('proxy.main.create_airbyte_server_block', return_value='12345'):
         response = await post_airbyte_server(payload)
         assert response == {'block_id': '12345'}
 
@@ -80,7 +80,7 @@ async def test_post_airbyte_server_failure():
         serverPort=8000,
         apiVersion='v1'
     )
-    with patch('main.create_airbyte_server_block', side_effect=Exception('test error')):
+    with patch('proxy.main.create_airbyte_server_block', side_effect=Exception('test error')):
         with pytest.raises(HTTPException) as excinfo:
             await post_airbyte_server(payload)
         assert excinfo.value.status_code == 400
@@ -101,13 +101,13 @@ async def test_post_airbyte_server_with_invalid_payload():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockname_success():
-    with patch('main.get_airbyte_connection_block_id', return_value='12345'):
+    with patch('proxy.main.get_airbyte_connection_block_id', return_value='12345'):
         response = await get_airbyte_connection_by_blockname('test_block')
         assert response == {'block_id': '12345'}
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockname_failure():
-    with patch('main.get_airbyte_connection_block_id', return_value=None):
+    with patch('proxy.main.get_airbyte_connection_block_id', return_value=None):
         with pytest.raises(HTTPException) as excinfo:
             await get_airbyte_connection_by_blockname('test_block')
         assert excinfo.value.status_code == 400
@@ -115,7 +115,7 @@ async def test_get_airbyte_connection_by_blockname_failure():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockname_invalid_blockname():
-    with patch("main.get_airbyte_connection_block_id") as get_airbyte_connection_block_id_mock:
+    with patch("proxy.main.get_airbyte_connection_block_id") as get_airbyte_connection_block_id_mock:
         get_airbyte_connection_block_id_mock.return_value = None
         blockname = "invalid_blockname"
         with pytest.raises(HTTPException) as exc_info:
@@ -126,13 +126,13 @@ async def test_get_airbyte_connection_by_blockname_invalid_blockname():
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockid_success():
     block_data = {'id': '12345', 'name': 'test_block', 'url': 'http://test-block.com'}
-    with patch('main.get_airbyte_connection_block', return_value=block_data):
+    with patch('proxy.main.get_airbyte_connection_block', return_value=block_data):
         response = await get_airbyte_connection_by_blockid('12345')
         assert response == block_data
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockid_failure():
-    with patch('main.get_airbyte_connection_block', return_value=None):
+    with patch('proxy.main.get_airbyte_connection_block', return_value=None):
         with pytest.raises(HTTPException) as excinfo:
             await get_airbyte_connection_by_blockid('12345')
         assert excinfo.value.status_code == 400
@@ -140,7 +140,7 @@ async def test_get_airbyte_connection_by_blockid_failure():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockid_invalid_blockid():
-    with patch("main.get_airbyte_connection_block") as get_airbyte_connection_block_mock:
+    with patch("proxy.main.get_airbyte_connection_block") as get_airbyte_connection_block_mock:
         get_airbyte_connection_block_mock.return_value = None
         blockid = "invalid_blockid"
         with pytest.raises(HTTPException) as exc_info:
@@ -156,7 +156,7 @@ async def test_post_airbyte_connection_success():
         connectionId='12345',
         connectionBlockName='test_connection'
     )
-    with patch('main.create_airbyte_connection_block', return_value='12345'):
+    with patch('proxy.main.create_airbyte_connection_block', return_value='12345'):
         response = await post_airbyte_connection(payload)
         assert response == {'block_id': '12345'}
 
@@ -167,7 +167,7 @@ async def test_post_airbyte_connection_failure():
         connectionId='12345',
         connectionBlockName='test_connection'
     )
-    with patch('main.create_airbyte_connection_block', side_effect=Exception('test error')):
+    with patch('proxy.main.create_airbyte_connection_block', side_effect=Exception('test error')):
         with pytest.raises(HTTPException) as excinfo:
             await post_airbyte_connection(payload)
         assert excinfo.value.status_code == 400
@@ -189,13 +189,13 @@ async def test_post_airbyte_connection_with_invalid_payload():
 
 @pytest.mark.asyncio
 async def test_get_shell_success():
-    with patch('main.get_shell_block_id', return_value='12345'):
+    with patch('proxy.main.get_shell_block_id', return_value='12345'):
         response = await get_shell('test_block')
         assert response == {'block_id': '12345'}
 
 @pytest.mark.asyncio
 async def test_get_shell_failure():
-    with patch('main.get_shell_block_id', return_value=None):
+    with patch('proxy.main.get_shell_block_id', return_value=None):
         with pytest.raises(HTTPException) as excinfo:
             await get_shell('test_block')
         assert excinfo.value.status_code == 400
@@ -210,7 +210,7 @@ async def test_post_shell_success():
         env={
             'TEST_ENV': 'test_value'}
     )
-    with patch('main.create_shell_block', return_value='12345'):
+    with patch('proxy.main.create_shell_block', return_value='12345'):
         response = await post_shell(payload)
         assert response == {'block_id': '12345'}
 
@@ -223,7 +223,7 @@ async def test_post_shell_failure():
         env={
             'TEST_ENV': 'test_value'}
     )
-    with patch('main.create_shell_block', side_effect=Exception('test error')):
+    with patch('proxy.main.create_shell_block', side_effect=Exception('test error')):
         with pytest.raises(HTTPException) as excinfo:
             await post_shell(payload)
         assert excinfo.value.status_code == 400
@@ -232,13 +232,13 @@ async def test_post_shell_failure():
 
 @pytest.mark.asyncio
 async def test_get_dbtcore_success():
-    with patch('main.get_dbtcore_block_id', return_value='12345'):
+    with patch('proxy.main.get_dbtcore_block_id', return_value='12345'):
         response = await get_dbtcore('test_block')
         assert response == {'block_id': '12345'}
 
 @pytest.mark.asyncio
 async def test_get_dbtcore_failure():
-    with patch('main.get_dbtcore_block_id', return_value=None):
+    with patch('proxy.main.get_dbtcore_block_id', return_value=None):
         with pytest.raises(HTTPException) as excinfo:
             await get_dbtcore('test_block')
         assert excinfo.value.status_code == 400
@@ -263,7 +263,7 @@ async def test_post_dbtcore_success():
         profiles_dir="test_profiles_dir",
         project_dir="test_project_dir",
     )
-    with patch('main.create_dbt_core_block', return_value=('12345', 'test_dbt_cleaned')):
+    with patch('proxy.main.create_dbt_core_block', return_value=('12345', 'test_dbt_cleaned')):
         response = await post_dbtcore(payload)
         assert response == {'block_id': '12345', 'block_name': 'test_dbt_cleaned'}
 
@@ -286,7 +286,7 @@ async def test_post_dbtcore_failure():
         profiles_dir="test_profiles_dir",
         project_dir="test_project_dir",
     )
-    with patch('main.create_dbt_core_block', side_effect=Exception('test error')):
+    with patch('proxy.main.create_dbt_core_block', side_effect=Exception('test error')):
         with pytest.raises(HTTPException) as excinfo:
             await post_dbtcore(payload)
         assert excinfo.value.status_code == 400
@@ -295,14 +295,14 @@ async def test_post_dbtcore_failure():
 
 @pytest.mark.asyncio
 async def test_delete_block_success():
-    with patch('main.requests.delete') as mock_delete:
+    with patch('proxy.main.requests.delete') as mock_delete:
         mock_delete.return_value.status_code = 204
         response = await delete_block('12345')
         assert response is None
 
 @pytest.mark.asyncio
 async def test_delete_block_failure():
-    with patch('main.requests.delete') as mock_delete:
+    with patch('proxy.main.requests.delete') as mock_delete:
         mock_delete.return_value.raise_for_status.side_effect = Exception('test error')
         mock_delete.return_value.text = 'test error'
         with pytest.raises(HTTPException) as excinfo:
@@ -314,7 +314,7 @@ async def test_delete_block_failure():
 @pytest.mark.asyncio
 async def test_sync_airbyte_connection_flow_success():
     payload = RunFlow(blockName='test_block', flowName='test_flow', flowRunName='test_flow_run')
-    with patch('main.airbytesync', return_value='test result'):
+    with patch('proxy.main.airbytesync', return_value='test result'):
         response = await sync_airbyte_connection_flow(payload)
         assert response == 'test result'
 
@@ -330,7 +330,7 @@ async def test_sync_airbyte_connection_flow_failure():
 @pytest.mark.asyncio
 async def test_sync_dbtcore_flow_success():
     payload = RunFlow(blockName='test_block', flowName='test_flow', flowRunName='test_flow_run')
-    with patch('main.dbtrun', return_value='test result'):
+    with patch('proxy.main.dbtrun', return_value='test result'):
         response = await sync_dbtcore_flow(payload)
         assert response == {'status': 'success', 'result': 'test result'}
 
@@ -354,7 +354,7 @@ async def test_post_dataflow_success():
         dbt_blocks=[{'name': 'test_block'}],
         cron='* * * * *'
     )
-    with patch('main.post_deployment', return_value={'id': '67890'}):
+    with patch('proxy.main.post_deployment', return_value={'id': '67890'}):
         response = await post_dataflow(payload)
         assert response == {'deployment': {'id': '67890'}}
 
@@ -368,7 +368,7 @@ async def test_post_dataflow_failure():
         dbt_blocks=[{'name': 'test_block'}],
         cron='* * * * *'
     )
-    with patch('main.post_deployment', side_effect=Exception('test error')):
+    with patch('proxy.main.post_deployment', side_effect=Exception('test error')):
         with pytest.raises(HTTPException) as excinfo:
             await post_dataflow(payload)
         assert excinfo.value.status_code == 400
@@ -377,27 +377,27 @@ async def test_post_dataflow_failure():
 @pytest.mark.asyncio
 async def test_get_flowrun_success():
     payload = FlowRunRequest(name='test_flow_run')
-    with patch('main.get_flow_runs_by_name', return_value=[{'id': '12345'}]):
+    with patch('proxy.main.get_flow_runs_by_name', return_value=[{'id': '12345'}]):
         response = await get_flowrun(payload)
         assert response == {'flow_run': {'id': '12345'}}
 
 @pytest.mark.asyncio
 async def test_get_flowrun_failure():
     payload = FlowRunRequest(name='test_flow_run')
-    with patch('main.get_flow_runs_by_name', return_value=[]):
+    with patch('proxy.main.get_flow_runs_by_name', return_value=[]):
         with pytest.raises(HTTPException) as excinfo:
             await get_flowrun(payload)
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == 'no such flow run'
 
 def test_get_flow_runs_success():
-    with patch('main.get_flow_runs_by_deployment_id', return_value=[{'id': '12345'}]):
+    with patch('proxy.main.get_flow_runs_by_deployment_id', return_value=[{'id': '12345'}]):
         response = get_flow_runs('67890')
         assert response == {'flow_runs': [{'id': '12345'}]}
 
 
 def test_get_flow_runs_failure():
-    with patch('main.get_flow_runs_by_deployment_id', side_effect=Exception('test error')):
+    with patch('proxy.main.get_flow_runs_by_deployment_id', side_effect=Exception('test error')):
         with pytest.raises(HTTPException) as excinfo:
             get_flow_runs('67890')
         assert excinfo.value.status_code == 400
@@ -405,14 +405,14 @@ def test_get_flow_runs_failure():
 
 def test_post_deployments_success():
     payload = DeploymentFetch(org_slug='test_org', deployment_ids=['12345'])
-    with patch('main.get_deployments_by_filter', return_value=[{'id': '12345'}]):
+    with patch('proxy.main.get_deployments_by_filter', return_value=[{'id': '12345'}]):
         response = post_deployments(payload)
         assert response == {'deployments': [{'id': '12345'}]}
 
 
 def test_post_deployments_failure():
     payload = DeploymentFetch(org_slug='test_org', deployment_ids=['12345'])
-    with patch('main.get_deployments_by_filter', side_effect=Exception('test error')):
+    with patch('proxy.main.get_deployments_by_filter', side_effect=Exception('test error')):
         with pytest.raises(HTTPException) as excinfo:
             post_deployments(payload)
         assert excinfo.value.status_code == 400
@@ -420,25 +420,25 @@ def test_post_deployments_failure():
 
 
 def test_get_flow_run_logs_paginated_success():
-    with patch('main.get_flow_run_logs', return_value='test logs'):
+    with patch('proxy.main.get_flow_run_logs', return_value='test logs'):
         response = get_flow_run_logs_paginated('12345')
         assert response == 'test logs'
 
 def test_get_flow_run_logs_paginated_failure():
-    with patch('main.get_flow_run_logs', side_effect=Exception('test error')):
+    with patch('proxy.main.get_flow_run_logs', side_effect=Exception('test error')):
         with pytest.raises(HTTPException) as excinfo:
             get_flow_run_logs_paginated('12345')
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == 'failed to fetch logs for flow_run'
 
 def test_delete_deployment_success():
-    with patch('main.requests.delete') as mock_delete:
+    with patch('proxy.main.requests.delete') as mock_delete:
         mock_delete.return_value.raise_for_status.return_value = None
         response = delete_deployment('12345')
         assert response is None
 
 def test_delete_deployment_failure():
-    with patch('main.requests.delete') as mock_delete:
+    with patch('proxy.main.requests.delete') as mock_delete:
         mock_delete.return_value.raise_for_status.side_effect = Exception('test error')
         mock_delete.return_value.text = 'test error'
         with pytest.raises(HTTPException) as excinfo:
@@ -449,20 +449,20 @@ def test_delete_deployment_failure():
 
 @pytest.mark.asyncio
 async def test_post_create_deployment_flow_run_success():
-    with patch('main.post_deployment_flow_run', return_value='test result'):
+    with patch('proxy.main.post_deployment_flow_run', return_value='test result'):
         response = await post_create_deployment_flow_run('12345')
         assert response == 'test result'
 
 @pytest.mark.asyncio
 async def test_post_create_deployment_flow_run_failure():
-    with patch('main.post_deployment_flow_run', side_effect=Exception('test error')):
+    with patch('proxy.main.post_deployment_flow_run', side_effect=Exception('test error')):
         with pytest.raises(HTTPException) as excinfo:
             await post_create_deployment_flow_run('12345')
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == 'failed to create flow_run for deployment'
 
 def test_post_deployment_set_schedule_success():
-    with patch('main.set_deployment_schedule'):
+    with patch('proxy.main.set_deployment_schedule'):
         response = post_deployment_set_schedule('12345', 'active')
         assert response == {'success': 1}
 
