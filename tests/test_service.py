@@ -1,11 +1,13 @@
+import asyncio
+import tempfile
 from fastapi import HTTPException
 import pytest
 import requests
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from exception import PrefectException
-from schemas import AirbyteConnectionCreate, AirbyteServerCreate, PrefectShellSetup
+from schemas import AirbyteConnectionCreate, AirbyteServerCreate, DbtCliProfile, DbtCoreCreate, DbtProfileCreate, PrefectShellSetup
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
-from service import create_airbyte_connection_block, create_airbyte_server_block, create_shell_block, delete_airbyte_connection_block, delete_airbyte_server_block, delete_shell_block, get_airbyte_connection_block, get_airbyte_connection_block_id, get_airbyte_server_block_id, get_dbtcore_block_id, get_shell_block_id, prefect_delete, prefect_get, prefect_post
+from service import _create_dbt_cli_profile, create_airbyte_connection_block, create_airbyte_server_block, create_dbt_core_block, create_shell_block, delete_airbyte_connection_block, delete_airbyte_server_block, delete_dbt_core_block, delete_shell_block, get_airbyte_connection_block, get_airbyte_connection_block_id, get_airbyte_server_block_id, get_dbtcore_block_id, get_shell_block_id, prefect_delete, prefect_get, prefect_post
 
 
 
@@ -507,3 +509,249 @@ async def test_get_dbtcore_block_id_invalid_blockname():
     with pytest.raises(TypeError) as excinfo:
         await get_dbtcore_block_id(123)
     assert str(excinfo.value) == 'blockname must be a string'
+
+
+@pytest.mark.asyncio
+@patch("service.DbtCliProfile.save", new_callable=AsyncMock)
+async def test_create_dbt_cli_profile(mock_save):
+    payload = DbtCoreCreate(
+        blockName="test_block_name",
+        profile=DbtProfileCreate(
+            name="test_name",
+            target="test_target",
+            target_configs_schema="test_outputs_path",
+        ),
+        wtype="postgres", 
+        credentials={
+            "username": "test_username",
+            "password": "test_password",
+            "database": "test_database",
+            "host": "test_host",
+            "port": "test_port",
+        },
+        commands=["test_command"],
+        env={"test_key": "test_value"},
+        working_dir="test_working_dir",
+        profiles_dir="test_profiles_dir",
+        project_dir="test_project_dir",
+    )
+    
+    result = await _create_dbt_cli_profile(payload)
+    
+    assert result.name == payload.profile.name
+    assert result.target == payload.profile.target
+
+
+@pytest.mark.asyncio
+async def test_create_dbt_cli_profile_failure():
+    # Create a DbtCoreCreate object with an invalid wtype value
+    payload = DbtCoreCreate(
+        blockName="test_block_name",
+        profile=DbtProfileCreate(
+            name="test_name",
+            target="test_target",
+            target_configs_schema="test_outputs_path",
+        ),
+        wtype="invalid_wtype",  # Use an invalid wtype value
+        credentials={
+            "username": "test_username",
+            "password": "test_password",
+            "database": "test_database",
+            "host": "test_host",
+            "port": "test_port",
+        },
+        commands=["test_command"],
+        env={"test_key": "test_value"},
+        working_dir="test_working_dir",
+        profiles_dir="test_profiles_dir",
+        project_dir="test_project_dir",
+    )
+    
+    # Call the function with the payload and assert that it raises a PrefectException
+    with pytest.raises(PrefectException) as excinfo:
+        await _create_dbt_cli_profile(payload)
+    
+    # Assert that the exception message is as expected
+    assert str(excinfo.value) == "unknown wtype: invalid_wtype"
+
+
+@pytest.mark.asyncio
+async def test_create_dbt_cli_profile_with_invalid_payload():
+    payload = "invalid_payload"
+    
+    with pytest.raises(TypeError) as excinfo:
+        await _create_dbt_cli_profile(payload)
+    
+    assert str(excinfo.value) == "payload must be a DbtCoreCreate"
+
+
+@pytest.mark.asyncio
+@patch("service.DbtCliProfile.save", new_callable=AsyncMock)
+async def test_create_dbt_cli_profile_exception(mock_save):
+    mock_save.side_effect = Exception("test exception")
+    
+    payload = DbtCoreCreate(
+        blockName="test_block_name",
+        profile=DbtProfileCreate(
+            name="test_name",
+            target="test_target",
+            target_configs_schema="test_outputs_path",
+        ),
+        wtype="postgres",
+        credentials={
+            "username": "test_username",
+            "password": "test_password",
+            "database": "test_database",
+            "host": "test_host",
+            "port": "test_port",
+        },
+        commands=["test_command"],
+        env={"test_key": "test_value"},
+        working_dir="test_working_dir",
+        profiles_dir="test_profiles_dir",
+        project_dir="test_project_dir",
+    )
+    
+    with pytest.raises(PrefectException) as excinfo:
+        await _create_dbt_cli_profile(payload)
+
+    assert str(excinfo.value) == "failed to create dbt cli profile"
+
+
+@pytest.mark.asyncio
+@patch("service.DbtCliProfile.save", new_callable=AsyncMock)
+@patch("service.DbtCoreOperation.__init__", return_value=None)
+@patch("service.DbtCoreOperation.save", new_callable=AsyncMock)
+@patch("service._block_id", return_value=("test_block_id", "test_cleaned_blockname"))
+async def test_create_dbt_core_block_success(mock_block_id, mock_dbtcoreoperation_save, mock_dbtcoreoperation_init, mock_save):
+    with tempfile.TemporaryDirectory() as tempdir:
+        payload = DbtCoreCreate(
+            blockName="test_block_name",
+            profile=DbtProfileCreate(
+                name="test_name",
+                target="test_target",
+                target_configs_schema="test_outputs_path",
+            ),
+            wtype="postgres",
+            credentials={
+                "username": "test_username",
+                "password": "test_password",
+                "database": "test_database",
+                "host": "test_host",
+                "port": "test_port",
+            },
+            commands=["run"],
+            env={"test_key": "test_value"},
+            working_dir=tempdir,
+            profiles_dir="test_profiles_dir",
+            project_dir="test_project_dir",
+        )
+        
+        result = await create_dbt_core_block(payload)
+        
+        assert result == (('test_block_id', 'test_cleaned_blockname'), 'testblockname')
+
+        
+@pytest.mark.asyncio
+async def test_create_dbt_core_block_failure():
+    payload = "invalid_payload"
+    
+    with pytest.raises(TypeError) as excinfo:
+        await create_dbt_core_block(payload)
+    
+    assert str(excinfo.value) == "payload must be a DbtCoreCreate"
+
+@pytest.mark.asyncio
+@patch("service.DbtCoreOperation.save", new_callable=AsyncMock)
+async def test_create_dbt_core_block_exception(mock_save):
+    mock_save.side_effect = Exception("test exception")
+    
+    # Create a valid DbtCoreCreate object
+    payload = DbtCoreCreate(
+        blockName="test_block_name",
+        profile=DbtProfileCreate(
+            name="test_name",
+            target="test_target",
+            target_configs_schema="test_outputs_path",
+        ),
+        wtype="postgres",
+        credentials={
+            "username": "test_username",
+            "password": "test_password",
+            "database": "test_database",
+            "host": "test_host",
+            "port": "test_port",
+        },
+        commands=["test_command"],
+        env={"test_key": "test_value"},
+        working_dir="test_working_dir",
+        profiles_dir="test_profiles_dir",
+        project_dir="test_project_dir",
+    )
+    
+    with pytest.raises(PrefectException) as excinfo:
+        await create_dbt_core_block(payload)
+    
+    assert str(excinfo.value) == "failed to create dbt cli profile"
+
+
+@pytest.mark.asyncio
+@patch("service.DbtCliProfile.save", new_callable=AsyncMock)
+@patch("service.DbtCoreOperation.__init__", return_value=None)
+@patch("service.DbtCoreOperation.save", side_effect=Exception("Test error"))
+@patch("service._block_id", return_value=("test_block_id", "test_cleaned_blockname"))
+async def test_create_dbt_core_block_exception(
+    mock_block_id, mock_dbtcoreoperation_save, mock_dbtcoreoperation_init, mock_save
+):
+    with tempfile.TemporaryDirectory() as tempdir:
+        payload = DbtCoreCreate(
+            blockName="test_block_name",
+            profile=DbtProfileCreate(
+                name="test_name",
+                target="test_target",
+                target_configs_schema="test_outputs_path",
+            ),
+            wtype="postgres",
+            credentials={
+                "username": "test_username",
+                "password": "test_password",
+                "database": "test_database",
+                "host": "test_host",
+                "port": "test_port",
+            },
+            commands=["run"],
+            env={"test_key": "test_value"},
+            working_dir=tempdir,
+            profiles_dir="test_profiles_dir",
+            project_dir="test_project_dir",
+        )
+
+        with pytest.raises(PrefectException) as exc_info:
+            await create_dbt_core_block(payload)
+
+        assert str(exc_info.value) == "failed to create dbt core op block"
+
+
+@pytest.mark.asyncio
+@patch("service.prefect_delete")
+async def test_delete_dbt_core_block_success(mock_prefect_delete):
+    block_id = "test_block_id"
+    mock_prefect_delete.return_value = "Deletion successful"
+
+    # Simulate asynchronous behavior by using asyncio.sleep
+    await asyncio.sleep(0)
+
+    result = delete_dbt_core_block(block_id)
+
+    assert result == "Deletion successful"
+    mock_prefect_delete.assert_called_once_with("block_documents/test_block_id")
+
+
+@pytest.mark.asyncio
+async def test_delete_dbt_core_block_type_error():
+    block_id = 123
+    
+    with pytest.raises(TypeError) as exc_info:
+        await delete_dbt_core_block(block_id)
+    
+    assert str(exc_info.value) == "block_id must be a string"

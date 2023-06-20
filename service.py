@@ -319,11 +319,16 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate):
     else:
         raise PrefectException("unknown wtype: " + payload.wtype)
 
-    dbt_cli_profile = DbtCliProfile(
-        name=payload.profile.name,
-        target=payload.profile.target,
-        target_configs=target_configs,
-    )
+    try:
+        dbt_cli_profile = DbtCliProfile(
+            name=payload.profile.name,
+            target=payload.profile.target,
+            target_configs=target_configs,
+        )
+        await dbt_cli_profile.save(overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to create dbt cli profile") from error
     # await dbt_cli_profile.save(
     #     cleaned_name_for_dbtblock(payload.profile.name), overwrite=True
     # )
