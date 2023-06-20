@@ -1,9 +1,9 @@
 [run]
 omit=*/tests/*
      */__init__.py
-     */schemas.py
+     */proxy/schemas.py
      */tests.py
-     */exception.py
-     */helpers.py
+     */proxy/exception.py
+     */proxy/helpers.py
      */logger.py
-     */flows.py
+     */proxy/flows.py
