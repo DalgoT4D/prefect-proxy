@@ -92,7 +92,24 @@ def prefect_delete(endpoint):
 def _block_id(block):
     return str(block.dict()["_block_document_id"])
 
+# ================================================================================================
+def post_filter_blocks(block_names):
+    """Filter and fetch prefect blocks based on the query parameter"""
+    try:
+        query = {
+                "block_documents": {
+                "operator": "and_",
+                "name": {"any_": []},
+            }
+        }
+        if block_names:
+            query["block_documents"]["name"]["any_"] = block_names
 
+        return prefect_post("block_documents/filter", query)
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException("failed to create deployment") from err
+    
 # ================================================================================================
 async def get_airbyte_server_block_id(blockname) -> str | None:
     """look up an airbyte server block by name and return block_id"""
@@ -458,6 +475,7 @@ def get_deployments_by_filter(org_slug, deployment_ids=[]):
                 "deploymentId": deployment["id"],
                 "tags": deployment["tags"],
                 "cron": deployment["schedule"]["cron"],
+                "isScheduleActive": deployment["is_schedule_active"]
             }
         )
 
@@ -560,3 +578,16 @@ def get_flow_runs_by_name(flow_run_name):
         logger.exception(error)
         raise PrefectException("failed to fetch flow-runs by name") from error
     return flow_runs
+
+
+def set_deployment_schedule(deployment_id, status):
+    """Set deployment schedule to active or inactive"""
+
+    # both the apis return null below
+    if status == 'active':
+        prefect_post(f"deployments/{deployment_id}/set_schedule_active", {})
+
+    if status == 'inactive':
+        prefect_post(f"deployments/{deployment_id}/set_schedule_inactive", {})
+
+    return None
