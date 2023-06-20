@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from main import (app, create_airbyte_server_block, delete_block, delete_deployment,
+from main import (app, delete_block, delete_deployment,
                   get_airbyte_connection_by_blockid,
                   get_airbyte_connection_by_blockname, get_airbyte_server,
                   get_dbtcore, get_flow_run_logs_paginated, get_flow_runs, get_flowrun, get_shell,
@@ -28,7 +28,6 @@ async def test_post_bulk_delete_blocks_success():
         response = await post_bulk_delete_blocks(payload)
         assert response == {'deleted_blockids': ['12345', '67890']}
 
-
 def test_post_airbyte_connection_blocks_success():
     payload = AirbyteConnectionBlocksFetch(block_names=['test_block'])
     with patch('main.post_filter_blocks', return_value=[{'name': 'test_block', 'data': {'connection_id': '12345'}, 'id': '67890'}]):
@@ -50,6 +49,15 @@ async def test_get_airbyte_server_failure():
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == 'no block having name test_block'
 
+@pytest.mark.asyncio
+async def test_get_airbyte_server_invalid_blockname():
+    with patch("main.get_airbyte_server_block_id") as get_airbyte_server_block_id_mock:
+        get_airbyte_server_block_id_mock.return_value = None
+        blockname = "invalid_blockname"
+        with pytest.raises(HTTPException) as exc_info:
+            await get_airbyte_server(blockname)
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "no block having name " + blockname
 
 @pytest.mark.asyncio
 async def test_post_airbyte_server_success():
@@ -77,6 +85,18 @@ async def test_post_airbyte_server_failure():
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == 'failed to create airbyte server block'
 
+@pytest.mark.asyncio
+async def test_post_airbyte_server_with_invalid_payload():
+    payload = AirbyteServerCreate(
+        blockName='test_server',
+        serverHost='http://test-server.com',
+        serverPort=8000,
+        apiVersion='v1'
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        await post_airbyte_server(payload)
+    assert excinfo.value.status_code == 400
+    assert excinfo.value.detail == 'failed to create airbyte server block'
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockname_success():
@@ -93,6 +113,16 @@ async def test_get_airbyte_connection_by_blockname_failure():
         assert excinfo.value.detail == 'no block having name test_block'
 
 @pytest.mark.asyncio
+async def test_get_airbyte_connection_by_blockname_invalid_blockname():
+    with patch("main.get_airbyte_connection_block_id") as get_airbyte_connection_block_id_mock:
+        get_airbyte_connection_block_id_mock.return_value = None
+        blockname = "invalid_blockname"
+        with pytest.raises(HTTPException) as exc_info:
+            await get_airbyte_connection_by_blockname(blockname)
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "no block having name " + blockname
+
+@pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockid_success():
     block_data = {'id': '12345', 'name': 'test_block', 'url': 'http://test-block.com'}
     with patch('main.get_airbyte_connection_block', return_value=block_data):
@@ -106,6 +136,16 @@ async def test_get_airbyte_connection_by_blockid_failure():
             await get_airbyte_connection_by_blockid('12345')
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == 'no block having id 12345'
+
+@pytest.mark.asyncio
+async def test_get_airbyte_connection_by_blockid_invalid_blockid():
+    with patch("main.get_airbyte_connection_block") as get_airbyte_connection_block_mock:
+        get_airbyte_connection_block_mock.return_value = None
+        blockid = "invalid_blockid"
+        with pytest.raises(HTTPException) as exc_info:
+            await get_airbyte_connection_by_blockid(blockid)
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail == "no block having id " + blockid
 
 
 @pytest.mark.asyncio
@@ -131,6 +171,19 @@ async def test_post_airbyte_connection_failure():
             await post_airbyte_connection(payload)
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == 'failed to create airbyte connection block'
+
+
+@pytest.mark.asyncio
+async def test_post_airbyte_connection_with_invalid_payload():
+    payload = AirbyteConnectionCreate(
+        serverBlockName='test_server',
+        connectionId='12345',
+        connectionBlockName='test_connection'
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        await post_airbyte_connection(payload)
+    assert excinfo.value.status_code == 400
+    assert excinfo.value.detail == 'failed to create airbyte connection block'
 
 
 @pytest.mark.asyncio
@@ -413,6 +466,13 @@ def test_post_deployment_set_schedule_success():
         assert response == {'success': 1}
 
 def test_post_deployment_set_schedule_failure():
+    with pytest.raises(HTTPException) as excinfo:
+        post_deployment_set_schedule('12345', 'invalid_status')
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.detail == 'incorrect status value'
+
+
+def test_post_deployment_set_schedule_with_invalid_status():
     with pytest.raises(HTTPException) as excinfo:
         post_deployment_set_schedule('12345', 'invalid_status')
     assert excinfo.value.status_code == 422
