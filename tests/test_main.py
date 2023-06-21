@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
-from proxy.main import (app, delete_block, delete_deployment,
+from proxy.main import (airbytesync, app, dbtrun, delete_block, delete_deployment,
                   get_airbyte_connection_by_blockid,
                   get_airbyte_connection_by_blockname, get_airbyte_server,
                   get_dbtcore, get_flow_run_logs_paginated, get_flow_runs, get_flowrun, get_shell,
@@ -21,6 +21,130 @@ from proxy.schemas import (AirbyteConnectionBlocksFetch, AirbyteConnectionCreate
 app = FastAPI()
 client = TestClient(app)
 
+
+def test_airbytesync_success():
+    block_name = "example_block"
+    flow_name = "example_flow"
+    flow_run_name = "example_flow_run"
+    inner_result = {"status": "success", "result": "example_result"}
+    expected_result = {"status": "success", "result": inner_result}
+    
+    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
+        with patch.object(mock_run_airbyte_connection_flow.with_options.return_value, "with_options") as mock_with_options:
+            mock_with_options.return_value = lambda x: inner_result
+            result = airbytesync(block_name, flow_name, flow_run_name)
+            assert result == expected_result
+
+
+def test_airbytesync_failure():
+    block_name = "example_block"
+    flow_name = "example_flow"
+    flow_run_name = "example_flow_run"
+    inner_result = {"status": "failed", "result": "example_failure_result"}
+    expected_result = {"status": "success", "result": inner_result}
+    
+    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
+        with patch.object(mock_run_airbyte_connection_flow.with_options.return_value, "with_options") as mock_with_options:
+            mock_with_options.return_value = lambda x: inner_result
+            result = airbytesync(block_name, flow_name, flow_run_name)
+            assert result == expected_result
+
+
+def test_airbyte_sync_with_invalid_block_name():
+    invalid_block_name = None
+    flow_name = "example_flow"
+    flow_run_name = "example_flow_run"
+    
+    with pytest.raises(Exception):
+        airbytesync(invalid_block_name, flow_name, flow_run_name)
+
+
+def test_airbyte_sync_invalid_flow_name():
+    block_name = "example_block"
+    invalid_flow_name = None
+    flow_run_name = "example_flow_run"
+    
+    with pytest.raises(Exception):
+        airbytesync(block_name, invalid_flow_name, flow_run_name)
+
+
+def test_airbyte_sync_invalid_flow_run_name():
+    block_name = "example_block"
+    flow_name = "example_flow"
+    invalid_flow_run_name = None
+    
+    with pytest.raises(Exception):
+        airbytesync(block_name, flow_name, invalid_flow_run_name)
+
+
+def test_dbtrun_success():
+    block_name = "example_block"
+    flow_name = "example_flow"
+    flow_run_name = "example_flow_run"
+    expected_result = {"result": "example_result"}
+    
+    with patch("proxy.main.run_dbtcore_flow") as mock_run_dbtcore_flow:
+        with patch.object(mock_run_dbtcore_flow.with_options.return_value, "with_options") as mock_with_options:
+            mock_with_options.return_value = lambda x: expected_result
+            result = dbtrun(block_name, flow_name, flow_run_name)
+            assert result == expected_result
+
+def test_dbtrun_failure():
+    block_name = "example_block"
+    flow_name = "example_flow"
+    flow_run_name = "example_flow_run"
+    expected_result = {"result": "example_failure_result", "status": "failed"}
+    
+    with patch("proxy.main.run_dbtcore_flow") as mock_run_dbtcore_flow:
+        with patch.object(mock_run_dbtcore_flow.with_options.return_value, "with_options") as mock_with_options:
+            mock_with_options.return_value = lambda x: expected_result
+            result = dbtrun(block_name, flow_name, flow_run_name)
+            assert result == expected_result
+
+
+def test_run_dbt_exception():
+    block_name = "example_block"
+    flow_name = "example_flow"
+    flow_run_name = "example_flow_run"
+    expected_result = {"result": "example_failure_result", "status": "failed"}
+    
+    def mock_with_options(*args, **kwargs):
+        raise HTTPException(status_code=400, detail="Job 12345 failed.")
+    
+    with patch("proxy.main.run_dbtcore_flow.with_options", new=mock_with_options):
+        try:
+            result = dbtrun(block_name, flow_name, flow_run_name)
+            assert result == expected_result
+        except HTTPException as e:
+            assert e.status_code == 400
+            assert e.detail == "Job 12345 failed."
+
+
+def test_dbtrun_invalid_block_name():
+    block_name = None
+    flow_name = "example_flow"
+    flow_run_name = "example_flow_run"
+    
+    with pytest.raises(TypeError):
+        dbtrun(block_name, flow_name, flow_run_name)
+
+
+def test_dbtrun_invalid_flow_name():
+    block_name = "example_block"
+    flow_name = None
+    flow_run_name = "example_flow_run"
+    
+    with pytest.raises(TypeError):
+        dbtrun(block_name, flow_name, flow_run_name)
+
+
+def test_dbtrun_invalid_flow_run_name():
+    block_name = "example_block"
+    flow_name = "example_flow"
+    flow_run_name = None
+    
+    with pytest.raises(TypeError):
+        dbtrun(block_name, flow_name, flow_run_name)
 
 @pytest.mark.asyncio
 async def test_post_bulk_delete_blocks_success():

@@ -46,6 +46,14 @@ setup_logger()
 # =============================================================================
 def airbytesync(block_name, flow_name, flow_run_name):
     """Run an Airbyte Connection sync"""
+
+    if not isinstance(block_name, str):
+        raise TypeError("block_name must be a string")
+    if not isinstance(flow_name, str):
+        raise TypeError("flow_name must be a string")
+    if not isinstance(flow_run_name, str):
+        raise TypeError("flow_run_name must be a string")
+    
     logger.info("airbytesync %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_airbyte_connection_flow
     if flow_name:
@@ -80,16 +88,27 @@ def airbytesync(block_name, flow_name, flow_run_name):
 
 def dbtrun(block_name, flow_name, flow_run_name):
     """Run a dbt core flow"""
+    if not isinstance(block_name, str):
+        raise TypeError("block_name must be a string")
+    if not isinstance(flow_name, str):
+        raise TypeError("flow_name must be a string")
+    if not isinstance(flow_run_name, str):
+        raise TypeError("flow_run_name must be a string")
+    
     logger.info("dbtrun %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_dbtcore_flow
     if flow_name:
         flow = flow.with_options(name=flow_name)
     if flow_run_name:
         flow = flow.with_options(flow_run_name=flow_run_name)
-    result = flow(block_name)
-    return result
-
-
+    
+    try:
+        result = flow(block_name)
+        return result
+    except Exception as error:
+        logger.error("An error occurred: %s", error)
+        return {"status": "failed", "error": str(error)}
+    
 # =============================================================================
 @app.post("/proxy/blocks/bulk/delete/")
 async def post_bulk_delete_blocks(payload: PrefectBlocksDelete):
