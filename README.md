@@ -15,3 +15,8 @@ You also need to run a celery worker against the queue called "proxy"
     celery -A main.celery worker -Q proxy
   
 More project documentation can be found at https://github.com/DevDataPlatform/prefect-proxy/wiki
+
+
+To run tests
+
+    pytest
