@@ -278,10 +278,13 @@ async def test_post_airbyte_server_with_invalid_payload():
         serverPort=8000,
         apiVersion="v1",
     )
-    with pytest.raises(HTTPException) as excinfo:
-        await post_airbyte_server(payload)
-    assert excinfo.value.status_code == 400
-    assert excinfo.value.detail == "failed to create airbyte server block"
+    with patch(
+        "proxy.main.create_airbyte_server_block", side_effect=Exception("test error")
+    ):
+        with pytest.raises(HTTPException) as excinfo:
+            await post_airbyte_server(payload)
+        assert excinfo.value.status_code == 400
+        assert excinfo.value.detail == "failed to create airbyte server block"
 
 
 @pytest.mark.asyncio
