@@ -1,0 +1,9 @@
+[run]
+omit=*/tests/*
+     */__init__.py
+     */proxy/schemas.py
+     */tests.py
+     */proxy/exception.py
+     */proxy/helpers.py
+     */logger.py
+     */proxy/flows.py

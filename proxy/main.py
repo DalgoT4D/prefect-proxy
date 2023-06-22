@@ -4,7 +4,7 @@ import re
 import requests
 from fastapi import FastAPI, HTTPException
 
-from service import (
+from proxy.service import (
     get_airbyte_server_block_id,
     create_airbyte_server_block,
     get_airbyte_connection_block_id,
@@ -21,9 +21,9 @@ from service import (
     post_deployment_flow_run,
     get_flow_runs_by_name,
     post_filter_blocks,
-    set_deployment_schedule
+    set_deployment_schedule,
 )
-from schemas import (
+from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteConnectionCreate,
     PrefectShellSetup,
@@ -35,7 +35,7 @@ from schemas import (
     PrefectBlocksDelete,
     AirbyteConnectionBlocksFetch,
 )
-from flows import run_airbyte_connection_flow, run_dbtcore_flow
+from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
 
 from logger import setup_logger, logger
 
@@ -44,8 +44,16 @@ setup_logger()
 
 
 # =============================================================================
-def airbytesync(block_name, flow_name, flow_run_name):
+def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
     """Run an Airbyte Connection sync"""
+
+    if not isinstance(block_name, str):
+        raise TypeError("block_name must be a string")
+    if not isinstance(flow_name, str):
+        raise TypeError("flow_name must be a string")
+    if not isinstance(flow_run_name, str):
+        raise TypeError("flow_run_name must be a string")
+
     logger.info("airbytesync %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_airbyte_connection_flow
     if flow_name:
@@ -65,7 +73,7 @@ def airbytesync(block_name, flow_name, flow_run_name):
         # the error message may contain "Job <num> failed."
         errormessage = error.detail
         logger.error("celery task caught exception %s", errormessage)
-        pattern = re.compile("Job (\d+) failed.")
+        pattern = re.compile(r"Job (\d+) failed.")
         match = pattern.match(errormessage)
         if match:
             airbyte_job_num = match.groups()[0]
@@ -78,16 +86,28 @@ def airbytesync(block_name, flow_name, flow_run_name):
         raise
 
 
-def dbtrun(block_name, flow_name, flow_run_name):
+def dbtrun(block_name: str, flow_name: str, flow_run_name: str):
     """Run a dbt core flow"""
+    if not isinstance(block_name, str):
+        raise TypeError("block_name must be a string")
+    if not isinstance(flow_name, str):
+        raise TypeError("flow_name must be a string")
+    if not isinstance(flow_run_name, str):
+        raise TypeError("flow_run_name must be a string")
+
     logger.info("dbtrun %s %s %s", block_name, flow_name, flow_run_name)
     flow = run_dbtcore_flow
     if flow_name:
         flow = flow.with_options(name=flow_name)
     if flow_run_name:
         flow = flow.with_options(flow_run_name=flow_run_name)
-    result = flow(block_name)
-    return result
+
+    try:
+        result = flow(block_name)
+        return result
+    except Exception as error:
+        logger.exception(error)
+        return {"status": "failed", "error": str(error)}
 
 
 # =============================================================================
@@ -103,7 +123,7 @@ async def post_bulk_delete_blocks(payload: PrefectBlocksDelete):
             res.raise_for_status()
         except requests.exceptions.HTTPError as error:
             logger.error(
-                "something went wrong deleteing block_id %s: %s", block_id, res.text
+                "something went wrong deleting block_id %s: %s", block_id, res.text
             )
             logger.exception(error)
             continue
@@ -417,18 +437,17 @@ async def post_create_deployment_flow_run(deployment_id):
 def post_deployment_set_schedule(deployment_id, status):
     """Create a flow run from deployment"""
 
-    if (status is None) or (isinstance(status, str) is not True) or (status not in ["active", "inactive"]):
-        raise HTTPException(
-            status_code=422, detail="incorrect status value"
-        )
+    if (
+        (status is None)
+        or (isinstance(status, str) is not True)
+        or (status not in ["active", "inactive"])
+    ):
+        raise HTTPException(status_code=422, detail="incorrect status value")
 
     try:
         set_deployment_schedule(deployment_id, status)
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to set schedule"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to set schedule") from error
 
     return {"success": 1}
-
