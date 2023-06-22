@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 from logger import logger
 
 
-from proxy.helpers import cleaned_name_for_dbtblock
+from proxy.helpers import cleaned_name_for_prefectblock
 from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -139,7 +139,8 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
         api_version=payload.apiVersion,
     )
     try:
-        await airbyteservercblock.save(payload.blockName)
+        block_name_for_save = cleaned_name_for_prefectblock(payload.blockName)
+        await airbyteservercblock.save(block_name_for_save)
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create airbyte server block") from error
@@ -218,7 +219,8 @@ async def create_airbyte_connection_block(
         connection_id=conninfo.connectionId,
     )
     try:
-        await connection_block.save(conninfo.connectionBlockName)
+        block_name_for_save = cleaned_name_for_prefectblock(conninfo.connectionBlockName)
+        await connection_block.save(block_name_for_save)
     except Exception as error:
         logger.exception(error)
         raise PrefectException(
@@ -273,7 +275,8 @@ async def create_shell_block(shell: PrefectShellSetup) -> str:
         commands=shell.commands, env=shell.env, working_dir=shell.workingDir
     )
     try:
-        await shell_operation_block.save(shell.blockName)
+        block_name_for_save = cleaned_name_for_prefectblock(shell.blockName)
+        await shell_operation_block.save(block_name_for_save)
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create shell block") from error
@@ -341,7 +344,7 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
             target_configs=target_configs,
         )
         await dbt_cli_profile.save(
-            cleaned_name_for_dbtblock(payload.profile.name), overwrite=True
+            cleaned_name_for_prefectblock(payload.profile.name), overwrite=True
         )
     except Exception as error:
         logger.exception(error)
@@ -365,7 +368,7 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         project_dir=payload.project_dir,
         dbt_cli_profile=dbt_cli_profile,
     )
-    cleaned_blockname = cleaned_name_for_dbtblock(payload.blockName)
+    cleaned_blockname = cleaned_name_for_prefectblock(payload.blockName)
     try:
         await dbt_core_operation.save(cleaned_blockname, overwrite=True)
     except Exception as error:
