@@ -1,5 +1,7 @@
 # prefect-proxy
 
+[![DeepSource](https://app.deepsource.com/gh/DevDataPlatform/prefect-proxy.svg/?label=active+issues&show_trend=true&token=2GpMBhrZhOTX8-sWY9yJWDXY)](https://app.deepsource.com/gh/DevDataPlatform/prefect-proxy/?ref=repository-badge)
+
 Since Prefect exposes an async Python interface and Django does not play well with async functions, we split the Prefect interface off into a FastAPI project
 
 These endpoints will be called only from the Django server or from testing scripts
