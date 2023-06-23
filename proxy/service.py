@@ -39,7 +39,6 @@ FLOW_RUN_SCHEDULED = "SCHEDULED"
 
 def prefect_post(endpoint: str, payload: dict) -> dict:
     """POST request to prefect server"""
-
     if not isinstance(endpoint, str):
         raise TypeError("endpoint must be a string")
     if not isinstance(payload, dict):
@@ -58,7 +57,6 @@ def prefect_post(endpoint: str, payload: dict) -> dict:
 
 def prefect_get(endpoint: str) -> dict:
     """GET request to prefect server"""
-
     if not isinstance(endpoint, str):
         raise TypeError("endpoint must be a string")
 
@@ -74,7 +72,6 @@ def prefect_get(endpoint: str) -> dict:
 
 def prefect_delete(endpoint: str) -> dict:
     """DELETE request to prefect server"""
-
     if not isinstance(endpoint, str):
         raise TypeError("endpoint must be a string")
 
@@ -127,7 +124,6 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
 
 async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
     """Create airbyte server block in prefect"""
-
     if not isinstance(payload, AirbyteServerCreate):
         raise TypeError("payload must be an AirbyteServerCreate")
 
@@ -165,7 +161,6 @@ def delete_airbyte_server_block(blockid: str):
 # ================================================================================================
 async def get_airbyte_connection_block_id(blockname: str) -> str | None:
     """look up airbyte connection block by name and return block_id"""
-
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
     try:
@@ -265,7 +260,6 @@ async def get_shell_block_id(blockname: str) -> str | None:
 
 async def create_shell_block(shell: PrefectShellSetup) -> str:
     """Create a prefect shell block"""
-
     if not isinstance(shell, PrefectShellSetup):
         raise TypeError("shell must be a PrefectShellSetup")
 
@@ -519,7 +513,6 @@ async def post_deployment_flow_run(deployment_id: str):
 
 def parse_log(log: dict) -> dict:
     """select level, timestamp, message from ..."""
-
     if not isinstance(log, dict):
         raise TypeError("log must be a dict")
     return {
@@ -532,7 +525,6 @@ def parse_log(log: dict) -> dict:
 def traverse_flow_run_graph(flow_run_id: str, flow_runs: list) -> list:
     """This recursive function will read through the graph
     and return all sub flow run ids of the parent that can potentially have logs"""
-
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
     if not isinstance(flow_runs, list):
@@ -602,7 +594,6 @@ def get_flow_runs_by_name(flow_run_name: str) -> dict:
 
 def set_deployment_schedule(deployment_id: str, status: str) -> None:
     """Set deployment schedule to active or inactive"""
-
     # both the apis return null below
     if status == "active":
         prefect_post(f"deployments/{deployment_id}/set_schedule_active", {})
