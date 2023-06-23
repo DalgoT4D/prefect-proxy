@@ -154,11 +154,16 @@ def post_airbyte_connection_blocks(payload: AirbyteConnectionBlocksFetch):
 
 # =============================================================================
 @app.get("/proxy/blocks/airbyte/server/{blockname}")
-async def get_airbyte_server(blockname):
-    """look up an airbyte server block by name and return block_id"""
-    block_id = await get_airbyte_server_block_id(blockname)
+async def get_airbyte_server(blockname: str):
+    """Look up an Airbyte server block by name and return block_id"""
+    try:
+        block_id = await get_airbyte_server_block_id(blockname)
+    except Exception as error:
+        logger.error(f"Failed to get Airbyte server block ID for block name {blockname}: {error}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
     if block_id is None:
-        raise HTTPException(status_code=400, detail="no block having name " + blockname)
+        return {"block_id": None}
     logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
 

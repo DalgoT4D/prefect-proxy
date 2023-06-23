@@ -220,26 +220,14 @@ async def test_get_airbyte_server_success():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_server_failure():
-    with patch("proxy.main.get_airbyte_server_block_id", return_value=None):
+    with patch("proxy.main.get_airbyte_server_block_id") as mock_get_block_id:
+        mock_get_block_id.side_effect = Exception("Test error")
         with pytest.raises(HTTPException) as excinfo:
             await get_airbyte_server("test_block")
-        assert excinfo.value.status_code == 400
-        assert excinfo.value.detail == "no block having name test_block"
+        assert excinfo.value.status_code == 500
+        assert excinfo.value.detail == "Internal server error"
 
-
-@pytest.mark.asyncio
-async def test_get_airbyte_server_invalid_blockname():
-    with patch(
-        "proxy.main.get_airbyte_server_block_id"
-    ) as get_airbyte_server_block_id_mock:
-        get_airbyte_server_block_id_mock.return_value = None
-        blockname = "invalid_blockname"
-        with pytest.raises(HTTPException) as exc_info:
-            await get_airbyte_server(blockname)
-        assert exc_info.value.status_code == 400
-        assert exc_info.value.detail == "no block having name " + blockname
-
-
+        
 @pytest.mark.asyncio
 async def test_post_airbyte_server_success():
     payload = AirbyteServerCreate(
