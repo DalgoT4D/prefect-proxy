@@ -1,6 +1,8 @@
 """interface with prefect's python client api"""
+from http import HTTPStatus
 import os
 import requests
+from fastapi.responses import JSONResponse
 from fastapi import HTTPException
 
 from prefect.deployments import Deployment, run_deployment
@@ -388,7 +390,7 @@ def delete_dbt_core_block(block_id: str) -> dict:
 
 
 # ================================================================================================
-async def post_deployment(payload: DeploymentCreate) -> dict:
+async def post_deployment(payload: DeploymentCreate) -> None:
     """create a deployment from a flow and a schedule"""
     if not isinstance(payload, DeploymentCreate):
         raise TypeError("payload must be a DeploymentCreate")
@@ -463,7 +465,7 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
     return flow_runs
 
 
-def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
+def get_deployments_by_filter(org_slug: str, deployment_ids=[]) -> list:
     # pylint: disable=dangerous-default-value
     """fetch all deployments by org"""
     if not isinstance(org_slug, str):
@@ -514,7 +516,8 @@ async def post_deployment_flow_run(deployment_id: str):
         return {"flow_run_id": flow_run.id}
     except Exception as exc:
         logger.exception(exc)
-        raise PrefectException("Failed to create deployment flow run") from exc
+        # why are we not just raising a prefect-exception here
+        return JSONResponse(content={"detail": str(exc)}, status_code=500)
 
 
 def parse_log(log: dict) -> dict:
@@ -559,7 +562,7 @@ def traverse_flow_run_graph(flow_run_id: str, flow_runs: list) -> list:
     return flow_runs
 
 
-def get_flow_run_logs(flow_run_id: str, offset: int) -> dict:
+def get_flow_run_logs(flow_run_id: str, offset: int) -> list:
     """return logs from a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
@@ -584,7 +587,7 @@ def get_flow_run_logs(flow_run_id: str, offset: int) -> dict:
     }
 
 
-def get_flow_runs_by_name(flow_run_name: str) -> dict:
+def get_flow_runs_by_name(flow_run_name: str) -> list:
     """Query flow run from the name"""
     if not isinstance(flow_run_name, str):
         raise TypeError("flow_run_name must be a string")
