@@ -78,8 +78,7 @@ def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
         if match:
             airbyte_job_num = match.groups()[0]
             return {"status": "failed", "airbyte_job_num": airbyte_job_num}
-        else:
-            raise
+        raise
 
     except Exception as error:
         logger.exception(error)
@@ -107,7 +106,7 @@ def dbtrun(block_name: str, flow_name: str, flow_run_name: str):
         return result
     except Exception as error:
         logger.exception(error)
-        return {"status": "failed", "error": str(error)}
+        raise HTTPException(status_code=400, detail="failed to run dbt core flow") from error
 
 
 # =============================================================================
