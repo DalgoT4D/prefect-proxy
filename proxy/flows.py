@@ -41,7 +41,6 @@ def run_dbtcore_flow(block_name: str):
 @flow
 def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
     """A general flow function that will help us create deployments"""
-
     # sort the dbt blocks by seq
     dbt_blocks.sort(key=lambda blk: blk["seq"])
 

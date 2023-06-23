@@ -46,7 +46,6 @@ setup_logger()
 # =============================================================================
 def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
     """Run an Airbyte Connection sync"""
-
     if not isinstance(block_name, str):
         raise TypeError("block_name must be a string")
     if not isinstance(flow_name, str):
@@ -406,7 +405,6 @@ def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
 @app.delete("/proxy/deployments/{deployment_id}")
 def delete_deployment(deployment_id):
     """Delete a deployment"""
-
     root = os.getenv("PREFECT_API_URL")
     res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
     try:
@@ -420,7 +418,6 @@ def delete_deployment(deployment_id):
 @app.post("/proxy/deployments/{deployment_id}/flow_run")
 async def post_create_deployment_flow_run(deployment_id):
     """Create a flow run from deployment"""
-
     try:
         res = await post_deployment_flow_run(deployment_id)
     except Exception as error:
@@ -435,7 +432,6 @@ async def post_create_deployment_flow_run(deployment_id):
 @app.post("/proxy/deployments/{deployment_id}/set_schedule/{status}")
 def post_deployment_set_schedule(deployment_id, status):
     """Create a flow run from deployment"""
-
     if (
         (status is None)
         or (isinstance(status, str) is not True)
