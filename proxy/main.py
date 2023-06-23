@@ -46,7 +46,6 @@ setup_logger()
 # =============================================================================
 def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
     """Run an Airbyte Connection sync"""
-
     if not isinstance(block_name, str):
         raise TypeError("block_name must be a string")
     if not isinstance(flow_name, str):
@@ -78,8 +77,7 @@ def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
         if match:
             airbyte_job_num = match.groups()[0]
             return {"status": "failed", "airbyte_job_num": airbyte_job_num}
-        else:
-            raise
+        raise
 
     except Exception as error:
         logger.exception(error)
@@ -107,7 +105,9 @@ def dbtrun(block_name: str, flow_name: str, flow_run_name: str):
         return result
     except Exception as error:
         logger.exception(error)
-        return {"status": "failed", "error": str(error)}
+        raise HTTPException(
+            status_code=400, detail="failed to run dbt core flow"
+        ) from error
 
 
 # =============================================================================
@@ -165,8 +165,10 @@ async def get_airbyte_server(blockname):
 
 @app.post("/proxy/blocks/airbyte/server/")
 async def post_airbyte_server(payload: AirbyteServerCreate):
-    """create a new airbyte server block with this block name,
-    raise an exception if the name is already in use"""
+    """
+    create a new airbyte server block with this block name,
+    raise an exception if the name is already in use
+    """
     logger.info(payload)
     try:
         block_id = await create_airbyte_server_block(payload)
@@ -204,8 +206,10 @@ async def get_airbyte_connection_by_blockid(blockid):
 
 @app.post("/proxy/blocks/airbyte/connection/")
 async def post_airbyte_connection(payload: AirbyteConnectionCreate):
-    """create a new airbyte connection block with this block name,
-    raise an exception if the name is already in use"""
+    """
+    create a new airbyte connection block with this block name,
+    raise an exception if the name is already in use
+    """
     logger.info(payload)
     try:
         block_id = await create_airbyte_connection_block(payload)
@@ -232,8 +236,10 @@ async def get_shell(blockname):
 
 @app.post("/proxy/blocks/shell/")
 async def post_shell(payload: PrefectShellSetup):
-    """create a new shell block with this block name,
-    raise an exception if the name is already in use"""
+    """
+    create a new shell block with this block name,
+    raise an exception if the name is already in use
+    """
     logger.info(payload)
     try:
         block_id = await create_shell_block(payload)
@@ -260,8 +266,10 @@ async def get_dbtcore(blockname):
 
 @app.post("/proxy/blocks/dbtcore/")
 async def post_dbtcore(payload: DbtCoreCreate):
-    """create a new dbt_core block with this block name,
-    raise an exception if the name is already in use"""
+    """
+    create a new dbt_core block with this block name,
+    raise an exception if the name is already in use
+    """
     logger.info(payload)
     try:
         block_id, cleaned_blockname = await create_dbt_core_block(payload)
@@ -407,7 +415,6 @@ def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
 @app.delete("/proxy/deployments/{deployment_id}")
 def delete_deployment(deployment_id):
     """Delete a deployment"""
-
     root = os.getenv("PREFECT_API_URL")
     res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
     try:
@@ -421,7 +428,6 @@ def delete_deployment(deployment_id):
 @app.post("/proxy/deployments/{deployment_id}/flow_run")
 async def post_create_deployment_flow_run(deployment_id):
     """Create a flow run from deployment"""
-
     try:
         res = await post_deployment_flow_run(deployment_id)
     except Exception as error:
@@ -436,7 +442,6 @@ async def post_create_deployment_flow_run(deployment_id):
 @app.post("/proxy/deployments/{deployment_id}/set_schedule/{status}")
 def post_deployment_set_schedule(deployment_id, status):
     """Create a flow run from deployment"""
-
     if (
         (status is None)
         or (isinstance(status, str) is not True)
