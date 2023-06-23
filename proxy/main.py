@@ -158,7 +158,7 @@ async def get_airbyte_server(blockname):
     """look up an airbyte server block by name and return block_id"""
     block_id = await get_airbyte_server_block_id(blockname)
     if block_id is None:
-        raise HTTPException(status_code=400, detail="no block having name " + blockname)
+        return {"block_id": None}
     logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
 
