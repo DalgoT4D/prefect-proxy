@@ -220,7 +220,7 @@ async def create_airbyte_connection_block(
     except Exception as error:
         logger.exception(error)
         raise PrefectException(
-            "failed to create airbyte connection block for connection" 
+            "failed to create airbyte connection block for connection"
             + f"{conninfo.connectionId}"
         ) from error
     logger.info("created airbyte connection block %s", conninfo.connectionBlockName)
