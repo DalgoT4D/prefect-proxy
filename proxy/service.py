@@ -86,6 +86,7 @@ def prefect_delete(endpoint: str) -> dict:
 
 
 def _block_id(block: Block) -> str:
+    """Get the id of block"""
     return str(block.dict()["_block_document_id"])
 
 
@@ -212,12 +213,15 @@ async def create_airbyte_connection_block(
         connection_id=conninfo.connectionId,
     )
     try:
-        block_name_for_save = cleaned_name_for_prefectblock(conninfo.connectionBlockName)
+        block_name_for_save = cleaned_name_for_prefectblock(
+            conninfo.connectionBlockName
+        )
         await connection_block.save(block_name_for_save)
     except Exception as error:
         logger.exception(error)
         raise PrefectException(
-            f"failed to create airbyte connection block for connection {conninfo.connectionId}"
+            "failed to create airbyte connection block for connection"
+            + f"{conninfo.connectionId}"
         ) from error
     logger.info("created airbyte connection block %s", conninfo.connectionBlockName)
 
@@ -410,8 +414,10 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
 
 
 def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
-    """Fetch flow runs of a deployment that are FAILED/COMPLETED,
-    sorted by descending start time of each run"""
+    """
+    Fetch flow runs of a deployment that are FAILED/COMPLETED,
+    sorted by descending start time of each run
+    """
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     if not isinstance(limit, int):
@@ -523,8 +529,10 @@ def parse_log(log: dict) -> dict:
 
 
 def traverse_flow_run_graph(flow_run_id: str, flow_runs: list) -> list:
-    """This recursive function will read through the graph
-    and return all sub flow run ids of the parent that can potentially have logs"""
+    """
+    This recursive function will read through the graph
+    and return all sub flow run ids of the parent that can potentially have logs
+    """
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
     if not isinstance(flow_runs, list):
