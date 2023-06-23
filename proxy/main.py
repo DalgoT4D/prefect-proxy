@@ -105,7 +105,9 @@ def dbtrun(block_name: str, flow_name: str, flow_run_name: str):
         return result
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(status_code=400, detail="failed to run dbt core flow") from error
+        raise HTTPException(
+            status_code=400, detail="failed to run dbt core flow"
+        ) from error
 
 
 # =============================================================================
@@ -163,8 +165,10 @@ async def get_airbyte_server(blockname):
 
 @app.post("/proxy/blocks/airbyte/server/")
 async def post_airbyte_server(payload: AirbyteServerCreate):
-    """create a new airbyte server block with this block name,
-    raise an exception if the name is already in use"""
+    """
+    create a new airbyte server block with this block name,
+    raise an exception if the name is already in use
+    """
     logger.info(payload)
     try:
         block_id = await create_airbyte_server_block(payload)
@@ -202,8 +206,10 @@ async def get_airbyte_connection_by_blockid(blockid):
 
 @app.post("/proxy/blocks/airbyte/connection/")
 async def post_airbyte_connection(payload: AirbyteConnectionCreate):
-    """create a new airbyte connection block with this block name,
-    raise an exception if the name is already in use"""
+    """
+    create a new airbyte connection block with this block name,
+    raise an exception if the name is already in use
+    """
     logger.info(payload)
     try:
         block_id = await create_airbyte_connection_block(payload)
@@ -230,8 +236,10 @@ async def get_shell(blockname):
 
 @app.post("/proxy/blocks/shell/")
 async def post_shell(payload: PrefectShellSetup):
-    """create a new shell block with this block name,
-    raise an exception if the name is already in use"""
+    """
+    create a new shell block with this block name,
+    raise an exception if the name is already in use
+    """
     logger.info(payload)
     try:
         block_id = await create_shell_block(payload)
@@ -258,8 +266,10 @@ async def get_dbtcore(blockname):
 
 @app.post("/proxy/blocks/dbtcore/")
 async def post_dbtcore(payload: DbtCoreCreate):
-    """create a new dbt_core block with this block name,
-    raise an exception if the name is already in use"""
+    """
+    create a new dbt_core block with this block name,
+    raise an exception if the name is already in use
+    """
     logger.info(payload)
     try:
         block_id, cleaned_blockname = await create_dbt_core_block(payload)
