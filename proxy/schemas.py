@@ -130,14 +130,11 @@ class FlowRunRequest(BaseModel):
 
     name: str
 
-
 class AirbyteConnectionBlocksFetch(BaseModel):
     """These parameters define the query for fetching prefect blocks"""
-
     block_names: list[str] | None
 
 
 class PrefectBlocksDelete(BaseModel):
     """Delete each block having the block ids in the array"""
-
     block_ids: list[str] | None
