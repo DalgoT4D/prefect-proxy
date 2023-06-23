@@ -1,8 +1,6 @@
 """interface with prefect's python client api"""
-from http import HTTPStatus
 import os
 import requests
-from fastapi.responses import JSONResponse
 from fastapi import HTTPException
 
 from prefect.deployments import Deployment, run_deployment
