@@ -412,6 +412,16 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
     return {"id": deployment_id, "name": deployment.name}
 
 
+def get_deployment(deployment_id: str) -> list:
+    """Fetch deployment and its details"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+
+    res = prefect_get(f"deployments/{deployment_id}")
+    logger.info("Fetched deployment with ID: %s", deployment_id)
+    return res
+
+
 def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
     """
     Fetch flow runs of a deployment that are FAILED/COMPLETED,
