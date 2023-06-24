@@ -3,6 +3,7 @@ import os
 import re
 import requests
 from fastapi import FastAPI, HTTPException
+from prefect_airbyte import AirbyteConnection
 
 from proxy.service import (
     get_airbyte_server_block_id,
@@ -22,6 +23,7 @@ from proxy.service import (
     get_flow_runs_by_name,
     post_filter_blocks,
     set_deployment_schedule,
+    get_deployment,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -159,7 +161,11 @@ async def get_airbyte_server(blockname: str):
     try:
         block_id = await get_airbyte_server_block_id(blockname)
     except Exception as error:
-        logger.error(f"Failed to get Airbyte server block ID for block name {blockname}: {error}")
+        logger.error(
+            "Failed to get Airbyte server block ID for block name %s: %s",
+            blockname,
+            str(error),
+        )
         raise HTTPException(status_code=500, detail="Internal server error")
 
     if block_id is None:
@@ -415,6 +421,34 @@ def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
         raise HTTPException(
             status_code=400, detail="failed to fetch logs for flow_run"
         ) from error
+
+
+@app.get("/proxy/deployments/{deployment_id}")
+def get_read_deployment(deployment_id):
+    """Fetch deployment and all its details"""
+    try:
+        deployment = get_deployment(deployment_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch deployment " + deployment_id
+        ) from error
+
+    res = {
+        "name": deployment["name"],
+        "deploymentId": deployment["id"],
+        "tags": deployment["tags"],
+        "cron": deployment["schedule"]["cron"],
+        "isScheduleActive": deployment["is_schedule_active"],
+        "parameters": deployment["parameters"],
+    }
+
+    if "airbyte_blocks" in res["parameters"]:
+        for airbyte_block in res["parameters"]["airbyte_blocks"]:
+            block = AirbyteConnection.load(airbyte_block["blockName"])
+            airbyte_block["connectionId"] = block.connection_id
+
+    return res
 
 
 @app.delete("/proxy/deployments/{deployment_id}")
