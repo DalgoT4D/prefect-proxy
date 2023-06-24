@@ -17,6 +17,7 @@ from proxy.main import (
     get_flow_run_logs_paginated,
     get_flow_runs,
     get_flowrun,
+    get_read_deployment,
     get_shell,
     post_airbyte_connection,
     post_airbyte_connection_blocks,
@@ -227,6 +228,13 @@ async def test_get_airbyte_server_failure():
         assert excinfo.value.status_code == 500
         assert excinfo.value.detail == "Internal server error"
 
+
+@pytest.mark.asyncio
+async def test_get_airbyte_server_invalid_block_name():
+    with pytest.raises(TypeError) as excinfo:
+        await get_airbyte_server(None)
+    assert excinfo.value.args[0] == "blockname must be a string"
+
         
 @pytest.mark.asyncio
 async def test_post_airbyte_server_success():
@@ -260,19 +268,10 @@ async def test_post_airbyte_server_failure():
 
 @pytest.mark.asyncio
 async def test_post_airbyte_server_with_invalid_payload():
-    payload = AirbyteServerCreate(
-        blockName="testserver",
-        serverHost="http://test-server.com",
-        serverPort=8000,
-        apiVersion="v1",
-    )
-    with patch(
-        "proxy.main.create_airbyte_server_block", side_effect=Exception("test error")
-    ):
-        with pytest.raises(HTTPException) as excinfo:
-            await post_airbyte_server(payload)
-        assert excinfo.value.status_code == 400
-        assert excinfo.value.detail == "failed to create airbyte server block"
+    payload = None
+    with pytest.raises(TypeError) as excinfo:
+        await post_airbyte_server(payload)
+    assert excinfo.value.args[0] == "payload is invalid"
 
 
 @pytest.mark.asyncio
@@ -393,6 +392,13 @@ async def test_get_shell_failure():
 
 
 @pytest.mark.asyncio
+async def test_get_shell_invalid_blockname():
+    with pytest.raises(TypeError) as excinfo:
+        await get_shell(None)
+    assert excinfo.value.args[0] == "blockname must be a string"
+
+
+@pytest.mark.asyncio
 async def test_post_shell_success():
     payload = PrefectShellSetup(
         blockName="test_shell",
@@ -421,6 +427,14 @@ async def test_post_shell_failure():
 
 
 @pytest.mark.asyncio
+async def test_post_shell_invalid_payload():
+    payload = None
+    with pytest.raises(TypeError) as excinfo:
+        await post_shell(payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
 async def test_get_dbtcore_success():
     with patch("proxy.main.get_dbtcore_block_id", return_value="12345"):
         response = await get_dbtcore("test_block")
@@ -434,6 +448,13 @@ async def test_get_dbtcore_failure():
             await get_dbtcore("test_block")
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == "no block having name test_block"
+
+
+@pytest.mark.asyncio
+async def test_get_dbtcore_invalid_blockname():
+    with pytest.raises(TypeError) as excinfo:
+        await get_dbtcore(None)
+    assert excinfo.value.args[0] == "blockname must be a string"
 
 
 @pytest.mark.asyncio
@@ -485,6 +506,14 @@ async def test_post_dbtcore_failure():
 
 
 @pytest.mark.asyncio
+async def test_post_dbtcore_invalid_payload():
+    payload = None
+    with pytest.raises(TypeError) as excinfo:
+        await post_dbtcore(payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
 async def test_delete_block_success():
     with patch("proxy.main.requests.delete") as mock_delete:
         mock_delete.return_value.status_code = 204
@@ -501,6 +530,13 @@ async def test_delete_block_failure():
             await delete_block("12345")
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == "test error"
+
+
+@pytest.mark.asyncio
+async def test_delete_block_invalid_blockid():
+    with pytest.raises(TypeError) as excinfo:
+        await delete_block(None)
+    assert excinfo.value.args[0] == "block_id must be a string"
 
 
 @pytest.mark.asyncio
@@ -523,6 +559,14 @@ async def test_sync_airbyte_connection_flow_failure():
 
 
 @pytest.mark.asyncio
+async def test_sync_airbyte_connection_flow_invalid_payload():
+    payload = None
+    with pytest.raises(TypeError) as excinfo:
+        await sync_airbyte_connection_flow(payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
 async def test_sync_dbtcore_flow_success():
     payload = RunFlow(
         blockName="test_block", flowName="test_flow", flowRunName="test_flow_run"
@@ -539,6 +583,14 @@ async def test_sync_dbtcore_flow_failure():
         await sync_dbtcore_flow(payload)
     assert excinfo.value.status_code == 400
     assert excinfo.value.detail == "received empty blockName"
+
+
+@pytest.mark.asyncio
+async def test_sync_dbtcore_flow_invalid_payload():
+    payload = None
+    with pytest.raises(TypeError) as excinfo:
+        await sync_dbtcore_flow(payload)
+    assert excinfo.value.args[0] == "payload is invalid"
 
 
 @pytest.mark.asyncio
@@ -574,6 +626,14 @@ async def test_post_dataflow_failure():
 
 
 @pytest.mark.asyncio
+async def test_post_dataflow_invalid_payload():
+    payload = None
+    with pytest.raises(TypeError) as excinfo:
+        await post_dataflow(payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
 async def test_get_flowrun_success():
     payload = FlowRunRequest(name="test_flow_run")
     with patch("proxy.main.get_flow_runs_by_name", return_value=[{"id": "12345"}]):
@@ -589,6 +649,14 @@ async def test_get_flowrun_failure():
             await get_flowrun(payload)
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == "no such flow run"
+
+
+@pytest.mark.asyncio
+async def test_get_flowrun_invalid_payload():
+    payload = None
+    with pytest.raises(TypeError) as excinfo:
+        await get_flowrun(payload)
+    assert excinfo.value.args[0] == "payload is invalid"
 
 
 def test_get_flow_runs_success():
@@ -609,6 +677,24 @@ def test_get_flow_runs_failure():
         assert excinfo.value.detail == "failed to fetch flow_runs for deployment"
 
 
+def test_get_flow_runs_invalid_deployment_id():
+    with pytest.raises(TypeError) as excinfo:
+        get_flow_runs(None, 0)
+    assert excinfo.value.args[0] == "deployment_id must be a string"
+
+
+def test_get_flow_runs_with_invalid_limit():
+    with pytest.raises(TypeError) as excinfo:
+        get_flow_runs("67890", None)
+    assert excinfo.value.args[0] == "limit must be an integer"
+
+
+def test_get_flow_runs_limit_less_than_zero():
+    with pytest.raises(ValueError) as excinfo:
+        get_flow_runs("67890", -1)
+    assert excinfo.value.args[0] == "limit must be positive"
+
+
 def test_post_deployments_success():
     payload = DeploymentFetch(org_slug="test_org", deployment_ids=["12345"])
     with patch("proxy.main.get_deployments_by_filter", return_value=[{"id": "12345"}]):
@@ -627,6 +713,13 @@ def test_post_deployments_failure():
         assert excinfo.value.detail == "failed to filter deployments"
 
 
+def test_post_deployments_invalid_payload():
+    payload = None
+    with pytest.raises(TypeError) as excinfo:
+        post_deployments(payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
 def test_get_flow_run_logs_paginated_success():
     with patch("proxy.main.get_flow_run_logs", return_value="test logs"):
         response = get_flow_run_logs_paginated("12345")
@@ -639,6 +732,55 @@ def test_get_flow_run_logs_paginated_failure():
             get_flow_run_logs_paginated("12345")
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == "failed to fetch logs for flow_run"
+
+
+def test_get_flow_run_logs_paginated_invalid_flow_run_id():
+    with pytest.raises(TypeError) as excinfo:
+        get_flow_run_logs_paginated(None, 0)
+    assert excinfo.value.args[0] == "flow_run_id must be a string"
+
+
+def test_get_flow_run_logs_paginated_invalid_offset():
+    with pytest.raises(TypeError) as excinfo:
+        get_flow_run_logs_paginated("12345", None)
+    assert excinfo.value.args[0] == "offset must be an integer"
+
+
+def test_get_flow_run_logs_paginated_offset_less_than_zero():
+    with pytest.raises(ValueError) as excinfo:
+        get_flow_run_logs_paginated("12345", -1)
+    assert excinfo.value.args[0] == "offset must be positive"
+
+
+def test_get_read_deployment_success():
+    deployment_id = "test-deployment-id"
+    mock_deployment_data = {
+        "name": "test-deployment",
+        "id": deployment_id,
+        "tags": ["tag1", "tag2"],
+        "schedule": {"cron": "* * * * *"},
+        "is_schedule_active": True,
+        "parameters": {"airbyte_blocks": []},
+    }
+    with patch("proxy.main.get_deployment") as mock_get_deployment:
+        mock_get_deployment.return_value = mock_deployment_data
+        response = get_read_deployment(deployment_id)
+    assert response["deploymentId"] == deployment_id
+
+
+def test_get_read_deployment_failure():
+    with patch("proxy.main.get_deployment", side_effect=Exception("test error")):
+        with pytest.raises(HTTPException) as excinfo:
+            deployment_id = "test-deployment-id"
+            get_read_deployment(deployment_id)
+        assert excinfo.value.status_code == 400
+        assert excinfo.value.detail == "failed to fetch deployment " + deployment_id
+
+
+def test_get_read_deployment_invalid_deployment_id():
+    with pytest.raises(TypeError) as excinfo:
+        get_read_deployment(None)
+    assert excinfo.value.args[0] == "deployment_id must be a string"
 
 
 def test_delete_deployment_success():
@@ -656,6 +798,12 @@ def test_delete_deployment_failure():
             delete_deployment("12345")
         assert excinfo.value.status_code == 400
         assert excinfo.value.detail == "test error"
+
+
+def test_delete_deployment_invalid_deployment_id():
+    with pytest.raises(TypeError) as excinfo:
+        delete_deployment(None)
+    assert excinfo.value.args[0] == "deployment_id must be a string"
 
 
 @pytest.mark.asyncio
@@ -676,6 +824,13 @@ async def test_post_create_deployment_flow_run_failure():
         assert excinfo.value.detail == "failed to create flow_run for deployment"
 
 
+@pytest.mark.asyncio
+async def test_post_create_deployment_flow_run_invalid_deployment_id():
+    with pytest.raises(TypeError) as excinfo:
+        await post_create_deployment_flow_run(None)
+    assert excinfo.value.args[0] == "deployment_id must be a string"
+
+
 def test_post_deployment_set_schedule_success():
     with patch("proxy.main.set_deployment_schedule"):
         response = post_deployment_set_schedule("12345", "active")
@@ -689,8 +844,13 @@ def test_post_deployment_set_schedule_failure():
     assert excinfo.value.detail == "incorrect status value"
 
 
-def test_post_deployment_set_schedule_with_invalid_status():
-    with pytest.raises(HTTPException) as excinfo:
-        post_deployment_set_schedule("12345", "invalid_status")
-    assert excinfo.value.status_code == 422
-    assert excinfo.value.detail == "incorrect status value"
+def test_post_deployment_set_schedule_invalid_deployment_id():
+    with pytest.raises(TypeError) as excinfo:
+        post_deployment_set_schedule(None, "active")
+    assert excinfo.value.args[0] == "deployment_id must be a string"
+
+
+def test_post_deployment_set_schedule_invalid_status():
+    with pytest.raises(TypeError) as excinfo:
+        post_deployment_set_schedule("12345", None)
+    assert excinfo.value.args[0] == "status must be a string"

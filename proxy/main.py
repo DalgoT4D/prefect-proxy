@@ -158,6 +158,8 @@ def post_airbyte_connection_blocks(payload: AirbyteConnectionBlocksFetch):
 @app.get("/proxy/blocks/airbyte/server/{blockname}")
 async def get_airbyte_server(blockname: str):
     """Look up an Airbyte server block by name and return block_id"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
     try:
         block_id = await get_airbyte_server_block_id(blockname)
     except Exception as error:
@@ -181,6 +183,8 @@ async def post_airbyte_server(payload: AirbyteServerCreate):
     raise an exception if the name is already in use
     """
     logger.info(payload)
+    if not isinstance(payload, AirbyteServerCreate):
+        raise TypeError("payload is invalid")
     try:
         block_id = await create_airbyte_server_block(payload)
     except Exception as error:
@@ -237,6 +241,8 @@ async def post_airbyte_connection(payload: AirbyteConnectionCreate):
 @app.get("/proxy/blocks/shell/{blockname}")
 async def get_shell(blockname):
     """look up a shell operation block by name and return block_id"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
     block_id = await get_shell_block_id(blockname)
     if block_id is None:
         logger.error("no shell block having name %s", blockname)
@@ -251,6 +257,8 @@ async def post_shell(payload: PrefectShellSetup):
     create a new shell block with this block name,
     raise an exception if the name is already in use
     """
+    if not isinstance(payload, PrefectShellSetup):
+        raise TypeError("payload is invalid")
     logger.info(payload)
     try:
         block_id = await create_shell_block(payload)
@@ -267,6 +275,9 @@ async def post_shell(payload: PrefectShellSetup):
 @app.get("/proxy/blocks/dbtcore/{blockname}")
 async def get_dbtcore(blockname):
     """look up a dbt core operation block by name and return block_id"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
+    
     block_id = await get_dbtcore_block_id(blockname)
     if block_id is None:
         logger.error("no dbt core block having name %s", blockname)
@@ -282,6 +293,8 @@ async def post_dbtcore(payload: DbtCoreCreate):
     raise an exception if the name is already in use
     """
     logger.info(payload)
+    if not isinstance(payload, DbtCoreCreate):
+        raise TypeError("payload is invalid")
     try:
         block_id, cleaned_blockname = await create_dbt_core_block(payload)
     except Exception as error:
@@ -301,6 +314,8 @@ async def post_dbtcore(payload: DbtCoreCreate):
 @app.delete("/delete-a-block/{block_id}")
 async def delete_block(block_id):
     """we can break this up into four different deleters later if we want to"""
+    if not isinstance(block_id, str):
+        raise TypeError("block_id must be a string")
     root = os.getenv("PREFECT_API_URL")
     logger.info("DELETE %s/block_documents/%s", root, block_id)
     res = requests.delete(f"{root}/block_documents/{block_id}", timeout=10)
@@ -315,6 +330,8 @@ async def delete_block(block_id):
 @app.post("/proxy/flows/airbyte/connection/sync/")
 async def sync_airbyte_connection_flow(payload: RunFlow):
     """Prefect flow to sync an airbyte connection"""
+    if not isinstance(payload, RunFlow):
+        raise TypeError("payload is invalid")
     logger.info(payload)
     if payload.blockName == "":
         logger.error("received empty blockName")
@@ -333,6 +350,8 @@ async def sync_airbyte_connection_flow(payload: RunFlow):
 async def sync_dbtcore_flow(payload: RunFlow):
     """Prefect flow to run dbt"""
     logger.info(payload)
+    if not isinstance(payload, RunFlow):
+        raise TypeError("payload is invalid")
     if payload.blockName == "":
         logger.error("received empty blockName")
         raise HTTPException(status_code=400, detail="received empty blockName")
@@ -349,6 +368,9 @@ async def sync_dbtcore_flow(payload: RunFlow):
 @app.post("/proxy/deployments/")
 async def post_dataflow(payload: DeploymentCreate):
     """Create a deployment from an existing flow"""
+    if not isinstance(payload, DeploymentCreate):
+        raise TypeError("payload is invalid")
+    
     logger.info(payload)
     try:
         deployment = await post_deployment(payload)
@@ -364,6 +386,9 @@ async def post_dataflow(payload: DeploymentCreate):
 @app.post("/proxy/flow_run/")
 async def get_flowrun(payload: FlowRunRequest):
     """look up a flow run by name and return id if found"""
+    if not isinstance(payload, FlowRunRequest):
+        raise TypeError("payload is invalid")
+    
     logger.info("flow run name=%s", payload.name)
     try:
         flow_runs = get_flow_runs_by_name(payload.name)
@@ -383,6 +408,13 @@ async def get_flowrun(payload: FlowRunRequest):
 @app.get("/proxy/flow_runs")
 def get_flow_runs(deployment_id: str, limit: int = 0):
     """Get Flow Runs for a deployment"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    if not isinstance(limit, int):
+        raise TypeError("limit must be an integer")
+    if limit < 0:
+        raise ValueError("limit must be positive")
+    logger.info("deployment_id=%s, limit=%s", deployment_id, limit)
     try:
         flow_runs = get_flow_runs_by_deployment_id(deployment_id, limit)
     except Exception as error:
@@ -398,6 +430,8 @@ def get_flow_runs(deployment_id: str, limit: int = 0):
 def post_deployments(payload: DeploymentFetch):
     """Get deployments by various filters"""
     logger.info(payload)
+    if not isinstance(payload, DeploymentFetch):
+        raise TypeError("payload is invalid")
     try:
         deployments = get_deployments_by_filter(
             org_slug=payload.org_slug, deployment_ids=payload.deployment_ids
@@ -414,6 +448,13 @@ def post_deployments(payload: DeploymentFetch):
 @app.get("/proxy/flow_runs/logs/{flow_run_id}")
 def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
     """paginate the logs from a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+    if not isinstance(offset, int):
+        raise TypeError("offset must be an integer")
+    if offset < 0:
+        raise ValueError("offset must be positive")
+    logger.info("flow_run_id=%s, offset=%s", flow_run_id, offset)
     try:
         return get_flow_run_logs(flow_run_id, offset)
     except Exception as error:
@@ -426,6 +467,10 @@ def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
 @app.get("/proxy/deployments/{deployment_id}")
 def get_read_deployment(deployment_id):
     """Fetch deployment and all its details"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    logger.info("deployment_id=%s", deployment_id)
+    
     try:
         deployment = get_deployment(deployment_id)
     except Exception as error:
@@ -454,6 +499,10 @@ def get_read_deployment(deployment_id):
 @app.delete("/proxy/deployments/{deployment_id}")
 def delete_deployment(deployment_id):
     """Delete a deployment"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    logger.info("deployment_id=%s", deployment_id)
+    
     root = os.getenv("PREFECT_API_URL")
     res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
     try:
@@ -467,6 +516,9 @@ def delete_deployment(deployment_id):
 @app.post("/proxy/deployments/{deployment_id}/flow_run")
 async def post_create_deployment_flow_run(deployment_id):
     """Create a flow run from deployment"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    logger.info("deployment_id=%s", deployment_id)
     try:
         res = await post_deployment_flow_run(deployment_id)
     except Exception as error:
@@ -481,6 +533,11 @@ async def post_create_deployment_flow_run(deployment_id):
 @app.post("/proxy/deployments/{deployment_id}/set_schedule/{status}")
 def post_deployment_set_schedule(deployment_id, status):
     """Create a flow run from deployment"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    
+    if not isinstance(status, str):
+        raise TypeError("status must be a string")
     if (
         (status is None)
         or (isinstance(status, str) is not True)
