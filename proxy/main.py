@@ -161,7 +161,11 @@ async def get_airbyte_server(blockname: str):
     try:
         block_id = await get_airbyte_server_block_id(blockname)
     except Exception as error:
-        logger.error(f"Failed to get Airbyte server block ID for block name {blockname}: {error}")
+        logger.error(
+            "Failed to get Airbyte server block ID for block name %s: %s",
+            blockname,
+            str(error),
+        )
         raise HTTPException(status_code=500, detail="Internal server error")
 
     if block_id is None:
@@ -422,7 +426,14 @@ def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
 @app.get("/proxy/deployments/{deployment_id}")
 def get_read_deployment(deployment_id):
     """Fetch deployment and all its details"""
-    deployment = get_deployment(deployment_id)
+    try:
+        deployment = get_deployment(deployment_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch deployment " + deployment_id
+        ) from error
+
     res = {
         "name": deployment["name"],
         "deploymentId": deployment["id"],
