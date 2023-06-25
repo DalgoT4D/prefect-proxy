@@ -277,7 +277,7 @@ async def get_dbtcore(blockname):
     """look up a dbt core operation block by name and return block_id"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
-    
+
     block_id = await get_dbtcore_block_id(blockname)
     if block_id is None:
         logger.error("no dbt core block having name %s", blockname)
@@ -370,7 +370,7 @@ async def post_dataflow(payload: DeploymentCreate):
     """Create a deployment from an existing flow"""
     if not isinstance(payload, DeploymentCreate):
         raise TypeError("payload is invalid")
-    
+
     logger.info(payload)
     try:
         deployment = await post_deployment(payload)
@@ -388,7 +388,7 @@ async def get_flowrun(payload: FlowRunRequest):
     """look up a flow run by name and return id if found"""
     if not isinstance(payload, FlowRunRequest):
         raise TypeError("payload is invalid")
-    
+
     logger.info("flow run name=%s", payload.name)
     try:
         flow_runs = get_flow_runs_by_name(payload.name)
@@ -470,7 +470,7 @@ def get_read_deployment(deployment_id):
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     logger.info("deployment_id=%s", deployment_id)
-    
+
     try:
         deployment = get_deployment(deployment_id)
     except Exception as error:
@@ -502,7 +502,7 @@ def delete_deployment(deployment_id):
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     logger.info("deployment_id=%s", deployment_id)
-    
+
     root = os.getenv("PREFECT_API_URL")
     res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
     try:
@@ -535,7 +535,7 @@ def post_deployment_set_schedule(deployment_id, status):
     """Create a flow run from deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
-    
+
     if not isinstance(status, str):
         raise TypeError("status must be a string")
     if (
