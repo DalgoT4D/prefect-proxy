@@ -412,7 +412,7 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
     return {"id": deployment_id, "name": deployment.name}
 
 
-def get_deployment(deployment_id: str) -> list:
+def get_deployment(deployment_id: str) -> dict:
     """Fetch deployment and its details"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
