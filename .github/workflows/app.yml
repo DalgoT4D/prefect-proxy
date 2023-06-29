@@ -48,6 +48,5 @@ jobs:
       - name: Deploy to EC2
         run: |
           eval `ssh-agent -s`
-          ssh-add - <<< ${{ secrets.SSH_PRIVATE_KEY | replace('\n', '\\n') }}
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" | ssh-add -
           ssh ${{ secrets.SERVER }} "source ~/.nvm/nvm.sh; cd /home/ddp/prefect-proxy; git pull; pm2 restart prefect-proxy"
-          
