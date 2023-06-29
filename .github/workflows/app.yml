@@ -45,14 +45,9 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-      - name: Create known_hosts file
-        run: |
-          mkdir -p ~/.ssh
-          touch ~/.ssh/known_hosts
-      - name: Add remote host key to known_hosts
-        run: ssh-keyscan ${{ secrets.SERVERIP }} >> ~/.ssh/known_hosts
       - name: Deploy to EC2
         run: |
           eval `ssh-agent -s`
-          ssh-add - <<< "${{ secrets.SSH_PRIVATE_KEY }}"
+          ssh-add - <<< ${{ secrets.SSH_PRIVATE_KEY | replace('\n', '\\n') }}
           ssh ${{ secrets.SERVER }} "source ~/.nvm/nvm.sh; cd /home/ddp/prefect-proxy; git pull; pm2 restart prefect-proxy"
+          
