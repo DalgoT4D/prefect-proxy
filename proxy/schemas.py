@@ -65,6 +65,7 @@ class DbtCoreCreate(BaseModel):
 
     profile: DbtProfileCreate
     wtype: str
+    bqlocation: str = None
     credentials: dict
 
     commands: list

@@ -328,6 +328,9 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
         target_configs = BigQueryTargetConfigs(
             credentials=dbcredentials,
             schema=payload.profile.target_configs_schema,
+            extras={
+                "location": payload.bqlocation,
+            },
         )
     else:
         raise PrefectException("unknown wtype: " + payload.wtype)
