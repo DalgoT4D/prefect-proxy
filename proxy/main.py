@@ -168,7 +168,7 @@ async def get_airbyte_server(blockname: str):
             blockname,
             str(error),
         )
-        raise HTTPException(status_code=500, detail="Internal server error")
+        raise HTTPException(status_code=500, detail="Internal server error") from error
 
     if block_id is None:
         return {"block_id": None}
