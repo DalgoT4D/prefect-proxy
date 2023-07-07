@@ -438,7 +438,7 @@ def get_flow_run_by_id(flow_run_id):
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
-            status_code=400, detail="failed to fetch flow_runs for deployment"
+            status_code=400, detail="failed to fetch flow_run " + flow_run_id
         ) from error
 
     logger.info("Found flow run wth id - %s", flow_run_id)
