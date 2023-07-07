@@ -612,6 +612,16 @@ def get_flow_runs_by_name(flow_run_name: str) -> dict:
     return flow_runs
 
 
+def get_flow_run(flow_run_id: str) -> dict:
+    """Get a flow run by its id"""
+    try:
+        flow_run = prefect_get(f"flow_runs/{flow_run_id}")
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException("failed to fetch a flow-run") from err
+    return flow_run
+
+
 def set_deployment_schedule(deployment_id: str, status: str) -> None:
     """Set deployment schedule to active or inactive"""
     # both the apis return null below
