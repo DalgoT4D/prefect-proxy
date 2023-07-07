@@ -24,6 +24,7 @@ from proxy.service import (
     post_filter_blocks,
     set_deployment_schedule,
     get_deployment,
+    get_flow_run,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -424,6 +425,25 @@ def get_flow_runs(deployment_id: str, limit: int = 0):
         ) from error
     logger.info("Found flow runs for deployment ID: %s", deployment_id)
     return {"flow_runs": flow_runs}
+
+
+@app.get("/proxy/flow_runs/{flow_run_id}")
+def get_flow_run_by_id(flow_run_id):
+    """Get a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("Flow run id must be a string")
+
+    try:
+        flow_run = get_flow_run(flow_run_id=flow_run_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch flow_run " + flow_run_id
+        ) from error
+
+    logger.info("Found flow run wth id - %s", flow_run_id)
+
+    return flow_run
 
 
 @app.post("/proxy/deployments/filter")
