@@ -316,9 +316,7 @@ async def post_dbtcore(payload: DbtCoreCreate):
 
 @app.put("/proxy/blocks/dbtcore/postgres/")
 async def put_dbtcore_postgres(payload: DbtCoreCredentialUpdate):
-    """
-    update the credentials inside an existing dbt core op block
-    """
+    """update the credentials inside an existing dbt core op block"""
     if not isinstance(payload, DbtCoreCredentialUpdate):
         raise TypeError("payload is invalid")
     try:
@@ -336,9 +334,7 @@ async def put_dbtcore_postgres(payload: DbtCoreCredentialUpdate):
 
 @app.put("/proxy/blocks/dbtcore/bigquery/")
 async def put_dbtcore_bigquery(payload: DbtCoreCredentialUpdate):
-    """
-    update the credentials inside an existing dbt core op block
-    """
+    """update the credentials inside an existing dbt core op block"""
     if not isinstance(payload, DbtCoreCredentialUpdate):
         raise TypeError("payload is invalid")
     try:
