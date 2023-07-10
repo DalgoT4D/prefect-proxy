@@ -387,6 +387,63 @@ def delete_dbt_core_block(block_id: str) -> dict:
     return prefect_delete(f"block_documents/{block_id}")
 
 
+async def update_postgres_credentials(dbt_blockname, new_extras):
+    """updates the database credentials inside a dbt postgres block"""
+    try:
+        block = await DbtCoreOperation.load(dbt_blockname)
+    except Exception as error:
+        raise PrefectException("no dbt core op block named " + dbt_blockname) from error
+
+    if block.dbt_cli_profile.target_configs.type != "postgres":
+        raise TypeError("wrong blocktype")
+
+    extras = block.dbt_cli_profile.target_configs.dict()["extras"]
+    extras.update(**new_extras)
+
+    block.dbt_cli_profile.target_configs = TargetConfigs(
+        type=block.dbt_cli_profile.target_configs.type,
+        schema=block.dbt_cli_profile.target_configs.dict()["schema"],
+        extras=extras,
+    )
+
+    try:
+        await block.dbt_cli_profile.save(
+            name=block.dbt_cli_profile.name, overwrite=True
+        )
+        await block.save(dbt_blockname, overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to update dbt cli profile [postgres]") from error
+
+
+async def update_bigquery_credentials(dbt_blockname, credentials):
+    """updates the database credentials inside a dbt bigquery block"""
+    try:
+        block = await DbtCoreOperation.load(dbt_blockname)
+    except Exception as error:
+        raise PrefectException("no dbt core op block named " + dbt_blockname) from error
+
+    if block.dbt_cli_profile.target_configs.type != "bigquery":
+        raise TypeError("wrong blocktype")
+
+    dbcredentials = GcpCredentials(service_account_info=credentials)
+
+    block.dbt_cli_profile.target_configs = BigQueryTargetConfigs(
+        credentials=dbcredentials,
+        schema=block.dbt_cli_profile.target_configs.dict()["schema_"],
+        extras=block.dbt_cli_profile.target_configs.dict()["extras"],
+    )
+
+    try:
+        await block.dbt_cli_profile.save(
+            name=block.dbt_cli_profile.name, overwrite=True
+        )
+        await block.save(dbt_blockname, overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to update dbt cli profile [bigquery]") from error
+
+
 # ================================================================================================
 async def post_deployment(payload: DeploymentCreate) -> dict:
     """create a deployment from a flow and a schedule"""

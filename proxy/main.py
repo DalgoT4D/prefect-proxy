@@ -13,6 +13,8 @@ from proxy.service import (
     create_airbyte_connection_block,
     get_dbtcore_block_id,
     create_dbt_core_block,
+    update_postgres_credentials,
+    update_bigquery_credentials,
     get_shell_block_id,
     create_shell_block,
     post_deployment,
@@ -31,6 +33,7 @@ from proxy.schemas import (
     AirbyteConnectionCreate,
     PrefectShellSetup,
     DbtCoreCreate,
+    DbtCoreCredentialUpdate,
     RunFlow,
     DeploymentCreate,
     DeploymentFetch,
@@ -309,6 +312,45 @@ async def post_dbtcore(payload: DbtCoreCreate):
         cleaned_blockname,
     )
     return {"block_id": block_id, "block_name": cleaned_blockname}
+
+
+@app.put("/proxy/blocks/dbtcore/postgres/")
+async def put_dbtcore_postgres(payload: DbtCoreCredentialUpdate):
+    """
+    update the credentials inside an existing dbt core op block
+    """
+    if not isinstance(payload, DbtCoreCredentialUpdate):
+        raise TypeError("payload is invalid")
+    try:
+        await update_postgres_credentials(payload.blockName, payload.credentials)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400,
+            detail="failed to update dbt core block credentials [postgres]",
+        ) from error
+
+    logger.info("updated credentials in dbtcore block %s [postgres]", payload.blockName)
+    return {"success": 1}
+
+
+@app.put("/proxy/blocks/dbtcore/bigquery/")
+async def put_dbtcore_bigquery(payload: DbtCoreCredentialUpdate):
+    """
+    update the credentials inside an existing dbt core op block
+    """
+    if not isinstance(payload, DbtCoreCredentialUpdate):
+        raise TypeError("payload is invalid")
+    try:
+        await update_bigquery_credentials(payload.blockName, payload.credentials)
+    except Exception as error:
+        raise HTTPException(
+            status_code=400,
+            detail="failed to update dbt core block credentials [bigquery]",
+        ) from error
+
+    logger.info("updated credentials in dbtcore block %s [bigquery]", payload.blockName)
+    return {"success": 1}
 
 
 # =============================================================================

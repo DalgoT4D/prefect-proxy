@@ -75,6 +75,13 @@ class DbtCoreCreate(BaseModel):
     project_dir: str
 
 
+class DbtCoreCredentialUpdate(BaseModel):
+    """payload to create a dbt core command block"""
+
+    blockName: str
+    credentials: dict
+
+
 class DbtCoreBlockResponse(BaseModel):
     """response from the dbt block"""
 
