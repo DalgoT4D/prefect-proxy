@@ -397,13 +397,25 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
     if block.dbt_cli_profile.target_configs.type != "postgres":
         raise TypeError("wrong blocktype")
 
+    aliases = {
+        "dbname": "database",
+        "user": "username",
+    }
+
     extras = block.dbt_cli_profile.target_configs.dict()["extras"]
-    extras.update(**new_extras)
+    cleaned_extras = {}
+    # copy existing extras over to cleaned_extras with the right keys
+    for key, value in extras.items():
+        cleaned_extras[aliases.get(key, key)] = value
+
+    # copy new extras over to cleaned_extras with the right keys
+    for key, value in new_extras.items():
+        cleaned_extras[aliases.get(key, key)] = value
 
     block.dbt_cli_profile.target_configs = TargetConfigs(
         type=block.dbt_cli_profile.target_configs.type,
         schema=block.dbt_cli_profile.target_configs.dict()["schema"],
-        extras=extras,
+        extras=cleaned_extras,
     )
 
     try:
