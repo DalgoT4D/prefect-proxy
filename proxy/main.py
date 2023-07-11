@@ -314,7 +314,7 @@ async def post_dbtcore(payload: DbtCoreCreate):
     return {"block_id": block_id, "block_name": cleaned_blockname}
 
 
-@app.put("/proxy/blocks/dbtcore/postgres/")
+@app.put("/proxy/blocks/dbtcore_edit/postgres/")
 async def put_dbtcore_postgres(payload: DbtCoreCredentialUpdate):
     """update the credentials inside an existing dbt core op block"""
     if not isinstance(payload, DbtCoreCredentialUpdate):
@@ -332,7 +332,7 @@ async def put_dbtcore_postgres(payload: DbtCoreCredentialUpdate):
     return {"success": 1}
 
 
-@app.put("/proxy/blocks/dbtcore/bigquery/")
+@app.put("/proxy/blocks/dbtcore_edit/bigquery/")
 async def put_dbtcore_bigquery(payload: DbtCoreCredentialUpdate):
     """update the credentials inside an existing dbt core op block"""
     if not isinstance(payload, DbtCoreCredentialUpdate):
