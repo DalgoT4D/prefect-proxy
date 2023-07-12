@@ -399,7 +399,7 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
 
     aliases = {
         "dbname": "database",
-        "user": "username",
+        "username": "user",
     }
 
     extras = block.dbt_cli_profile.target_configs.dict()["extras"]
