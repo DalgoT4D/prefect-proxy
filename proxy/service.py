@@ -390,7 +390,7 @@ def delete_dbt_core_block(block_id: str) -> dict:
 async def update_postgres_credentials(dbt_blockname, new_extras):
     """updates the database credentials inside a dbt postgres block"""
     try:
-        block = await DbtCoreOperation.load(dbt_blockname)
+        block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
     except Exception as error:
         raise PrefectException("no dbt core op block named " + dbt_blockname) from error
 
@@ -428,10 +428,10 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
         raise PrefectException("failed to update dbt cli profile [postgres]") from error
 
 
-async def update_bigquery_credentials(dbt_blockname, credentials):
+async def update_bigquery_credentials(dbt_blockname: str, credentials: dict):
     """updates the database credentials inside a dbt bigquery block"""
     try:
-        block = await DbtCoreOperation.load(dbt_blockname)
+        block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
     except Exception as error:
         raise PrefectException("no dbt core op block named " + dbt_blockname) from error
 
@@ -454,6 +454,27 @@ async def update_bigquery_credentials(dbt_blockname, credentials):
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to update dbt cli profile [bigquery]") from error
+
+
+async def update_target_configs_schema(dbt_blockname: str, target_configs_schema: str):
+    """updates the target inside a dbt bigquery block"""
+    try:
+        block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
+    except Exception as error:
+        raise PrefectException("no dbt core op block named " + dbt_blockname) from error
+
+    block.dbt_cli_profile.target_configs.schema = target_configs_schema
+
+    try:
+        await block.dbt_cli_profile.save(
+            name=block.dbt_cli_profile.name, overwrite=True
+        )
+        await block.save(dbt_blockname, overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException(
+            "failed to update dbt cli profile target_configs schema"
+        ) from error
 
 
 # ================================================================================================
