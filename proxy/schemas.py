@@ -76,10 +76,17 @@ class DbtCoreCreate(BaseModel):
 
 
 class DbtCoreCredentialUpdate(BaseModel):
-    """payload to create a dbt core command block"""
+    """payload to update a dbt core command block's credentials"""
 
     blockName: str
     credentials: dict
+
+
+class DbtCoreSchemaUpdate(BaseModel):
+    """payload to update a dbt core command block's schema"""
+
+    blockName: str
+    target_configs_schema: str
 
 
 class DbtCoreBlockResponse(BaseModel):

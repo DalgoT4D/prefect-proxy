@@ -15,6 +15,7 @@ from proxy.service import (
     create_dbt_core_block,
     update_postgres_credentials,
     update_bigquery_credentials,
+    update_target_configs_schema,
     get_shell_block_id,
     create_shell_block,
     post_deployment,
@@ -34,6 +35,7 @@ from proxy.schemas import (
     PrefectShellSetup,
     DbtCoreCreate,
     DbtCoreCredentialUpdate,
+    DbtCoreSchemaUpdate,
     RunFlow,
     DeploymentCreate,
     DeploymentFetch,
@@ -346,6 +348,26 @@ async def put_dbtcore_bigquery(payload: DbtCoreCredentialUpdate):
         ) from error
 
     logger.info("updated credentials in dbtcore block %s [bigquery]", payload.blockName)
+    return {"success": 1}
+
+
+@app.put("/proxy/blocks/dbtcore_edit_schema/")
+async def put_dbtcore_schema(payload: DbtCoreSchemaUpdate):
+    """update the target inside an existing dbt core op block"""
+    if not isinstance(payload, DbtCoreSchemaUpdate):
+        raise TypeError("payload is invalid")
+    try:
+        await update_target_configs_schema(
+            payload.blockName, payload.target_configs_schema
+        )
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400,
+            detail="failed to update dbt core block target_configs_schema",
+        ) from error
+
+    logger.info("updated target_configs_schema in dbtcore block %s", payload.blockName)
     return {"success": 1}
 
 
