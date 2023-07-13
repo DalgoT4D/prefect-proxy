@@ -448,7 +448,8 @@ async def update_bigquery_credentials(dbt_blockname: str, credentials: dict):
 
     try:
         await block.dbt_cli_profile.save(
-            name=block.dbt_cli_profile.name, overwrite=True
+            name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
+            overwrite=True,
         )
         await block.save(dbt_blockname, overwrite=True)
     except Exception as error:
@@ -467,13 +468,15 @@ async def update_target_configs_schema(dbt_blockname: str, target_configs_schema
 
     try:
         await block.dbt_cli_profile.save(
-            name=block.dbt_cli_profile.name, overwrite=True
+            name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
+            overwrite=True,
         )
         await block.save(dbt_blockname, overwrite=True)
     except Exception as error:
         logger.exception(error)
         raise PrefectException(
-            "failed to update dbt cli profile target_configs schema"
+            "failed to update dbt cli profile target_configs schema for "
+            + dbt_blockname
         ) from error
 
 
