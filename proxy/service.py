@@ -549,9 +549,10 @@ def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:
 
     payload = {"schedule": schedule}
 
-    prefect_patch(f"deployments/{deployment_id}", payload)
+    # res will be any empty json if success since status code is 204
+    res = prefect_patch(f"deployments/{deployment_id}", payload)
     logger.info("Update deployment with ID: %s", deployment_id)
-    return True
+    return res
 
 
 def get_deployment(deployment_id: str) -> dict:
