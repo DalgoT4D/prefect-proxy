@@ -25,6 +25,7 @@ from proxy.schemas import (
     PrefectShellSetup,
     DbtCoreCreate,
     DeploymentCreate,
+    DeploymentUpdate,
 )
 from proxy.flows import (
     deployment_schedule_flow,
@@ -55,6 +56,28 @@ def prefect_post(endpoint: str, payload: dict) -> dict:
     return res.json()
 
 
+def prefect_patch(endpoint: str, payload: dict) -> dict:
+    """POST request to prefect server"""
+    if not isinstance(endpoint, str):
+        raise TypeError("endpoint must be a string")
+    if not isinstance(payload, dict):
+        raise TypeError("payload must be a dictionary")
+
+    root = os.getenv("PREFECT_API_URL")
+    res = requests.patch(f"{root}/{endpoint}", timeout=30, json=payload)
+    logger.info(res.text)
+    try:
+        res.raise_for_status()
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=res.text) from error
+
+    if res.status_code == 204:
+        return True
+
+    return res.json()
+
+
 def prefect_get(endpoint: str) -> dict:
     """GET request to prefect server"""
     if not isinstance(endpoint, str):
@@ -67,6 +90,7 @@ def prefect_get(endpoint: str) -> dict:
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
+
     return res.json()
 
 
@@ -82,6 +106,10 @@ def prefect_delete(endpoint: str) -> dict:
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
+
+    if res.status_code == 204:
+        return True
+
     return res.json()
 
 
@@ -506,6 +534,22 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
         logger.exception(error)
         raise PrefectException("failed to create deployment") from error
     return {"id": deployment_id, "name": deployment.name}
+
+
+def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:
+    """create a deployment from a flow and a schedule"""
+    if not isinstance(payload, DeploymentUpdate):
+        raise TypeError("payload must be a DeploymentUpdate")
+
+    logger.info(payload)
+
+    schedule = CronSchedule(cron=payload.cron).dict()
+
+    payload = {"schedule": schedule}
+
+    prefect_patch(f"deployments/{deployment_id}", payload)
+    logger.info("Update deployment with ID: %s", deployment_id)
+    return True
 
 
 def get_deployment(deployment_id: str) -> dict:

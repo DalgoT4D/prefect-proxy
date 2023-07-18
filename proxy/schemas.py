@@ -133,6 +133,12 @@ class DeploymentCreate(BaseModel):
     cron: str = None
 
 
+class DeploymentUpdate(BaseModel):
+    """parameters to create a deployment from a flow"""
+
+    cron: str
+
+
 class DeploymentFetch(BaseModel):
     """parameters to filter deployments by while fetching"""
 

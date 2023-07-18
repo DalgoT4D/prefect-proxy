@@ -28,6 +28,7 @@ from proxy.service import (
     set_deployment_schedule,
     get_deployment,
     get_flow_run,
+    put_deployment,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -39,6 +40,7 @@ from proxy.schemas import (
     RunFlow,
     DeploymentCreate,
     DeploymentFetch,
+    DeploymentUpdate,
     FlowRunRequest,
     PrefectBlocksDelete,
     AirbyteConnectionBlocksFetch,
@@ -442,6 +444,24 @@ async def post_dataflow(payload: DeploymentCreate):
         ) from error
     logger.info("Created new deployment: %s", deployment)
     return {"deployment": deployment}
+
+
+@app.put("/proxy/deployments/{deployment_id}")
+def put_dataflow(deployment_id, payload: DeploymentUpdate):
+    """updates a deployment"""
+    if not isinstance(payload, DeploymentUpdate):
+        raise TypeError("payload is invalid")
+
+    logger.info(payload)
+    try:
+        put_deployment(deployment_id, payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to update the deployment"
+        ) from error
+    logger.info("Updated the deployment: %s", deployment_id)
+    return {"success": 1}
 
 
 @app.post("/proxy/flow_run/")
