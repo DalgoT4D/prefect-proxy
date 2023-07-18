@@ -56,7 +56,7 @@ def prefect_post(endpoint: str, payload: dict) -> dict:
     return res.json()
 
 
-def prefect_patch(endpoint: str, payload: dict) -> dict | bool:
+def prefect_patch(endpoint: str, payload: dict) -> dict:
     """POST request to prefect server"""
     if not isinstance(endpoint, str):
         raise TypeError("endpoint must be a string")
@@ -72,8 +72,9 @@ def prefect_patch(endpoint: str, payload: dict) -> dict | bool:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
 
+    # no content
     if res.status_code == 204:
-        return True
+        return {}
 
     return res.json()
 
@@ -94,7 +95,7 @@ def prefect_get(endpoint: str) -> dict:
     return res.json()
 
 
-def prefect_delete(endpoint: str) -> dict | bool:
+def prefect_delete(endpoint: str) -> dict:
     """DELETE request to prefect server"""
     if not isinstance(endpoint, str):
         raise TypeError("endpoint must be a string")
@@ -107,8 +108,9 @@ def prefect_delete(endpoint: str) -> dict | bool:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
 
+    # no content
     if res.status_code == 204:
-        return True
+        return {}
 
     return res.json()
 
