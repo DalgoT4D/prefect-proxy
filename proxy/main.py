@@ -1,5 +1,4 @@
 """Route handlers"""
-import inspect
 import os
 import re
 import requests
@@ -292,7 +291,7 @@ async def get_dbtcore(request: Request, blockname):
     """look up a dbt core operation block by name and return block_id"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
-    
+
     org_slug = request.headers.get("x-ddp-org")
     block_id = await get_dbtcore_block_id(blockname)
     if block_id is None:
