@@ -121,7 +121,10 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
         org_slug = None
     try:
         block = await AirbyteServer.load(blockname)
-        logger.info("found airbyte server block named %s", blockname, extra={"orgslug": org_slug})
+        logger.info("found airbyte server block named %s", 
+                    blockname, 
+                    extra={"orgslug": org_slug}
+                )
         return _block_id(block)
     except ValueError:
         logger.error("no airbyte server block named %s", blockname, extra={"orgslug": org_slug})
@@ -148,7 +151,10 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create airbyte server block") from error
-    logger.info("created airbyte server block named %s", payload.blockName, extra={"orgslug": org_slug})
+    logger.info("created airbyte server block named %s", 
+                payload.blockName, 
+                extra={"orgslug": org_slug}
+            )
     return _block_id(airbyteservercblock)
 
 
@@ -179,10 +185,16 @@ async def get_airbyte_connection_block_id(blockname: str) -> str | None:
         org_slug = None
     try:
         block = await AirbyteConnection.load(blockname)
-        logger.info("found airbyte connection block named %s", blockname, extra={"orgslug": org_slug})
+        logger.info("found airbyte connection block named %s", 
+                    blockname, 
+                    extra={"orgslug": org_slug}
+                )
         return _block_id(block)
     except ValueError:
-        logger.error("no airbyte connection block named %s", blockname, extra={"orgslug": org_slug})
+        logger.error("no airbyte connection block named %s", 
+                     blockname, 
+                     extra={"orgslug": org_slug}
+                    )
         # pylint: disable=raise-missing-from
         raise HTTPException(
             status_code=404, detail=f"No airbyte connection block named {blockname}"
@@ -301,7 +313,10 @@ async def create_shell_block(shell: PrefectShellSetup) -> str:
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create shell block") from error
-    logger.info("created shell operation block %s", shell.blockName, extra={"orgslug": org_slug})
+    logger.info("created shell operation block %s", 
+                shell.blockName, 
+                extra={"orgslug": org_slug}
+            )
     return _block_id(shell_operation_block)
 
 
@@ -410,7 +425,10 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         logger.exception(error, extra={"orgslug": org_slug})
         raise PrefectException("failed to create dbt core op block") from error
 
-    logger.info("created dbt core operation block %s", payload.blockName, extra={"orgslug": org_slug})
+    logger.info("created dbt core operation block %s", 
+                payload.blockName, 
+                extra={"orgslug": org_slug}
+            )
 
     return _block_id(dbt_core_operation), cleaned_blockname
 
@@ -592,7 +610,10 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
         org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
     except KeyError:
         org_slug = None
-    logger.info("fetching flow runs for deployment %s", deployment_id, extra={"orgslug": org_slug})
+    logger.info("fetching flow runs for deployment %s", 
+                deployment_id, 
+                extra={"orgslug": org_slug}
+            )
 
     query = {
         "sort": "START_TIME_DESC",

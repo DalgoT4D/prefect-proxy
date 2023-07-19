@@ -181,7 +181,8 @@ async def get_airbyte_server(request: Request, blockname: str):
 
     if block_id is None:
         return {"block_id": None}
-    logger.info("blockname => blockid : %s => %s", blockname, block_id, extra={"orgslug": org_slug})
+    logger.info("blockname => blockid : %s => %s", blockname, block_id, 
+                extra={"orgslug": org_slug})
     return {"block_id": block_id}
 
 
@@ -202,7 +203,10 @@ async def post_airbyte_server(request: Request,payload: AirbyteServerCreate):
         raise HTTPException(
             status_code=400, detail="failed to create airbyte server block"
         ) from error
-    logger.info("Created new airbyte server block with ID: %s", block_id, extra={"orgslug": org_slug})
+    logger.info("Created new airbyte server block with ID: %s", 
+                block_id, 
+                extra={"orgslug": org_slug}
+            )
     return {"block_id": block_id}
 
 
@@ -215,7 +219,11 @@ async def get_airbyte_connection_by_blockname(request: Request, blockname):
     if block_id is None:
         logger.error("no airbyte connection block having name %s", blockname)
         raise HTTPException(status_code=400, detail="no block having name " + blockname)
-    logger.info("blockname => blockid : %s => %s", blockname, block_id, extra={"orgslug": org_slug})
+    logger.info("blockname => blockid : %s => %s", 
+                blockname, 
+                block_id, 
+                extra={"orgslug": org_slug}
+            )
     return {"block_id": block_id}
 
 
@@ -245,7 +253,10 @@ async def post_airbyte_connection(request: Request, payload: AirbyteConnectionCr
         raise HTTPException(
             status_code=400, detail="failed to create airbyte connection block"
         ) from error
-    logger.info("Created new airbyte connection block with ID: %s", block_id, extra={"orgslug": org_slug})
+    logger.info("Created new airbyte connection block with ID: %s", 
+                block_id, 
+                extra={"orgslug": org_slug}
+            )
     return {"block_id": block_id}
 
 
@@ -260,7 +271,11 @@ async def get_shell(request: Request, blockname):
     if block_id is None:
         logger.error("no shell block having name %s", blockname)
         raise HTTPException(status_code=400, detail="no block having name " + blockname)
-    logger.info("blockname => blockid : %s => %s", blockname, block_id, extra={"orgslug": org_slug})
+    logger.info("blockname => blockid : %s => %s", 
+                blockname, 
+                block_id, 
+                extra={"orgslug": org_slug}
+            )
     return {"block_id": block_id}
 
 
@@ -297,7 +312,11 @@ async def get_dbtcore(request: Request, blockname):
     if block_id is None:
         logger.error("no dbt core block having name %s", blockname)
         raise HTTPException(status_code=400, detail="no block having name " + blockname)
-    logger.info("blockname => blockid : %s => %s", blockname, block_id, extra={"orgslug": org_slug})
+    logger.info("blockname => blockid : %s => %s", 
+                blockname, 
+                block_id, 
+                extra={"orgslug": org_slug}
+            )
     return {"block_id": block_id}
 
 
@@ -342,7 +361,10 @@ async def put_dbtcore_postgres(request, payload: DbtCoreCredentialUpdate):
             detail="failed to update dbt core block credentials [postgres]",
         ) from error
 
-    logger.info("updated credentials in dbtcore block %s [postgres]", payload.blockName, extra={"orgslug": org_slug})
+    logger.info("updated credentials in dbtcore block %s [postgres]", 
+                payload.blockName, 
+                extra={"orgslug": org_slug}
+            )
     return {"success": 1}
 
 
@@ -360,7 +382,10 @@ async def put_dbtcore_bigquery(request: Request, payload: DbtCoreCredentialUpdat
             detail="failed to update dbt core block credentials [bigquery]",
         ) from error
 
-    logger.info("updated credentials in dbtcore block %s [bigquery]", payload.blockName, extra={"orgslug": org_slug})
+    logger.info("updated credentials in dbtcore block %s [bigquery]", 
+                payload.blockName, 
+                extra={"orgslug": org_slug}
+            )
     return {"success": 1}
 
 
@@ -381,7 +406,10 @@ async def put_dbtcore_schema(request: Request, payload: DbtCoreSchemaUpdate):
             detail="failed to update dbt core block target_configs_schema",
         ) from error
 
-    logger.info("updated target_configs_schema in dbtcore block %s", payload.blockName, extra={"orgslug": org_slug})
+    logger.info("updated target_configs_schema in dbtcore block %s", 
+                payload.blockName, 
+                extra={"orgslug": org_slug}
+            )
     return {"success": 1}
 
 
@@ -433,7 +461,10 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
     if payload.blockName == "":
         logger.error("received empty blockName")
         raise HTTPException(status_code=400, detail="received empty blockName")
-    logger.info("running dbtcore-run for dbt-core-op %s", payload.blockName, extra={"orgslug": org_slug})
+    logger.info("running dbtcore-run for dbt-core-op %s", 
+                payload.blockName, 
+                extra={"orgslug": org_slug}
+            )
     try:
         result = dbtrun(payload.blockName, payload.flowName, payload.flowRunName)
         logger.info(result)
@@ -503,7 +534,10 @@ def get_flow_runs(request: Request, deployment_id: str, limit: int = 0):
         raise HTTPException(
             status_code=400, detail="failed to fetch flow_runs for deployment"
         ) from error
-    logger.info("Found flow runs for deployment ID: %s", deployment_id, extra={"orgslug": org_slug})
+    logger.info("Found flow runs for deployment ID: %s", 
+                deployment_id, 
+                extra={"orgslug": org_slug}
+            )
     return {"flow_runs": flow_runs}
 
 
