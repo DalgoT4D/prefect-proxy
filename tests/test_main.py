@@ -216,7 +216,7 @@ def test_post_airbyte_connection_blocks_success():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_server_success():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch("proxy.main.get_airbyte_server_block_id", return_value="12345"):
         response = await get_airbyte_server(request, "test_block")
         assert response == {"block_id": "12345"}
@@ -235,7 +235,7 @@ async def test_get_airbyte_server_failure():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_server_invalid_block_name():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with pytest.raises(TypeError) as excinfo:
         await get_airbyte_server(request, None)
     assert excinfo.value.args[0] == "blockname must be a string"
@@ -284,7 +284,7 @@ async def test_post_airbyte_server_with_invalid_payload():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockname_success():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch("proxy.main.get_airbyte_connection_block_id", return_value="12345"):
         response = await get_airbyte_connection_by_blockname(request, "test_block")
         assert response == {"block_id": "12345"}
@@ -292,7 +292,7 @@ async def test_get_airbyte_connection_by_blockname_success():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockname_failure():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch("proxy.main.get_airbyte_connection_block_id", return_value=None):
         with pytest.raises(HTTPException) as excinfo:
             await get_airbyte_connection_by_blockname(request, "test_block")
@@ -302,7 +302,7 @@ async def test_get_airbyte_connection_by_blockname_failure():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockname_invalid_blockname():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch(
         "proxy.main.get_airbyte_connection_block_id"
     ) as get_airbyte_connection_block_id_mock:
@@ -317,7 +317,7 @@ async def test_get_airbyte_connection_by_blockname_invalid_blockname():
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockid_success():
     block_data = {"id": "12345", "name": "test_block", "url": "http://test-block.com"}
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch("proxy.main.get_airbyte_connection_block", return_value=block_data):
         response = await get_airbyte_connection_by_blockid(request, "12345")
         assert response == block_data
@@ -325,7 +325,7 @@ async def test_get_airbyte_connection_by_blockid_success():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockid_failure():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch("proxy.main.get_airbyte_connection_block", return_value=None):
         with pytest.raises(HTTPException) as excinfo:
             await get_airbyte_connection_by_blockid(request, "12345")
@@ -335,7 +335,7 @@ async def test_get_airbyte_connection_by_blockid_failure():
 
 @pytest.mark.asyncio
 async def test_get_airbyte_connection_by_blockid_invalid_blockid():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch(
         "proxy.main.get_airbyte_connection_block"
     ) as get_airbyte_connection_block_mock:
@@ -394,7 +394,7 @@ async def test_post_airbyte_connection_with_invalid_payload():
 
 @pytest.mark.asyncio
 async def test_get_shell_success():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch("proxy.main.get_shell_block_id", return_value="12345"):
         response = await get_shell(request, "test_block")
         assert response == {"block_id": "12345"}
@@ -402,7 +402,7 @@ async def test_get_shell_success():
 
 @pytest.mark.asyncio
 async def test_get_shell_failure():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch("proxy.main.get_shell_block_id", return_value=None):
         with pytest.raises(HTTPException) as excinfo:
             await get_shell(request, "test_block")
@@ -412,7 +412,7 @@ async def test_get_shell_failure():
 
 @pytest.mark.asyncio
 async def test_get_shell_invalid_blockname():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with pytest.raises(TypeError) as excinfo:
         await get_shell(request, None)
     assert excinfo.value.args[0] == "blockname must be a string"
@@ -451,7 +451,7 @@ async def test_post_shell_failure():
 @pytest.mark.asyncio
 async def test_post_shell_invalid_payload():
     payload = None
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with pytest.raises(TypeError) as excinfo:
         await post_shell(request, payload)
     assert excinfo.value.args[0] == "payload is invalid"
@@ -459,7 +459,7 @@ async def test_post_shell_invalid_payload():
 
 @pytest.mark.asyncio
 async def test_get_dbtcore_success():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch("proxy.main.get_dbtcore_block_id", return_value="12345"):
         response = await get_dbtcore(request, "test_block")
         assert response == {"block_id": "12345"}
@@ -467,7 +467,7 @@ async def test_get_dbtcore_success():
 
 @pytest.mark.asyncio
 async def test_get_dbtcore_failure():
-    request = client.request("POST", "/")
+    request = client.request("GET", "/")
     with patch("proxy.main.get_dbtcore_block_id", return_value=None):
         with pytest.raises(HTTPException) as excinfo:
             await get_dbtcore(request, "test_block")
@@ -900,14 +900,14 @@ async def test_post_create_deployment_flow_run_invalid_deployment_id():
 def test_post_deployment_set_schedule_success():
     request = client.request("POST", "/")
     with patch("proxy.main.set_deployment_schedule"):
-        response = post_deployment_set_schedule("12345", "active")
+        response = post_deployment_set_schedule(request, "12345", "active")
         assert response == {"success": 1}
 
 
 def test_post_deployment_set_schedule_failure():
     request = client.request("POST", "/")
     with pytest.raises(HTTPException) as excinfo:
-        post_deployment_set_schedule("12345", "invalid_status")
+        post_deployment_set_schedule(request, "12345", "invalid_status")
     assert excinfo.value.status_code == 422
     assert excinfo.value.detail == "incorrect status value"
 
@@ -915,12 +915,12 @@ def test_post_deployment_set_schedule_failure():
 def test_post_deployment_set_schedule_invalid_deployment_id():
     request = client.request("POST", "/")
     with pytest.raises(TypeError) as excinfo:
-        post_deployment_set_schedule(None, "active")
+        post_deployment_set_schedule(request, None, "active")
     assert excinfo.value.args[0] == "deployment_id must be a string"
 
 
 def test_post_deployment_set_schedule_invalid_status():
     request = client.request("POST", "/")
     with pytest.raises(TypeError) as excinfo:
-        post_deployment_set_schedule("12345", None)
+        post_deployment_set_schedule(request, "12345", None)
     assert excinfo.value.args[0] == "status must be a string"

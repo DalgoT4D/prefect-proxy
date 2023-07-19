@@ -638,8 +638,9 @@ async def post_create_deployment_flow_run(request: Request, deployment_id):
 
 
 @app.post("/proxy/deployments/{deployment_id}/set_schedule/{status}")
-def post_deployment_set_schedule(deployment_id, status):
+def post_deployment_set_schedule(request: Request, deployment_id, status):
     """Create a flow run from deployment"""
+    org_slug = request.headers.get("x-ddp-org")
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
 
@@ -655,7 +656,7 @@ def post_deployment_set_schedule(deployment_id, status):
     try:
         set_deployment_schedule(deployment_id, status)
     except Exception as error:
-        logger.exception(error)
+        logger.exception(error, extra={"orgslug": org_slug})
         raise HTTPException(status_code=400, detail="failed to set schedule") from error
 
     return {"success": 1}
