@@ -253,7 +253,7 @@ async def create_airbyte_connection_block(
     except Exception as error:
         logger.exception(error, extra={"orgslug": org_slug})
         raise PrefectException(
-            f"failed to create airbyte connection block for connection {conninfo.connectionId}"
+            f"failed to create airbyte connection block {conninfo.connectionId}"
         ) from error
     logger.info("created airbyte connection block %s", conninfo.connectionBlockName)
 
