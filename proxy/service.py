@@ -450,9 +450,9 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
 
     try:
         await block.dbt_cli_profile.save(
-            name=block.dbt_cli_profile.name, overwrite=True
+            name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
         )
-        await block.save(dbt_blockname, overwrite=True)
+        await block.save(cleaned_name_for_prefectblock(dbt_blockname), overwrite=True)
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to update dbt cli profile [postgres]") from error
@@ -481,7 +481,7 @@ async def update_bigquery_credentials(dbt_blockname: str, credentials: dict):
             name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
             overwrite=True,
         )
-        await block.save(dbt_blockname, overwrite=True)
+        await block.save(cleaned_name_for_prefectblock(dbt_blockname), overwrite=True)
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to update dbt cli profile [bigquery]") from error
@@ -501,7 +501,7 @@ async def update_target_configs_schema(dbt_blockname: str, target_configs_schema
             name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
             overwrite=True,
         )
-        await block.save(dbt_blockname, overwrite=True)
+        await block.save(cleaned_name_for_prefectblock(dbt_blockname), overwrite=True)
     except Exception as error:
         logger.exception(error)
         raise PrefectException(
