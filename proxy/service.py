@@ -39,6 +39,7 @@ FLOW_RUN_SCHEDULED = "SCHEDULED"
 
 
 def get_org_slug():
+    """Get the value of the 'org_slug' variable"""
     try:
         org_slug = inspect.stack()[2].frame.f_locals["org_slug"]
     except KeyError:
@@ -122,8 +123,7 @@ def post_filter_blocks(block_names) -> dict:
 async def get_airbyte_server_block_id(blockname: str) -> str | None:
     """look up an airbyte server block by name and return block_id"""
     if not isinstance(blockname, str):
-        raise TypeError("blockname must be a string")
-    
+        raise TypeError("blockname must be a string")    
     org_slug = get_org_slug()
     try:
         block = await AirbyteServer.load(blockname)
@@ -144,7 +144,6 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
     """Create airbyte server block in prefect"""
     if not isinstance(payload, AirbyteServerCreate):
         raise TypeError("payload must be an AirbyteServerCreate")
-
     org_slug = get_org_slug()
     airbyteservercblock = AirbyteServer(
         server_host=payload.serverHost,
@@ -185,8 +184,7 @@ def delete_airbyte_server_block(blockid: str):
 async def get_airbyte_connection_block_id(blockname: str) -> str | None:
     """look up airbyte connection block by name and return block_id"""
     if not isinstance(blockname, str):
-        raise TypeError("blockname must be a string")
-    
+        raise TypeError("blockname must be a string")    
     org_slug = get_org_slug()
     try:
         block = await AirbyteConnection.load(blockname)
@@ -211,8 +209,7 @@ async def get_airbyte_connection_block_id(blockname: str) -> str | None:
 async def get_airbyte_connection_block(blockid: str) -> dict:
     """look up and return block data for an airbyte connection"""
     if not isinstance(blockid, str):
-        raise TypeError("blockid must be a string")
-    
+        raise TypeError("blockid must be a string")    
     org_slug = get_org_slug()
     try:
         result = prefect_get(f"block_documents/{blockid}")
@@ -236,7 +233,6 @@ async def create_airbyte_connection_block(
     """Create airbyte connection block"""
     if not isinstance(conninfo, AirbyteConnectionCreate):
         raise TypeError("conninfo must be an AirbyteConnectionCreate")
-
     org_slug = get_org_slug()
     logger.info(conninfo, extra={"orgslug": org_slug})
     try:
@@ -304,7 +300,6 @@ async def create_shell_block(shell: PrefectShellSetup) -> str:
     """Create a prefect shell block"""
     if not isinstance(shell, PrefectShellSetup):
         raise TypeError("shell must be a PrefectShellSetup")
-
     org_slug = get_org_slug()
     shell_operation_block = ShellOperation(
         commands=shell.commands, env=shell.env, working_dir=shell.workingDir
@@ -324,8 +319,7 @@ async def create_shell_block(shell: PrefectShellSetup) -> str:
 def delete_shell_block(blockid: str) -> dict:
     """Delete a prefect shell block"""
     if not isinstance(blockid, str):
-        raise TypeError("blockid must be a string")
-    
+        raise TypeError("blockid must be a string")    
     org_slug = get_org_slug()
     logger.info(
         "deleting shell operation block %s", blockid, extra={"orgslug": org_slug}
@@ -352,8 +346,7 @@ async def get_dbtcore_block_id(blockname: str) -> str | None:
 async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
     """credentials are decrypted by now"""
     if not isinstance(payload, DbtCoreCreate):
-        raise TypeError("payload must be a DbtCoreCreate")
-    
+        raise TypeError("payload must be a DbtCoreCreate")    
     org_slug = get_org_slug()
     logger.info(payload, extra={"orgslug": org_slug})
     if payload.wtype == "postgres":
@@ -398,8 +391,7 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
 async def create_dbt_core_block(payload: DbtCoreCreate):
     """Create a dbt core block in prefect"""
     if not isinstance(payload, DbtCoreCreate):
-        raise TypeError("payload must be a DbtCoreCreate")
-    
+        raise TypeError("payload must be a DbtCoreCreate")    
     org_slug = get_org_slug()
     logger.info(payload, extra={"orgslug": org_slug})
 
@@ -431,8 +423,7 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
 def delete_dbt_core_block(block_id: str) -> dict:
     """Delete a dbt core block in prefect"""
     if not isinstance(block_id, str):
-        raise TypeError("block_id must be a string")
-    
+        raise TypeError("block_id must be a string")    
     org_slug = get_org_slug()
 
     logger.info(
@@ -541,8 +532,7 @@ async def update_target_configs_schema(dbt_blockname: str, target_configs_schema
 async def post_deployment(payload: DeploymentCreate) -> dict:
     """create a deployment from a flow and a schedule"""
     if not isinstance(payload, DeploymentCreate):
-        raise TypeError("payload must be a DeploymentCreate")
-    
+        raise TypeError("payload must be a DeploymentCreate")    
     org_slug = get_org_slug()
     logger.info(payload, extra={"orgslug": org_slug})
 
@@ -568,8 +558,7 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
 def get_deployment(deployment_id: str) -> dict:
     """Fetch deployment and its details"""
     if not isinstance(deployment_id, str):
-        raise TypeError("deployment_id must be a string")
-    
+        raise TypeError("deployment_id must be a string")    
     org_slug = get_org_slug()
     res = prefect_get(f"deployments/{deployment_id}")
     logger.info(
@@ -588,8 +577,7 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
     if not isinstance(limit, int):
         raise TypeError("limit must be an integer")
     if limit < 0:
-        raise ValueError("limit must be a positive integer")
-    
+        raise ValueError("limit must be a positive integer")    
     org_slug = get_org_slug()
     logger.info(
         "fetching flow runs for deployment %s",
@@ -640,8 +628,7 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
     if not isinstance(org_slug, str):
         raise TypeError("org_slug must be a string")
     if not isinstance(deployment_ids, list):
-        raise TypeError("deployment_ids must be a list")
-    
+        raise TypeError("deployment_ids must be a list")    
     org_slug = get_org_slug()
     query = {
         "deployments": {
@@ -680,8 +667,7 @@ async def post_deployment_flow_run(deployment_id: str):
     # pylint: disable=broad-exception-caught
     """Create deployment flow run"""
     if not isinstance(deployment_id, str):
-        raise TypeError("deployment_id must be a string")
-    
+        raise TypeError("deployment_id must be a string")    
     org_slug = get_org_slug()
     try:
         flow_run = await run_deployment(deployment_id, timeout=0)
@@ -761,8 +747,7 @@ def get_flow_run_logs(flow_run_id: str, offset: int) -> dict:
 def get_flow_runs_by_name(flow_run_name: str) -> dict:
     """Query flow run from the name"""
     if not isinstance(flow_run_name, str):
-        raise TypeError("flow_run_name must be a string")
-    
+        raise TypeError("flow_run_name must be a string")    
     org_slug = get_org_slug()
     query = {
         "flow_runs": {"operator": "and_", "name": {"any_": [flow_run_name]}},
