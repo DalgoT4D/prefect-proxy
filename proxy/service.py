@@ -451,6 +451,7 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
     try:
         await block.dbt_cli_profile.save(
             name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
+            overwrite=True,
         )
         await block.save(cleaned_name_for_prefectblock(dbt_blockname), overwrite=True)
     except Exception as error:
