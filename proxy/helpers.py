@@ -4,8 +4,8 @@ import re
 
 
 class CustomLogger:
-    """override the python logger to include the orgname associated with every request"""
-    
+    """override the python logger to include the orgname"""
+
     def __init__(self, name, level=logging.INFO):
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
