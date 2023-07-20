@@ -2,7 +2,7 @@
 import os
 import re
 import requests
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from prefect_airbyte import AirbyteConnection
 from proxy.helpers import CustomLogger
 
