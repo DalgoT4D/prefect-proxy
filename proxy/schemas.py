@@ -46,7 +46,6 @@ class DbtProfileCreate(BaseModel):
     """this is part of the dbt block creation payload"""
 
     name: str
-    target: str
     target_configs_schema: str
 
 
@@ -83,7 +82,7 @@ class DbtCoreCredentialUpdate(BaseModel):
 
 
 class DbtCoreSchemaUpdate(BaseModel):
-    """payload to update a dbt core command block's schema"""
+    """payload to update a dbt core command block's schema and target"""
 
     blockName: str
     target_configs_schema: str
