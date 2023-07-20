@@ -368,7 +368,7 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
     try:
         dbt_cli_profile = DbtCliProfile(
             name=payload.profile.name,
-            target=payload.profile.target,
+            target=payload.profile.target_configs_schema,
             target_configs=target_configs,
         )
         await dbt_cli_profile.save(
@@ -496,6 +496,7 @@ async def update_target_configs_schema(dbt_blockname: str, target_configs_schema
         raise PrefectException("no dbt core op block named " + dbt_blockname) from error
 
     block.dbt_cli_profile.target_configs.schema = target_configs_schema
+    block.dbt_cli_profile.target = target_configs_schema
 
     try:
         await block.dbt_cli_profile.save(
