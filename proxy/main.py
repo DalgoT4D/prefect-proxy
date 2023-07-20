@@ -4,6 +4,7 @@ import re
 import requests
 from fastapi import FastAPI, HTTPException, Request
 from prefect_airbyte import AirbyteConnection
+from proxy.helpers import CustomLogger
 
 from proxy.service import (
     get_airbyte_server_block_id,
@@ -45,10 +46,12 @@ from proxy.schemas import (
 )
 from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
 
-from logger import setup_logger, logger
+from logger import setup_logger
 
 app = FastAPI()
 setup_logger()
+
+logger = CustomLogger("prefect-proxy")
 
 
 # =============================================================================
@@ -120,13 +123,12 @@ def dbtrun(block_name: str, flow_name: str, flow_run_name: str):
 
 # =============================================================================
 @app.post("/proxy/blocks/bulk/delete/")
-async def post_bulk_delete_blocks(request: Request, payload: PrefectBlocksDelete):
+async def post_bulk_delete_blocks(payload: PrefectBlocksDelete):
     """Delete all airbyte connection blocks in the payload array"""
     root = os.getenv("PREFECT_API_URL")
     deleted_blockids = []
-    org_slug = request.headers.get("x-ddp-org")
     for block_id in payload.block_ids:
-        logger.info("deleting block_id : %s ", block_id, extra={"orgslug": org_slug})
+        logger.info("deleting block_id : %s ", block_id)
         res = requests.delete(f"{root}/block_documents/{block_id}", timeout=10)
         try:
             res.raise_for_status()
@@ -136,9 +138,7 @@ async def post_bulk_delete_blocks(request: Request, payload: PrefectBlocksDelete
             )
             logger.exception(error)
             continue
-        logger.info(
-            "deleted block with block_id : %s", block_id, extra={"orgslug": org_slug}
-        )
+        logger.info("deleted block with block_id : %s", block_id)
         deleted_blockids.append(block_id)
 
     return {"deleted_blockids": deleted_blockids}
@@ -146,9 +146,7 @@ async def post_bulk_delete_blocks(request: Request, payload: PrefectBlocksDelete
 
 # =============================================================================
 @app.post("/proxy/blocks/airbyte/connection/filter")
-def post_airbyte_connection_blocks(
-    request: Request, payload: AirbyteConnectionBlocksFetch
-):
+def post_airbyte_connection_blocks(payload: AirbyteConnectionBlocksFetch):
     """Filter the prefect blocks with parameters from payload"""
     blocks = post_filter_blocks(payload.block_names)
 
@@ -167,9 +165,8 @@ def post_airbyte_connection_blocks(
 
 # =============================================================================
 @app.get("/proxy/blocks/airbyte/server/{blockname}")
-async def get_airbyte_server(request: Request, blockname: str):
+async def get_airbyte_server(blockname: str):
     """Look up an Airbyte server block by name and return block_id"""
-    org_slug = request.headers.get("x-ddp-org")
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
     try:
@@ -179,29 +176,22 @@ async def get_airbyte_server(request: Request, blockname: str):
             "Failed to get Airbyte server block ID for block name %s: %s",
             blockname,
             str(error),
-            extra={"orgslug": org_slug}
         )
         raise HTTPException(status_code=500, detail="Internal server error") from error
 
     if block_id is None:
         return {"block_id": None}
-    logger.info(
-        "blockname => blockid : %s => %s",
-        blockname,
-        block_id,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
 
 
 @app.post("/proxy/blocks/airbyte/server/")
-async def post_airbyte_server(request: Request, payload: AirbyteServerCreate):
+async def post_airbyte_server(payload: AirbyteServerCreate):
     """
     create a new airbyte server block with this block name,
     raise an exception if the name is already in use
     """
     logger.info(payload)
-    org_slug = request.headers.get("x-ddp-org")
     if not isinstance(payload, AirbyteServerCreate):
         raise TypeError("payload is invalid")
     try:
@@ -211,53 +201,39 @@ async def post_airbyte_server(request: Request, payload: AirbyteServerCreate):
         raise HTTPException(
             status_code=400, detail="failed to create airbyte server block"
         ) from error
-    logger.info(
-        "Created new airbyte server block with ID: %s",
-        block_id,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("Created new airbyte server block with ID: %s", block_id)
     return {"block_id": block_id}
 
 
 # =============================================================================
 @app.get("/proxy/blocks/airbyte/connection/byblockname/{blockname}")
-async def get_airbyte_connection_by_blockname(request: Request, blockname):
+async def get_airbyte_connection_by_blockname(blockname):
     """look up airbyte connection block by name and return block_id"""
-    org_slug = request.headers.get("x-ddp-org")
     block_id = await get_airbyte_connection_block_id(blockname)
     if block_id is None:
         logger.error("no airbyte connection block having name %s", blockname)
         raise HTTPException(status_code=400, detail="no block having name " + blockname)
-    logger.info(
-        "blockname => blockid : %s => %s",
-        blockname,
-        block_id,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
 
 
 @app.get("/proxy/blocks/airbyte/connection/byblockid/{blockid}")
-async def get_airbyte_connection_by_blockid(request: Request, blockid):
+async def get_airbyte_connection_by_blockid(blockid):
     """look up airbyte connection block by id and return block data"""
-    org_slug = request.headers.get("x-ddp-org")
     block = await get_airbyte_connection_block(blockid)
     if block is None:
         logger.error("no airbyte connection block having id %s", blockid)
         raise HTTPException(status_code=400, detail="no block having id " + blockid)
-    logger.info(
-        "Found airbyte connection block by id: %s", block, extra={"orgslug": org_slug}
-    )
+    logger.info("Found airbyte connection block by id: %s", block)
     return block
 
 
 @app.post("/proxy/blocks/airbyte/connection/")
-async def post_airbyte_connection(request: Request, payload: AirbyteConnectionCreate):
+async def post_airbyte_connection(payload: AirbyteConnectionCreate):
     """
     create a new airbyte connection block with this block name,
     raise an exception if the name is already in use
     """
-    org_slug = request.headers.get("x-ddp-org")
     try:
         block_id = await create_airbyte_connection_block(payload)
     except Exception as error:
@@ -265,41 +241,30 @@ async def post_airbyte_connection(request: Request, payload: AirbyteConnectionCr
         raise HTTPException(
             status_code=400, detail="failed to create airbyte connection block"
         ) from error
-    logger.info(
-        "Created new airbyte connection block with ID: %s",
-        block_id,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("Created new airbyte connection block with ID: %s", block_id)
     return {"block_id": block_id}
 
 
 # =============================================================================
 @app.get("/proxy/blocks/shell/{blockname}")
-async def get_shell(request: Request, blockname):
+async def get_shell(blockname):
     """look up a shell operation block by name and return block_id"""
-    org_slug = request.headers.get("x-ddp-org")
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
     block_id = await get_shell_block_id(blockname)
     if block_id is None:
         logger.error("no shell block having name %s", blockname)
         raise HTTPException(status_code=400, detail="no block having name " + blockname)
-    logger.info(
-        "blockname => blockid : %s => %s",
-        blockname,
-        block_id,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
 
 
 @app.post("/proxy/blocks/shell/")
-async def post_shell(request: Request, payload: PrefectShellSetup):
+async def post_shell(payload: PrefectShellSetup):
     """
     create a new shell block with this block name,
     raise an exception if the name is already in use
     """
-    org_slug = request.headers.get("x-ddp-org")
     if not isinstance(payload, PrefectShellSetup):
         raise TypeError("payload is invalid")
     logger.info(payload)
@@ -310,41 +275,32 @@ async def post_shell(request: Request, payload: PrefectShellSetup):
         raise HTTPException(
             status_code=400, detail="failed to create shell block"
         ) from error
-    logger.info(
-        "Created new shell block with ID: %s", block_id, extra={"orgslug": org_slug}
-    )
+    logger.info("Created new shell block with ID: %s", block_id)
     return {"block_id": block_id}
 
 
 # =============================================================================
 @app.get("/proxy/blocks/dbtcore/{blockname}")
-async def get_dbtcore(request: Request, blockname):
+async def get_dbtcore(blockname):
     """look up a dbt core operation block by name and return block_id"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
 
-    org_slug = request.headers.get("x-ddp-org")
     block_id = await get_dbtcore_block_id(blockname)
     if block_id is None:
         logger.error("no dbt core block having name %s", blockname)
         raise HTTPException(status_code=400, detail="no block having name " + blockname)
-    logger.info(
-        "blockname => blockid : %s => %s",
-        blockname,
-        block_id,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
 
 
 @app.post("/proxy/blocks/dbtcore/")
-async def post_dbtcore(request: Request, payload: DbtCoreCreate):
+async def post_dbtcore(payload: DbtCoreCreate):
     """
     create a new dbt_core block with this block name,
     raise an exception if the name is already in use
     """
     logger.info(payload)
-    org_slug = request.headers.get("x-ddp-org")
     if not isinstance(payload, DbtCoreCreate):
         raise TypeError("payload is invalid")
     try:
@@ -358,7 +314,6 @@ async def post_dbtcore(request: Request, payload: DbtCoreCreate):
         "Created new dbt_core block with ID: %s and name: %s",
         block_id,
         cleaned_blockname,
-        extra={"orgslug": org_slug}
     )
     return {"block_id": block_id, "block_name": cleaned_blockname}
 
@@ -368,7 +323,6 @@ async def put_dbtcore_postgres(request, payload: DbtCoreCredentialUpdate):
     """update the credentials inside an existing dbt core op block"""
     if not isinstance(payload, DbtCoreCredentialUpdate):
         raise TypeError("payload is invalid")
-    org_slug = request.headers.get("x-ddp-org")
     try:
         await update_postgres_credentials(payload.blockName, payload.credentials)
     except Exception as error:
@@ -378,20 +332,15 @@ async def put_dbtcore_postgres(request, payload: DbtCoreCredentialUpdate):
             detail="failed to update dbt core block credentials [postgres]",
         ) from error
 
-    logger.info(
-        "updated credentials in dbtcore block %s [postgres]",
-        payload.blockName,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("updated credentials in dbtcore block %s [postgres]", payload.blockName)
     return {"success": 1}
 
 
 @app.put("/proxy/blocks/dbtcore_edit/bigquery/")
-async def put_dbtcore_bigquery(request: Request, payload: DbtCoreCredentialUpdate):
+async def put_dbtcore_bigquery(payload: DbtCoreCredentialUpdate):
     """update the credentials inside an existing dbt core op block"""
     if not isinstance(payload, DbtCoreCredentialUpdate):
         raise TypeError("payload is invalid")
-    org_slug = request.headers.get("x-ddp-org")
     try:
         await update_bigquery_credentials(payload.blockName, payload.credentials)
     except Exception as error:
@@ -400,20 +349,15 @@ async def put_dbtcore_bigquery(request: Request, payload: DbtCoreCredentialUpdat
             detail="failed to update dbt core block credentials [bigquery]",
         ) from error
 
-    logger.info(
-        "updated credentials in dbtcore block %s [bigquery]",
-        payload.blockName,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("updated credentials in dbtcore block %s [bigquery]", payload.blockName)
     return {"success": 1}
 
 
 @app.put("/proxy/blocks/dbtcore_edit_schema/")
-async def put_dbtcore_schema(request: Request, payload: DbtCoreSchemaUpdate):
+async def put_dbtcore_schema(payload: DbtCoreSchemaUpdate):
     """update the target inside an existing dbt core op block"""
     if not isinstance(payload, DbtCoreSchemaUpdate):
         raise TypeError("payload is invalid")
-    org_slug = request.headers.get("x-ddp-org")
     try:
         await update_target_configs_schema(
             payload.blockName, payload.target_configs_schema
@@ -425,25 +369,18 @@ async def put_dbtcore_schema(request: Request, payload: DbtCoreSchemaUpdate):
             detail="failed to update dbt core block target_configs_schema",
         ) from error
 
-    logger.info(
-        "updated target_configs_schema in dbtcore block %s",
-        payload.blockName,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("updated target_configs_schema in dbtcore block %s", payload.blockName)
     return {"success": 1}
 
 
 # =============================================================================
 @app.delete("/delete-a-block/{block_id}")
-async def delete_block(request: Request, block_id):
+async def delete_block(block_id):
     """we can break this up into four different deleters later if we want to"""
     if not isinstance(block_id, str):
         raise TypeError("block_id must be a string")
-    org_slug = request.headers.get("x-ddp-org")
     root = os.getenv("PREFECT_API_URL")
-    logger.info(
-        "DELETE %s/block_documents/%s", root, block_id, extra={"orgslug": org_slug}
-    )
+    logger.info("DELETE %s/block_documents/%s", root, block_id)
     res = requests.delete(f"{root}/block_documents/{block_id}", timeout=10)
     try:
         res.raise_for_status()
@@ -454,16 +391,15 @@ async def delete_block(request: Request, block_id):
 
 # =============================================================================
 @app.post("/proxy/flows/airbyte/connection/sync/")
-async def sync_airbyte_connection_flow(request: Request, payload: RunFlow):
+async def sync_airbyte_connection_flow(payload: RunFlow):
     """Prefect flow to sync an airbyte connection"""
     if not isinstance(payload, RunFlow):
         raise TypeError("payload is invalid")
     logger.info(payload)
-    org_slug = request.headers.get("x-ddp-org")
     if payload.blockName == "":
-        logger.error("received empty blockName", extra={"orgslug": org_slug})
+        logger.error("received empty blockName")
         raise HTTPException(status_code=400, detail="received empty blockName")
-    logger.info("Running airbyte connection sync flow", extra={"orgslug": org_slug})
+    logger.info("Running airbyte connection sync flow")
     try:
         result = airbytesync(payload.blockName, payload.flowName, payload.flowRunName)
         logger.info(result)
@@ -474,20 +410,15 @@ async def sync_airbyte_connection_flow(request: Request, payload: RunFlow):
 
 
 @app.post("/proxy/flows/dbtcore/run/")
-async def sync_dbtcore_flow(request: Request, payload: RunFlow):
+async def sync_dbtcore_flow(payload: RunFlow):
     """Prefect flow to run dbt"""
     logger.info(payload)
-    org_slug = request.headers.get("x-ddp-org")
     if not isinstance(payload, RunFlow):
         raise TypeError("payload is invalid")
     if payload.blockName == "":
         logger.error("received empty blockName")
         raise HTTPException(status_code=400, detail="received empty blockName")
-    logger.info(
-        "running dbtcore-run for dbt-core-op %s",
-        payload.blockName,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("running dbtcore-run for dbt-core-op %s", payload.blockName)
     try:
         result = dbtrun(payload.blockName, payload.flowName, payload.flowRunName)
         logger.info(result)
@@ -498,12 +429,11 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
 
 
 @app.post("/proxy/deployments/")
-async def post_dataflow(request: Request, payload: DeploymentCreate):
+async def post_dataflow(payload: DeploymentCreate):
     """Create a deployment from an existing flow"""
     if not isinstance(payload, DeploymentCreate):
         raise TypeError("payload is invalid")
 
-    org_slug = request.headers.get("x-ddp-org")
     logger.info(payload)
     try:
         deployment = await post_deployment(payload)
@@ -512,18 +442,17 @@ async def post_dataflow(request: Request, payload: DeploymentCreate):
         raise HTTPException(
             status_code=400, detail="failed to create deployment"
         ) from error
-    logger.info("Created new deployment: %s", deployment, extra={"orgslug": org_slug})
+    logger.info("Created new deployment: %s", deployment)
     return {"deployment": deployment}
 
 
 @app.post("/proxy/flow_run/")
-async def get_flowrun(request: Request, payload: FlowRunRequest):
+async def get_flowrun(payload: FlowRunRequest):
     """look up a flow run by name and return id if found"""
     if not isinstance(payload, FlowRunRequest):
         raise TypeError("payload is invalid")
 
-    org_slug = request.headers.get("x-ddp-org")
-    logger.info("flow run name=%s", payload.name, extra={"orgslug": org_slug})
+    logger.info("flow run name=%s", payload.name)
     try:
         flow_runs = get_flow_runs_by_name(payload.name)
     except Exception as error:
@@ -535,14 +464,12 @@ async def get_flowrun(request: Request, payload: FlowRunRequest):
         if len(flow_runs) > 1:
             logger.error("multiple flow names having name %s", payload.name)
         return {"flow_run": flow_runs[0]}
-    logger.error(
-        "no flow_runs having name %s", payload.name, extra={"orgslug": org_slug}
-    )
+    logger.error("no flow_runs having name %s", payload.name)
     raise HTTPException(status_code=400, detail="no such flow run")
 
 
 @app.get("/proxy/flow_runs")
-def get_flow_runs(request: Request, deployment_id: str, limit: int = 0):
+def get_flow_runs(deployment_id: str, limit: int = 0):
     """Get Flow Runs for a deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
@@ -550,10 +477,7 @@ def get_flow_runs(request: Request, deployment_id: str, limit: int = 0):
         raise TypeError("limit must be an integer")
     if limit < 0:
         raise ValueError("limit must be positive")
-    org_slug = request.headers.get("x-ddp-org")
-    logger.info(
-        "deployment_id=%s, limit=%s", deployment_id, limit, extra={"orgslug": org_slug}
-    )
+    logger.info("deployment_id=%s, limit=%s", deployment_id, limit)
     try:
         flow_runs = get_flow_runs_by_deployment_id(deployment_id, limit)
     except Exception as error:
@@ -561,21 +485,16 @@ def get_flow_runs(request: Request, deployment_id: str, limit: int = 0):
         raise HTTPException(
             status_code=400, detail="failed to fetch flow_runs for deployment"
         ) from error
-    logger.info(
-        "Found flow runs for deployment ID: %s",
-        deployment_id,
-        extra={"orgslug": org_slug}
-    )
+    logger.info("Found flow runs for deployment ID: %s", deployment_id)
     return {"flow_runs": flow_runs}
 
 
 @app.get("/proxy/flow_runs/{flow_run_id}")
-def get_flow_run_by_id(request: Request, flow_run_id):
+def get_flow_run_by_id(flow_run_id):
     """Get a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("Flow run id must be a string")
 
-    org_slug = request.headers.get("x-ddp-org")
     try:
         flow_run = get_flow_run(flow_run_id=flow_run_id)
     except Exception as error:
@@ -584,18 +503,17 @@ def get_flow_run_by_id(request: Request, flow_run_id):
             status_code=400, detail="failed to fetch flow_run " + flow_run_id
         ) from error
 
-    logger.info("Found flow run wth id - %s", flow_run_id, extra={"orgslug": org_slug})
+    logger.info("Found flow run wth id - %s", flow_run_id)
 
     return flow_run
 
 
 @app.post("/proxy/deployments/filter")
-def post_deployments(request: Request, payload: DeploymentFetch):
+def post_deployments(payload: DeploymentFetch):
     """Get deployments by various filters"""
     logger.info(payload)
     if not isinstance(payload, DeploymentFetch):
         raise TypeError("payload is invalid")
-    org_slug = request.headers.get("x-ddp-org")
     try:
         deployments = get_deployments_by_filter(
             org_slug=payload.org_slug, deployment_ids=payload.deployment_ids
@@ -605,25 +523,20 @@ def post_deployments(request: Request, payload: DeploymentFetch):
         raise HTTPException(
             status_code=400, detail="failed to filter deployments"
         ) from error
-    logger.info(
-        "Found deployments with payload: %s", payload, extra={"orgslug": org_slug}
-    )
+    logger.info("Found deployments with payload: %s", payload)
     return {"deployments": deployments}
 
 
 @app.get("/proxy/flow_runs/logs/{flow_run_id}")
-def get_flow_run_logs_paginated(request: Request, flow_run_id: str, offset: int = 0):
+def get_flow_run_logs_paginated(flow_run_id: str, offset: int = 0):
     """paginate the logs from a flow run"""
-    org_slug = request.headers.get("x-ddp-org")
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
     if not isinstance(offset, int):
         raise TypeError("offset must be an integer")
     if offset < 0:
         raise ValueError("offset must be positive")
-    logger.info(
-        "flow_run_id=%s, offset=%s", flow_run_id, offset, extra={"orgslug": org_slug}
-    )
+    logger.info("flow_run_id=%s, offset=%s", flow_run_id, offset)
     try:
         return get_flow_run_logs(flow_run_id, offset)
     except Exception as error:
@@ -634,12 +547,11 @@ def get_flow_run_logs_paginated(request: Request, flow_run_id: str, offset: int 
 
 
 @app.get("/proxy/deployments/{deployment_id}")
-def get_read_deployment(request: Request, deployment_id):
+def get_read_deployment(deployment_id):
     """Fetch deployment and all its details"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
-    org_slug = request.headers.get("x-ddp-org")
-    logger.info("deployment_id=%s", deployment_id, extra={"orgslug": org_slug})
+    logger.info("deployment_id=%s", deployment_id)
 
     try:
         deployment = get_deployment(deployment_id)
@@ -667,12 +579,11 @@ def get_read_deployment(request: Request, deployment_id):
 
 
 @app.delete("/proxy/deployments/{deployment_id}")
-def delete_deployment(request: Request, deployment_id):
+def delete_deployment(deployment_id):
     """Delete a deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
-    org_slug = request.headers.get("x-ddp-org")
-    logger.info("deployment_id=%s", deployment_id, extra={"orgslug": org_slug})
+    logger.info("deployment_id=%s", deployment_id)
 
     root = os.getenv("PREFECT_API_URL")
     res = requests.delete(f"{root}/deployments/{deployment_id}", timeout=30)
@@ -681,18 +592,15 @@ def delete_deployment(request: Request, deployment_id):
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
-    logger.info(
-        "Deleted deployment with ID: %s", deployment_id, extra={"orgslug": org_slug}
-    )
+    logger.info("Deleted deployment with ID: %s", deployment_id)
 
 
 @app.post("/proxy/deployments/{deployment_id}/flow_run")
-async def post_create_deployment_flow_run(request: Request, deployment_id):
+async def post_create_deployment_flow_run(deployment_id):
     """Create a flow run from deployment"""
-    org_slug = request.headers.get("x-ddp-org")
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
-    logger.info("deployment_id=%s", deployment_id, extra={"orgslug": org_slug})
+    logger.info("deployment_id=%s", deployment_id)
     try:
         res = await post_deployment_flow_run(deployment_id)
     except Exception as error:
@@ -705,9 +613,8 @@ async def post_create_deployment_flow_run(request: Request, deployment_id):
 
 
 @app.post("/proxy/deployments/{deployment_id}/set_schedule/{status}")
-def post_deployment_set_schedule(request: Request, deployment_id, status):
+def post_deployment_set_schedule(deployment_id, status):
     """Create a flow run from deployment"""
-    org_slug = request.headers.get("x-ddp-org")
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
 
@@ -723,7 +630,7 @@ def post_deployment_set_schedule(request: Request, deployment_id, status):
     try:
         set_deployment_schedule(deployment_id, status)
     except Exception as error:
-        logger.exception(error, extra={"orgslug": org_slug})
+        logger.exception(error)
         raise HTTPException(status_code=400, detail="failed to set schedule") from error
 
     return {"success": 1}

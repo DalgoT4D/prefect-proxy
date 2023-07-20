@@ -121,12 +121,10 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
         logger.info(
             "found airbyte server block named %s",
             blockname,
-         )
+        )
         return _block_id(block)
     except ValueError:
-        logger.error(
-            "no airbyte server block named %s", blockname
-        )
+        logger.error("no airbyte server block named %s", blockname)
         return None
 
 
@@ -145,10 +143,7 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create airbyte server block") from error
-    logger.info(
-        "created airbyte server block named %s",
-        payload.blockName
-    )
+    logger.info("created airbyte server block named %s", payload.blockName)
     return _block_id(airbyteservercblock)
 
 
@@ -178,13 +173,13 @@ async def get_airbyte_connection_block_id(blockname: str) -> str | None:
         logger.info(
             "found airbyte connection block named %s",
             blockname,
-         )
+        )
         return _block_id(block)
     except ValueError:
         logger.error(
             "no airbyte connection block named %s",
             blockname,
-         )
+        )
         # pylint: disable=raise-missing-from
         raise HTTPException(
             status_code=404, detail=f"No airbyte connection block named {blockname}"
@@ -197,14 +192,10 @@ async def get_airbyte_connection_block(blockid: str) -> dict:
         raise TypeError("blockid must be a string")
     try:
         result = prefect_get(f"block_documents/{blockid}")
-        logger.info(
-            "found airbyte connection block having id %s"
-        )
+        logger.info("found airbyte connection block having id %s")
         return result
     except requests.exceptions.HTTPError:
-        logger.error(
-            "no airbyte connection block having id %s"
-        )
+        logger.error("no airbyte connection block having id %s")
         # pylint: disable=raise-missing-from
         raise HTTPException(
             status_code=404, detail=f"No airbyte connection block having id {blockid}"
@@ -292,9 +283,7 @@ async def create_shell_block(shell: PrefectShellSetup) -> str:
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create shell block") from error
-    logger.info(
-        "created shell operation block %s", shell.blockName
-    )
+    logger.info("created shell operation block %s", shell.blockName)
     return _block_id(shell_operation_block)
 
 
@@ -302,9 +291,7 @@ def delete_shell_block(blockid: str) -> dict:
     """Delete a prefect shell block"""
     if not isinstance(blockid, str):
         raise TypeError("blockid must be a string")
-    logger.info(
-        "deleting shell operation block %s", blockid
-    )
+    logger.info("deleting shell operation block %s", blockid)
     return prefect_delete(f"block_documents/{blockid}")
 
 
@@ -390,10 +377,7 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         logger.exception(error)
         raise PrefectException("failed to create dbt core op block") from error
 
-    logger.info(
-        "created dbt core operation block %s",
-        payload.blockName
-    )
+    logger.info("created dbt core operation block %s", payload.blockName)
 
     return _block_id(dbt_core_operation), cleaned_blockname
 
@@ -403,9 +387,7 @@ def delete_dbt_core_block(block_id: str) -> dict:
     if not isinstance(block_id, str):
         raise TypeError("block_id must be a string")
 
-    logger.info(
-        "deleting dbt core operation block %s", block_id
-    )
+    logger.info("deleting dbt core operation block %s", block_id)
     return prefect_delete(f"block_documents/{block_id}")
 
 
@@ -533,9 +515,7 @@ def get_deployment(deployment_id: str) -> dict:
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     res = prefect_get(f"deployments/{deployment_id}")
-    logger.info(
-        "Fetched deployment with ID: %s", deployment_id
-    )
+    logger.info("Fetched deployment with ID: %s", deployment_id)
     return res
 
 
@@ -550,10 +530,7 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
         raise TypeError("limit must be an integer")
     if limit < 0:
         raise ValueError("limit must be a positive integer")
-    logger.info(
-        "fetching flow runs for deployment %s",
-        deployment_id
-    )
+    logger.info("fetching flow runs for deployment %s", deployment_id)
 
     query = {
         "sort": "START_TIME_DESC",
