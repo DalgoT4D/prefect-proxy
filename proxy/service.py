@@ -38,6 +38,14 @@ FLOW_RUN_COMPLETED = "COMPLETED"
 FLOW_RUN_SCHEDULED = "SCHEDULED"
 
 
+def get_org_slug():
+    try:
+        org_slug = inspect.stack()[2].frame.f_locals["org_slug"]
+    except KeyError:
+        org_slug = None
+    return org_slug
+
+
 def prefect_post(endpoint: str, payload: dict) -> dict:
     """POST request to prefect server"""
     if not isinstance(endpoint, str):
@@ -115,10 +123,8 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
     """look up an airbyte server block by name and return block_id"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     try:
         block = await AirbyteServer.load(blockname)
         logger.info(
@@ -139,10 +145,7 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
     if not isinstance(payload, AirbyteServerCreate):
         raise TypeError("payload must be an AirbyteServerCreate")
 
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    org_slug = get_org_slug()
     airbyteservercblock = AirbyteServer(
         server_host=payload.serverHost,
         server_port=payload.serverPort,
@@ -183,10 +186,8 @@ async def get_airbyte_connection_block_id(blockname: str) -> str | None:
     """look up airbyte connection block by name and return block_id"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     try:
         block = await AirbyteConnection.load(blockname)
         logger.info(
@@ -211,10 +212,8 @@ async def get_airbyte_connection_block(blockid: str) -> dict:
     """look up and return block data for an airbyte connection"""
     if not isinstance(blockid, str):
         raise TypeError("blockid must be a string")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     try:
         result = prefect_get(f"block_documents/{blockid}")
         logger.info(
@@ -238,10 +237,7 @@ async def create_airbyte_connection_block(
     if not isinstance(conninfo, AirbyteConnectionCreate):
         raise TypeError("conninfo must be an AirbyteConnectionCreate")
 
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    org_slug = get_org_slug()
     logger.info(conninfo, extra={"orgslug": org_slug})
     try:
         serverblock = await AirbyteServer.load(conninfo.serverBlockName)
@@ -309,11 +305,7 @@ async def create_shell_block(shell: PrefectShellSetup) -> str:
     if not isinstance(shell, PrefectShellSetup):
         raise TypeError("shell must be a PrefectShellSetup")
 
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
-
+    org_slug = get_org_slug()
     shell_operation_block = ShellOperation(
         commands=shell.commands, env=shell.env, working_dir=shell.workingDir
     )
@@ -333,11 +325,8 @@ def delete_shell_block(blockid: str) -> dict:
     """Delete a prefect shell block"""
     if not isinstance(blockid, str):
         raise TypeError("blockid must be a string")
-
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     logger.info(
         "deleting shell operation block %s", blockid, extra={"orgslug": org_slug}
     )
@@ -364,10 +353,8 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
     """credentials are decrypted by now"""
     if not isinstance(payload, DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     logger.info(payload, extra={"orgslug": org_slug})
     if payload.wtype == "postgres":
         target_configs = TargetConfigs(
@@ -412,10 +399,8 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
     """Create a dbt core block in prefect"""
     if not isinstance(payload, DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     logger.info(payload, extra={"orgslug": org_slug})
 
     dbt_cli_profile = await _create_dbt_cli_profile(payload)
@@ -447,10 +432,8 @@ def delete_dbt_core_block(block_id: str) -> dict:
     """Delete a dbt core block in prefect"""
     if not isinstance(block_id, str):
         raise TypeError("block_id must be a string")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
 
     logger.info(
         "deleting dbt core operation block %s", block_id, extra={"orgslug": org_slug}
@@ -460,10 +443,7 @@ def delete_dbt_core_block(block_id: str) -> dict:
 
 async def update_postgres_credentials(dbt_blockname, new_extras):
     """updates the database credentials inside a dbt postgres block"""
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    org_slug = get_org_slug()
     try:
         block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
     except Exception as error:
@@ -505,10 +485,7 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
 
 async def update_bigquery_credentials(dbt_blockname: str, credentials: dict):
     """updates the database credentials inside a dbt bigquery block"""
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    org_slug = get_org_slug()
     try:
         block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
     except Exception as error:
@@ -538,10 +515,7 @@ async def update_bigquery_credentials(dbt_blockname: str, credentials: dict):
 
 async def update_target_configs_schema(dbt_blockname: str, target_configs_schema: str):
     """updates the target inside a dbt bigquery block"""
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    org_slug = get_org_slug()
     try:
         block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
     except Exception as error:
@@ -568,10 +542,8 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
     """create a deployment from a flow and a schedule"""
     if not isinstance(payload, DeploymentCreate):
         raise TypeError("payload must be a DeploymentCreate")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     logger.info(payload, extra={"orgslug": org_slug})
 
     deployment = await Deployment.build_from_flow(
@@ -597,11 +569,8 @@ def get_deployment(deployment_id: str) -> dict:
     """Fetch deployment and its details"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
-
+    
+    org_slug = get_org_slug()
     res = prefect_get(f"deployments/{deployment_id}")
     logger.info(
         "Fetched deployment with ID: %s", deployment_id, extra={"orgslug": org_slug}
@@ -620,10 +589,8 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
         raise TypeError("limit must be an integer")
     if limit < 0:
         raise ValueError("limit must be a positive integer")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     logger.info(
         "fetching flow runs for deployment %s",
         deployment_id,
@@ -674,10 +641,8 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
         raise TypeError("org_slug must be a string")
     if not isinstance(deployment_ids, list):
         raise TypeError("deployment_ids must be a list")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     query = {
         "deployments": {
             "operator": "and_",
@@ -714,13 +679,10 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
 async def post_deployment_flow_run(deployment_id: str):
     # pylint: disable=broad-exception-caught
     """Create deployment flow run"""
-
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     try:
         flow_run = await run_deployment(deployment_id, timeout=0)
         return {"flow_run_id": flow_run.id}
@@ -800,10 +762,8 @@ def get_flow_runs_by_name(flow_run_name: str) -> dict:
     """Query flow run from the name"""
     if not isinstance(flow_run_name, str):
         raise TypeError("flow_run_name must be a string")
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    
+    org_slug = get_org_slug()
     query = {
         "flow_runs": {"operator": "and_", "name": {"any_": [flow_run_name]}},
     }
@@ -818,10 +778,7 @@ def get_flow_runs_by_name(flow_run_name: str) -> dict:
 
 def get_flow_run(flow_run_id: str) -> dict:
     """Get a flow run by its id"""
-    try:
-        org_slug = inspect.stack()[1].frame.f_locals["org_slug"]
-    except KeyError:
-        org_slug = None
+    org_slug = get_org_slug()
     try:
         flow_run = prefect_get(f"flow_runs/{flow_run_id}")
     except Exception as err:

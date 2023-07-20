@@ -179,7 +179,7 @@ async def get_airbyte_server(request: Request, blockname: str):
             "Failed to get Airbyte server block ID for block name %s: %s",
             blockname,
             str(error),
-            extra={"orgslug": org_slug},
+            extra={"orgslug": org_slug}
         )
         raise HTTPException(status_code=500, detail="Internal server error") from error
 
@@ -189,7 +189,7 @@ async def get_airbyte_server(request: Request, blockname: str):
         "blockname => blockid : %s => %s",
         blockname,
         block_id,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"block_id": block_id}
 
@@ -214,7 +214,7 @@ async def post_airbyte_server(request: Request, payload: AirbyteServerCreate):
     logger.info(
         "Created new airbyte server block with ID: %s",
         block_id,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"block_id": block_id}
 
@@ -232,7 +232,7 @@ async def get_airbyte_connection_by_blockname(request: Request, blockname):
         "blockname => blockid : %s => %s",
         blockname,
         block_id,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"block_id": block_id}
 
@@ -268,7 +268,7 @@ async def post_airbyte_connection(request: Request, payload: AirbyteConnectionCr
     logger.info(
         "Created new airbyte connection block with ID: %s",
         block_id,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"block_id": block_id}
 
@@ -288,7 +288,7 @@ async def get_shell(request: Request, blockname):
         "blockname => blockid : %s => %s",
         blockname,
         block_id,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"block_id": block_id}
 
@@ -332,7 +332,7 @@ async def get_dbtcore(request: Request, blockname):
         "blockname => blockid : %s => %s",
         blockname,
         block_id,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"block_id": block_id}
 
@@ -358,7 +358,7 @@ async def post_dbtcore(request: Request, payload: DbtCoreCreate):
         "Created new dbt_core block with ID: %s and name: %s",
         block_id,
         cleaned_blockname,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"block_id": block_id, "block_name": cleaned_blockname}
 
@@ -381,7 +381,7 @@ async def put_dbtcore_postgres(request, payload: DbtCoreCredentialUpdate):
     logger.info(
         "updated credentials in dbtcore block %s [postgres]",
         payload.blockName,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"success": 1}
 
@@ -403,7 +403,7 @@ async def put_dbtcore_bigquery(request: Request, payload: DbtCoreCredentialUpdat
     logger.info(
         "updated credentials in dbtcore block %s [bigquery]",
         payload.blockName,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"success": 1}
 
@@ -428,7 +428,7 @@ async def put_dbtcore_schema(request: Request, payload: DbtCoreSchemaUpdate):
     logger.info(
         "updated target_configs_schema in dbtcore block %s",
         payload.blockName,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"success": 1}
 
@@ -486,7 +486,7 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
     logger.info(
         "running dbtcore-run for dbt-core-op %s",
         payload.blockName,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     try:
         result = dbtrun(payload.blockName, payload.flowName, payload.flowRunName)
@@ -564,7 +564,7 @@ def get_flow_runs(request: Request, deployment_id: str, limit: int = 0):
     logger.info(
         "Found flow runs for deployment ID: %s",
         deployment_id,
-        extra={"orgslug": org_slug},
+        extra={"orgslug": org_slug}
     )
     return {"flow_runs": flow_runs}
 
