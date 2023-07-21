@@ -392,7 +392,7 @@ async def test_create_airbyte_connection_block_save_error(mock_load):
         await create_airbyte_connection_block(conninfo)
     assert (
         str(excinfo.value)
-        == f"failed to create airbyte connection block {conninfo.connectionId}"
+        == f"failed to create airbyte connection block for connection {conninfo.connectionId}"
     )
 
 

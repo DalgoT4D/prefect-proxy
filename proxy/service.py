@@ -222,10 +222,10 @@ async def get_airbyte_connection_block(blockid: str) -> dict:
         raise TypeError("blockid must be a string")
     try:
         result = prefect_get(f"block_documents/{blockid}")
-        logger.info("found airbyte connection block having id %s")
+        logger.info("found airbyte connection block having id %s", blockid)
         return result
     except requests.exceptions.HTTPError:
-        logger.error("no airbyte connection block having id %s")
+        logger.error("no airbyte connection block having id %s", blockid)
         # pylint: disable=raise-missing-from
         raise HTTPException(
             status_code=404, detail=f"No airbyte connection block having id {blockid}"
@@ -259,7 +259,7 @@ async def create_airbyte_connection_block(
     except Exception as error:
         logger.exception(error)
         raise PrefectException(
-            f"failed to create airbyte connection block {conninfo.connectionId}"
+            f"failed to create airbyte connection block for connection {conninfo.connectionId}"
         ) from error
     logger.info("created airbyte connection block %s", conninfo.connectionBlockName)
 
@@ -377,7 +377,9 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
             target=payload.profile.target_configs_schema,
             target_configs=target_configs,
         )
-        await dbt_cli_profile.save(cleaned_name_for_prefectblock(payload.profile.name))
+        await dbt_cli_profile.save(
+            cleaned_name_for_prefectblock(payload.profile.name), overwrite=True
+        )
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create dbt cli profile") from error
