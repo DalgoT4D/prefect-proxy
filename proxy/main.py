@@ -14,6 +14,7 @@ from proxy.service import (
     create_airbyte_connection_block,
     get_dbtcore_block_id,
     create_dbt_core_block,
+    put_deployment,
     update_postgres_credentials,
     update_bigquery_credentials,
     update_target_configs_schema,
@@ -33,6 +34,7 @@ from proxy.service import (
 from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteConnectionCreate,
+    DeploymentUpdate,
     PrefectShellSetup,
     DbtCoreCreate,
     DbtCoreCredentialUpdate,
@@ -55,7 +57,7 @@ logger = CustomLogger("prefect-proxy")
 
 
 # =============================================================================
-def airbytesync(request: Request, block_name: str, flow_name: str, flow_run_name: str):
+def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
     """Run an Airbyte Connection sync"""
     if not isinstance(block_name, str):
         raise TypeError("block_name must be a string")
@@ -95,7 +97,7 @@ def airbytesync(request: Request, block_name: str, flow_name: str, flow_run_name
         raise
 
 
-def dbtrun(request: Request, block_name: str, flow_name: str, flow_run_name: str):
+def dbtrun(block_name: str, flow_name: str, flow_run_name: str):
     """Run a dbt core flow"""
     if not isinstance(block_name, str):
         raise TypeError("block_name must be a string")
@@ -404,7 +406,7 @@ async def sync_airbyte_connection_flow(request: Request, payload: RunFlow):
     logger.info("Running airbyte connection sync flow")
     try:
         result = airbytesync(
-            request, payload.blockName, payload.flowName, payload.flowRunName
+            payload.blockName, payload.flowName, payload.flowRunName
         )
         logger.info(result)
         return result
@@ -425,7 +427,7 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
     logger.info("running dbtcore-run for dbt-core-op %s", payload.blockName)
     try:
         result = dbtrun(
-            request, payload.blockName, payload.flowName, payload.flowRunName
+            payload.blockName, payload.flowName, payload.flowRunName
         )
         logger.info(result)
         return {"status": "success", "result": result}
@@ -450,6 +452,24 @@ async def post_dataflow(request: Request, payload: DeploymentCreate):
         ) from error
     logger.info("Created new deployment: %s", deployment)
     return {"deployment": deployment}
+
+
+@app.put("/proxy/deployments/{deployment_id}")
+def put_dataflow(request: Request, deployment_id, payload: DeploymentUpdate):
+    """updates a deployment"""
+    if not isinstance(payload, DeploymentUpdate):
+        raise TypeError("payload is invalid")
+
+    logger.info(payload)
+    try:
+        put_deployment(deployment_id, payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to update the deployment"
+        ) from error
+    logger.info("Updated the deployment: %s", deployment_id)
+    return {"success": 1}
 
 
 @app.post("/proxy/flow_run/")
