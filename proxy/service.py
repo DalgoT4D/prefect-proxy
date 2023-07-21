@@ -14,10 +14,9 @@ from prefect_dbt.cli.configs import BigQueryTargetConfigs
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
 from dotenv import load_dotenv
-from logger import logger
 
 
-from proxy.helpers import cleaned_name_for_prefectblock
+from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock
 from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -36,6 +35,9 @@ load_dotenv()
 FLOW_RUN_FAILED = "FAILED"
 FLOW_RUN_COMPLETED = "COMPLETED"
 FLOW_RUN_SCHEDULED = "SCHEDULED"
+
+
+logger = CustomLogger("prefect-proxy")
 
 
 def prefect_post(endpoint: str, payload: dict) -> dict:
@@ -146,7 +148,10 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
         raise TypeError("blockname must be a string")
     try:
         block = await AirbyteServer.load(blockname)
-        logger.info("found airbyte server block named %s", blockname)
+        logger.info(
+            "found airbyte server block named %s",
+            blockname,
+        )
         return _block_id(block)
     except ValueError:
         logger.error("no airbyte server block named %s", blockname)
@@ -157,7 +162,6 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
     """Create airbyte server block in prefect"""
     if not isinstance(payload, AirbyteServerCreate):
         raise TypeError("payload must be an AirbyteServerCreate")
-
     airbyteservercblock = AirbyteServer(
         server_host=payload.serverHost,
         server_port=payload.serverPort,
@@ -196,10 +200,16 @@ async def get_airbyte_connection_block_id(blockname: str) -> str | None:
         raise TypeError("blockname must be a string")
     try:
         block = await AirbyteConnection.load(blockname)
-        logger.info("found airbyte connection block named %s", blockname)
+        logger.info(
+            "found airbyte connection block named %s",
+            blockname,
+        )
         return _block_id(block)
     except ValueError:
-        logger.error("no airbyte connection block named %s", blockname)
+        logger.error(
+            "no airbyte connection block named %s",
+            blockname,
+        )
         # pylint: disable=raise-missing-from
         raise HTTPException(
             status_code=404, detail=f"No airbyte connection block named {blockname}"
@@ -228,7 +238,6 @@ async def create_airbyte_connection_block(
     """Create airbyte connection block"""
     if not isinstance(conninfo, AirbyteConnectionCreate):
         raise TypeError("conninfo must be an AirbyteConnectionCreate")
-
     logger.info(conninfo)
     try:
         serverblock = await AirbyteServer.load(conninfo.serverBlockName)
@@ -295,7 +304,6 @@ async def create_shell_block(shell: PrefectShellSetup) -> str:
     """Create a prefect shell block"""
     if not isinstance(shell, PrefectShellSetup):
         raise TypeError("shell must be a PrefectShellSetup")
-
     shell_operation_block = ShellOperation(
         commands=shell.commands, env=shell.env, working_dir=shell.workingDir
     )
@@ -313,7 +321,6 @@ def delete_shell_block(blockid: str) -> dict:
     """Delete a prefect shell block"""
     if not isinstance(blockid, str):
         raise TypeError("blockid must be a string")
-
     logger.info("deleting shell operation block %s", blockid)
     return prefect_delete(f"block_documents/{blockid}")
 
@@ -339,7 +346,6 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
     if not isinstance(payload, DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
     logger.info(payload)
-
     if payload.wtype == "postgres":
         target_configs = TargetConfigs(
             type="postgres",
@@ -527,8 +533,6 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
         raise TypeError("payload must be a DeploymentCreate")
     logger.info(payload)
 
-    logger.info(payload)
-
     deployment = await Deployment.build_from_flow(
         flow=deployment_schedule_flow.with_options(name=payload.flow_name),
         name=payload.deployment_name,
@@ -569,7 +573,6 @@ def get_deployment(deployment_id: str) -> dict:
     """Fetch deployment and its details"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
-
     res = prefect_get(f"deployments/{deployment_id}")
     logger.info("Fetched deployment with ID: %s", deployment_id)
     return res
@@ -668,7 +671,6 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
 async def post_deployment_flow_run(deployment_id: str):
     # pylint: disable=broad-exception-caught
     """Create deployment flow run"""
-
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     try:
