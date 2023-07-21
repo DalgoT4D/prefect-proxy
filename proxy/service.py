@@ -498,6 +498,14 @@ async def update_target_configs_schema(dbt_blockname: str, target_configs_schema
     block.dbt_cli_profile.target_configs.schema = target_configs_schema
     block.dbt_cli_profile.target = target_configs_schema
 
+    # update the dbt command "dbt <command> --target <target>"
+    if len(block.commands) > 0:
+        option_index = block.commands[0].find("--target")
+        if option_index > -1:
+            prefix = block.commands[0][: option_index + len("--target ")]
+            new_command = prefix + target_configs_schema
+            block.commands[0] = new_command
+
     try:
         await block.dbt_cli_profile.save(
             name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
