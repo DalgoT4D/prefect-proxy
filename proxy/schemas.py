@@ -46,7 +46,6 @@ class DbtProfileCreate(BaseModel):
     """this is part of the dbt block creation payload"""
 
     name: str
-    target: str
     target_configs_schema: str
 
 
@@ -83,7 +82,7 @@ class DbtCoreCredentialUpdate(BaseModel):
 
 
 class DbtCoreSchemaUpdate(BaseModel):
-    """payload to update a dbt core command block's schema"""
+    """payload to update a dbt core command block's schema and target"""
 
     blockName: str
     target_configs_schema: str
@@ -131,6 +130,12 @@ class DeploymentCreate(BaseModel):
     connection_blocks: list
     dbt_blocks: list
     cron: str = None
+
+
+class DeploymentUpdate(BaseModel):
+    """parameters to create a deployment from a flow"""
+
+    cron: str
 
 
 class DeploymentFetch(BaseModel):

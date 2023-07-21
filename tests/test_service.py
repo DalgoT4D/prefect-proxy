@@ -587,7 +587,6 @@ async def test_get_dbtcore_block_id_invalid_blockname():
 #         blockName="test_block_name",
 #         profile=DbtProfileCreate(
 #             name="test_name",
-#             target="test_target",
 #             target_configs_schema="test_outputs_path",
 #         ),
 #         wtype="postgres",
@@ -608,7 +607,7 @@ async def test_get_dbtcore_block_id_invalid_blockname():
 #     result = await _create_dbt_cli_profile(payload)
 
 #     assert result.name == payload.profile.name
-#     assert result.target == payload.profile.target
+#     assert result.target == payload.profile.target_configs_schema
 
 
 @pytest.mark.asyncio
@@ -618,7 +617,6 @@ async def test_create_dbt_cli_profile_failure():
         blockName="test_block_name",
         profile=DbtProfileCreate(
             name="test_name",
-            target="test_target",
             target_configs_schema="test_outputs_path",
         ),
         wtype="invalid_wtype",  # Use an invalid wtype value
@@ -663,7 +661,6 @@ async def test_create_dbt_cli_profile_exception(mock_save):
         blockName="test_block_name",
         profile=DbtProfileCreate(
             name="test_name",
-            target="test_target",
             target_configs_schema="test_outputs_path",
         ),
         wtype="postgres",
@@ -698,7 +695,6 @@ async def test_create_dbt_cli_profile_exception(mock_save):
 #             blockName="test_block_name",
 #             profile=DbtProfileCreate(
 #                 name="test_name",
-#                 target="test_target",
 #                 target_configs_schema="test_outputs_path",
 #             ),
 #             wtype="postgres",
@@ -744,7 +740,6 @@ async def test_create_dbt_core_block_failure():
 #             blockName="test_block_name",
 #             profile=DbtProfileCreate(
 #                 name="test_name",
-#                 target="test_target",
 #                 target_configs_schema="test_outputs_path",
 #             ),
 #             wtype="postgres",

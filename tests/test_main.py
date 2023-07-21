@@ -235,7 +235,7 @@ async def test_get_airbyte_server_invalid_block_name():
         await get_airbyte_server(None)
     assert excinfo.value.args[0] == "blockname must be a string"
 
-        
+
 @pytest.mark.asyncio
 async def test_post_airbyte_server_success():
     payload = AirbyteServerCreate(
@@ -463,7 +463,6 @@ async def test_post_dbtcore_success():
         blockName="test_dbt",
         profile=DbtProfileCreate(
             name="test_profile",
-            target="test_target",
             target_configs_schema="test_schema",
         ),
         wtype="postgres",
@@ -487,7 +486,6 @@ async def test_post_dbtcore_failure():
         blockName="test_dbt",
         profile=DbtProfileCreate(
             name="test_profile",
-            target="test_target",
             target_configs_schema="test_schema",
         ),
         wtype="postgres",
