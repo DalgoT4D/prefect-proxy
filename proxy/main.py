@@ -385,7 +385,7 @@ async def post_secret_block(request: Request, payload: PrefectSecretBlockCreate)
     """
     create a new prefect secret block with this block name to store a secret string
     """
-    if not isinstance(payload, DbtCoreCreate):
+    if not isinstance(payload, PrefectSecretBlockCreate):
         raise TypeError("payload is invalid")
     try:
         block_id, cleaned_blockname = await create_secret_block(payload)
