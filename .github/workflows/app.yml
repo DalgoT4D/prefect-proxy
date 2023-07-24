@@ -31,6 +31,8 @@ jobs:
         run: |
           echo "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}" > /tmp/google_credentials.json
       - name: Test with pytest
+        env: 
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/google_credentials.json
         run: |
           coverage run -m pytest
           coverage report --fail-under=70
