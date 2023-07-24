@@ -138,7 +138,7 @@ def post_filter_blocks(block_names) -> dict:
         return prefect_post("block_documents/filter", query)
     except Exception as err:
         logger.exception(err)
-        raise PrefectException("failed to create deployment") from err
+        raise PrefectException("failed to filter blocks") from err
 
 
 # ================================================================================================
