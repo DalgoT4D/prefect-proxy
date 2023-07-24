@@ -1,11 +1,11 @@
 """Reusable flows"""
 
 import os
-from fastapi import HTTPException
 from prefect import flow
 from prefect_airbyte.flows import run_connection_sync
 from prefect_airbyte import AirbyteConnection
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
+from prefect.blocks.system import Secret
 from logger import logger
 
 
@@ -69,7 +69,23 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
     for block in dbt_blocks:
         if block["blockType"] == SHELLOPERATION:
             shell_op = ShellOperation.load(block["blockName"])
+
+            # fetch the secret block having the git oauth token-based url to pull code from private repos
+            # the key "secret-git-pull-url-block" will always be present. Value will be empty if no token was submitted by user
+            secret_block_name = shell_op.env["secret-git-pull-url-block"]
+            secret_blk = Secret.load(secret_block_name)
+            url = secret_blk.get()
+
+            # update the commands to account for the token
+            commands = shell_op.commands
+            updated_cmds = []
+            for cmd in commands:
+                updated_cmds.append(f"{cmd} {url}")
+            shell_op.commands = updated_cmds
+
+            # run the shell command(s)
             shell_op.run()
+
             continue
 
         if block["blockType"] == DBTCORE:
