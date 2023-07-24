@@ -121,7 +121,7 @@ def prefect_delete(endpoint: str) -> dict:
 
 def _block_id(block: Block) -> str:
     """Get the id of block"""
-    return str(dict()["_block_document_id"])
+    return str(block.dict()["_block_document_id"])
 
 
 # ================================================================================================
@@ -430,11 +430,11 @@ async def create_secret_block(payload: PrefectSecretBlockCreate):
     try:
         secret_block = Secret(value=payload.secret)
         cleaned_blockname = cleaned_name_for_prefectblock(payload.blockName)
-        block_id = await secret_block.save(cleaned_blockname, overwrite=True)
+        await secret_block.save(cleaned_blockname, overwrite=True)
     except Exception as error:
         raise PrefectException("Could not create a secret block") from error
 
-    return str(block_id), cleaned_blockname
+    return _block_id(secret_block), cleaned_blockname
 
 
 async def update_postgres_credentials(dbt_blockname, new_extras):
