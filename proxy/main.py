@@ -273,14 +273,14 @@ async def post_shell(request: Request, payload: PrefectShellSetup):
         raise TypeError("payload is invalid")
     logger.info(payload)
     try:
-        block_id = await create_shell_block(payload)
+        block_id, cleaned_blockname = await create_shell_block(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
             status_code=400, detail="failed to create shell block"
         ) from error
     logger.info("Created new shell block with ID: %s", block_id)
-    return {"block_id": block_id}
+    return {"block_id": block_id, "block_name": cleaned_blockname}
 
 
 # =============================================================================
@@ -405,9 +405,7 @@ async def sync_airbyte_connection_flow(request: Request, payload: RunFlow):
         raise HTTPException(status_code=400, detail="received empty blockName")
     logger.info("Running airbyte connection sync flow")
     try:
-        result = airbytesync(
-            payload.blockName, payload.flowName, payload.flowRunName
-        )
+        result = airbytesync(payload.blockName, payload.flowName, payload.flowRunName)
         logger.info(result)
         return result
     except Exception as error:
@@ -426,9 +424,7 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
         raise HTTPException(status_code=400, detail="received empty blockName")
     logger.info("running dbtcore-run for dbt-core-op %s", payload.blockName)
     try:
-        result = dbtrun(
-            payload.blockName, payload.flowName, payload.flowRunName
-        )
+        result = dbtrun(payload.blockName, payload.flowName, payload.flowRunName)
         logger.info(result)
         return {"status": "success", "result": result}
     except Exception as error:

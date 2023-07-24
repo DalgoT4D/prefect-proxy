@@ -309,12 +309,12 @@ async def create_shell_block(shell: PrefectShellSetup) -> str:
     )
     try:
         block_name_for_save = cleaned_name_for_prefectblock(shell.blockName)
-        await shell_operation_block.save(block_name_for_save)
+        await shell_operation_block.save(block_name_for_save, overwrite=True)
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create shell block") from error
     logger.info("created shell operation block %s", shell.blockName)
-    return _block_id(shell_operation_block)
+    return _block_id(shell_operation_block), block_name_for_save
 
 
 def delete_shell_block(blockid: str) -> dict:
