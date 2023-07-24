@@ -74,13 +74,13 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
             # the key "secret-git-pull-url-block" will always be present. Value will be empty if no token was submitted by user
             secret_block_name = shell_op.env["secret-git-pull-url-block"]
             secret_blk = Secret.load(secret_block_name)
-            url = secret_blk.get()
+            git_repo_endpoint = secret_blk.get()
 
             # update the commands to account for the token
             commands = shell_op.commands
             updated_cmds = []
             for cmd in commands:
-                updated_cmds.append(f"{cmd} {url}")
+                updated_cmds.append(f"{cmd} {git_repo_endpoint}")
             shell_op.commands = updated_cmds
 
             # run the shell command(s)
