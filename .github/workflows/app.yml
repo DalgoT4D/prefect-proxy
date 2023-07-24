@@ -27,6 +27,9 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Create Google App credentials file
+        run: |
+          echo ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }} > google_credentials.json
       - name: Test with pytest
         run: |
           coverage run -m pytest
