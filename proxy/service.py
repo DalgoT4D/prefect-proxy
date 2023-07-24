@@ -430,11 +430,11 @@ async def create_secret_block(payload: PrefectSecretBlockCreate):
     try:
         secret_block = Secret(value=payload.secret)
         cleaned_blockname = cleaned_name_for_prefectblock(payload.blockName)
-        await secret_block.save(cleaned_blockname, overwrite=True)
+        block_id = await secret_block.save(cleaned_blockname, overwrite=True)
     except Exception as error:
         raise PrefectException("Could not create a secret block") from error
 
-    return _block_id(secret_block), cleaned_blockname
+    return str(block_id), cleaned_blockname
 
 
 async def update_postgres_credentials(dbt_blockname, new_extras):
