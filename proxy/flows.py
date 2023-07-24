@@ -70,21 +70,24 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
         if block["blockType"] == SHELLOPERATION:
             shell_op = ShellOperation.load(block["blockName"])
 
-            # fetch the secret block having the git oauth token-based url to pull code from private repos
-            # the key "secret-git-pull-url-block" will always be present. Value will be empty if no token was submitted by user
-            secret_block_name = shell_op.env["secret-git-pull-url-block"]
-            secret_blk = Secret.load(secret_block_name)
-            git_repo_endpoint = secret_blk.get()
+            try:
+                # fetch the secret block having the git oauth token-based url to pull code from private repos
+                # the key "secret-git-pull-url-block" will always be present. Value will be empty if no token was submitted by user
+                secret_block_name = shell_op.env["secret-git-pull-url-block"]
+                secret_blk = Secret.load(secret_block_name)
+                git_repo_endpoint = secret_blk.get()
 
-            # update the commands to account for the token
-            commands = shell_op.commands
-            updated_cmds = []
-            for cmd in commands:
-                updated_cmds.append(f"{cmd} {git_repo_endpoint}")
-            shell_op.commands = updated_cmds
+                # update the commands to account for the token
+                commands = shell_op.commands
+                updated_cmds = []
+                for cmd in commands:
+                    updated_cmds.append(f"{cmd} {git_repo_endpoint}")
+                shell_op.commands = updated_cmds
 
-            # run the shell command(s)
-            shell_op.run()
+                # run the shell command(s)
+                shell_op.run()
+            except Exception as error:
+                logger.exception(error)
 
             continue
 
