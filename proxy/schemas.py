@@ -161,3 +161,10 @@ class PrefectBlocksDelete(BaseModel):
     """Delete each block having the block ids in the array"""
 
     block_ids: list[str] | None
+
+
+class PrefectSecretBlockCreate(BaseModel):
+    """Schema for creating a block to store a secret string in prefect"""
+
+    secret: str
+    blockName: str

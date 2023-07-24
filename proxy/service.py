@@ -7,6 +7,7 @@ from prefect.deployments import Deployment, run_deployment
 from prefect.server.schemas.schedules import CronSchedule
 from prefect.blocks.core import Block
 from prefect_airbyte import AirbyteConnection, AirbyteServer
+from prefect.blocks.system import Secret
 
 from prefect_gcp import GcpCredentials
 from prefect_dbt.cli.configs import TargetConfigs
@@ -25,6 +26,7 @@ from proxy.schemas import (
     DbtCoreCreate,
     DeploymentCreate,
     DeploymentUpdate,
+    PrefectSecretBlockCreate,
 )
 from proxy.flows import (
     deployment_schedule_flow,
@@ -119,7 +121,7 @@ def prefect_delete(endpoint: str) -> dict:
 
 def _block_id(block: Block) -> str:
     """Get the id of block"""
-    return str(block.dict()["_block_document_id"])
+    return str(dict()["_block_document_id"])
 
 
 # ================================================================================================
@@ -421,6 +423,18 @@ def delete_dbt_core_block(block_id: str) -> dict:
 
     logger.info("deleting dbt core operation block %s", block_id)
     return prefect_delete(f"block_documents/{block_id}")
+
+
+async def create_secret_block(payload: PrefectSecretBlockCreate):
+    """Create a prefect block of type secret"""
+    try:
+        secret_block = Secret(value=payload.secret)
+        cleaned_blockname = cleaned_name_for_prefectblock(payload.blockName)
+        await secret_block.save(cleaned_blockname, overwrite=True)
+    except Exception as error:
+        raise PrefectException("Could not create a secret block") from error
+
+    return _block_id(secret_block), cleaned_blockname
 
 
 async def update_postgres_credentials(dbt_blockname, new_extras):

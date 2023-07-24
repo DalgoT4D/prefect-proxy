@@ -30,6 +30,7 @@ from proxy.service import (
     set_deployment_schedule,
     get_deployment,
     get_flow_run,
+    create_secret_block,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -45,6 +46,7 @@ from proxy.schemas import (
     FlowRunRequest,
     PrefectBlocksDelete,
     AirbyteConnectionBlocksFetch,
+    PrefectSecretBlockCreate,
 )
 from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
 
@@ -375,6 +377,29 @@ async def put_dbtcore_schema(request: Request, payload: DbtCoreSchemaUpdate):
 
     logger.info("updated target_configs_schema in dbtcore block %s", payload.blockName)
     return {"success": 1}
+
+
+# =============================================================================
+@app.post("/proxy/blocks/secret/")
+async def post_secret_block(request: Request, payload: PrefectSecretBlockCreate):
+    """
+    create a new prefect secret block with this block name to store a secret string
+    """
+    if not isinstance(payload, DbtCoreCreate):
+        raise TypeError("payload is invalid")
+    try:
+        block_id, cleaned_blockname = await create_secret_block(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to prefect secret block"
+        ) from error
+    logger.info(
+        "Created new secret block with ID: %s and name: %s",
+        block_id,
+        cleaned_blockname,
+    )
+    return {"block_id": block_id, "block_name": cleaned_blockname}
 
 
 # =============================================================================
