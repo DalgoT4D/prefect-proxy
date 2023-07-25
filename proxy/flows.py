@@ -26,9 +26,8 @@ def run_airbyte_connection_flow(block_name: str):
         logger.info("airbyte connection sync result=")
         logger.info(result)
         return result
-    except (
-        Exception
-    ) as error:  # skipcq PYL-W0703 # pylint: disable=broad-exception-caught
+    except Exception as error:  # skipcq PYL-W0703
+        # pylint: disable=broad-exception-caught
         # logger.exception(error)
         logger.error(str(error))  # "Job <num> failed."
 
