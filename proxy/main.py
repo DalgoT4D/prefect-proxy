@@ -382,9 +382,7 @@ async def put_dbtcore_schema(request: Request, payload: DbtCoreSchemaUpdate):
 # =============================================================================
 @app.post("/proxy/blocks/secret/")
 async def post_secret_block(request: Request, payload: PrefectSecretBlockCreate):
-    """
-    create a new prefect secret block with this block name to store a secret string
-    """
+    """create a new prefect secret block with this block name to store a secret string"""
     if not isinstance(payload, PrefectSecretBlockCreate):
         raise TypeError("payload is invalid")
     try:

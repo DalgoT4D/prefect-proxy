@@ -28,7 +28,7 @@ def run_airbyte_connection_flow(block_name: str):
         return result
     except (
         Exception
-    ) as error:  # pylint: disable=broad-exception-caught # skipcq PYL-W0703
+    ) as error:  # skipcq PYL-W0703 # pylint: disable=broad-exception-caught
         # logger.exception(error)
         logger.error(str(error))  # "Job <num> failed."
 
@@ -102,5 +102,3 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
                 dbt_op.run()
             except Exception as error:  # skipcq PYL-W0703
                 logger.exception(error)
-
-    return None
