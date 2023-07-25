@@ -1,7 +1,7 @@
-from unittest.mock import AsyncMock, patch
+from unittest.mock import Mock, AsyncMock, patch
 
 import pytest
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from proxy.main import (
@@ -26,6 +26,12 @@ from proxy.main import (
     post_create_deployment_flow_run,
     post_dataflow,
     post_dbtcore,
+    put_dbtcore_postgres,
+    put_dbtcore_bigquery,
+    put_dbtcore_schema,
+    put_dataflow,
+    get_flow_run_by_id,
+    post_secret_block,
     post_deployment_set_schedule,
     post_deployments,
     post_shell,
@@ -38,8 +44,12 @@ from proxy.schemas import (
     AirbyteConnectionCreate,
     AirbyteServerCreate,
     DbtCoreCreate,
+    DbtCoreCredentialUpdate,
     DbtProfileCreate,
+    DbtCoreSchemaUpdate,
+    PrefectSecretBlockCreate,
     DeploymentCreate,
+    DeploymentUpdate,
     DeploymentFetch,
     FlowRunRequest,
     PrefectBlocksDelete,
@@ -543,6 +553,137 @@ async def test_post_dbtcore_invalid_payload():
 
 
 @pytest.mark.asyncio
+async def test_put_dbtcore_postgres_badparams():
+    request = Mock()
+    with pytest.raises(TypeError) as excinfo:
+        await put_dbtcore_postgres(request, 1)
+    assert str(excinfo.value) == "payload is invalid"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.update_postgres_credentials")
+async def test_put_dbtcore_postgres_failure(mock_update: AsyncMock):
+    request = Mock()
+    payload = DbtCoreCredentialUpdate(
+        blockName="block-name", credentials={"cred-key": "cred-val"}
+    )
+    mock_update.side_effect = Exception("exception")
+    with pytest.raises(HTTPException) as excinfo:
+        await put_dbtcore_postgres(request, payload)
+    assert (
+        excinfo.value.detail == "failed to update dbt core block credentials [postgres]"
+    )
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.update_postgres_credentials")
+async def test_put_dbtcore_postgres_success(mock_update: AsyncMock):
+    request = Mock()
+    payload = DbtCoreCredentialUpdate(
+        blockName="block-name", credentials={"cred-key": "cred-val"}
+    )
+    response = await put_dbtcore_postgres(request, payload)
+    assert response == {"success": 1}
+
+
+@pytest.mark.asyncio
+async def test_put_dbtcore_bigquery_badparams():
+    request = Mock()
+    with pytest.raises(TypeError) as excinfo:
+        await put_dbtcore_bigquery(request, 1)
+    assert str(excinfo.value) == "payload is invalid"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.update_bigquery_credentials")
+async def test_put_dbtcore_bigquery_failure(mock_update: AsyncMock):
+    request = Mock()
+    payload = DbtCoreCredentialUpdate(
+        blockName="block-name", credentials={"cred-key": "cred-val"}
+    )
+    mock_update.side_effect = Exception("exception")
+    with pytest.raises(HTTPException) as excinfo:
+        await put_dbtcore_bigquery(request, payload)
+    assert (
+        excinfo.value.detail == "failed to update dbt core block credentials [bigquery]"
+    )
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.update_bigquery_credentials")
+async def test_put_dbtcore_bigquery_success(mock_update: AsyncMock):
+    request = Mock()
+    payload = DbtCoreCredentialUpdate(
+        blockName="block-name", credentials={"cred-key": "cred-val"}
+    )
+    response = await put_dbtcore_bigquery(request, payload)
+    assert response == {"success": 1}
+
+
+@pytest.mark.asyncio
+async def test_put_dbtcore_schema_badparams():
+    request = Mock()
+    with pytest.raises(TypeError) as excinfo:
+        await put_dbtcore_schema(request, 1)
+    assert str(excinfo.value) == "payload is invalid"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.update_target_configs_schema")
+async def test_put_dbtcore_schema_failure(mock_update: AsyncMock):
+    request = Mock()
+    payload = DbtCoreSchemaUpdate(
+        blockName="block-name", target_configs_schema="target"
+    )
+    mock_update.side_effect = Exception("exception")
+    with pytest.raises(HTTPException) as excinfo:
+        await put_dbtcore_schema(request, payload)
+    assert (
+        excinfo.value.detail == "failed to update dbt core block target_configs_schema"
+    )
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.update_target_configs_schema")
+async def test_put_dbtcore_schema_success(mock_update: AsyncMock):
+    request = Mock()
+    payload = DbtCoreSchemaUpdate(
+        blockName="block-name", target_configs_schema="target"
+    )
+    response = await put_dbtcore_schema(request, payload)
+    assert response == {"success": 1}
+
+
+@pytest.mark.asyncio
+async def test_post_secret_block_badparams():
+    request = Mock()
+    with pytest.raises(TypeError) as excinfo:
+        await post_secret_block(request, 1)
+    assert str(excinfo.value) == "payload is invalid"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.create_secret_block")
+async def test_post_secret_block_failure(mock_create: AsyncMock):
+    request = Mock()
+    payload = PrefectSecretBlockCreate(blockName="block-name", secret="secret")
+    mock_create.side_effect = Exception("exception")
+    with pytest.raises(HTTPException) as excinfo:
+        await post_secret_block(request, payload)
+    assert excinfo.value.detail == "failed to prefect secret block"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.create_secret_block")
+async def test_post_secret_block_success(mock_create: AsyncMock):
+    request = Mock()
+    payload = PrefectSecretBlockCreate(blockName="block-name", secret="secret")
+    mock_create.return_value = ("block_id", "cleaned_blockname")
+    response = await post_secret_block(request, payload)
+    assert response == {"block_id": "block_id", "block_name": "cleaned_blockname"}
+
+
+@pytest.mark.asyncio
 async def test_delete_block_success():
     request = client.request("POST", "/")
     with patch("proxy.main.requests.delete") as mock_delete:
@@ -672,6 +813,55 @@ async def test_post_dataflow_invalid_payload():
     with pytest.raises(TypeError) as excinfo:
         await post_dataflow(request, payload)
     assert excinfo.value.args[0] == "payload is invalid"
+
+
+def test_put_dataflow_badparams():
+    request = Mock()
+    with pytest.raises(TypeError) as excinfo:
+        put_dataflow(request, "deployment-id", 123)
+    assert str(excinfo.value) == "payload is invalid"
+
+
+@patch("proxy.main.put_deployment")
+def test_put_data_flow_failure(mock_put: Mock):
+    request = Mock()
+    payload = DeploymentUpdate(cron="* * * * *")
+    mock_put.side_effect = Exception("exception")
+    with pytest.raises(HTTPException) as excinfo:
+        put_dataflow(request, "deployment-id", payload)
+    assert excinfo.value.detail == "failed to update the deployment"
+
+
+@patch("proxy.main.put_deployment")
+def test_put_data_flow_success(mock_put: Mock):
+    request = Mock()
+    payload = DeploymentUpdate(cron="* * * * *")
+    response = put_dataflow(request, "deployment-id", payload)
+    assert response == {"success": 1}
+
+
+def test_get_flow_run_by_id_badparams():
+    request = Mock()
+    with pytest.raises(TypeError) as excinfo:
+        get_flow_run_by_id(request, 123)
+    assert str(excinfo.value) == "Flow run id must be a string"
+
+
+@patch("proxy.main.get_flow_run")
+def test_put_data_flow_failure(mock_get: Mock):
+    request = Mock()
+    mock_get.side_effect = Exception("exception")
+    with pytest.raises(HTTPException) as excinfo:
+        get_flow_run_by_id(request, "f-run")
+    assert excinfo.value.detail == "failed to fetch flow_run f-run"
+
+
+@patch("proxy.main.get_flow_run")
+def test_put_data_flow_success(mock_get: Mock):
+    request = Mock()
+    mock_get.return_value = "flow-run"
+    response = get_flow_run_by_id(request, "f-run")
+    assert response == "flow-run"
 
 
 @pytest.mark.asyncio

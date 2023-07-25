@@ -14,6 +14,8 @@ from proxy.schemas import (
     DbtProfileCreate,
     PrefectShellSetup,
     DeploymentCreate,
+    DeploymentUpdate,
+    PrefectSecretBlockCreate,
 )
 from proxy.service import (
     _create_dbt_cli_profile,
@@ -30,6 +32,7 @@ from proxy.service import (
     get_airbyte_server_block_id,
     get_dbtcore_block_id,
     get_deployments_by_filter,
+    get_flow_run,
     get_flow_run_logs,
     get_flow_runs_by_deployment_id,
     get_flow_runs_by_name,
@@ -48,6 +51,11 @@ from proxy.service import (
     update_bigquery_credentials,
     update_target_configs_schema,
     post_deployment,
+    put_deployment,
+    get_deployment,
+    CronSchedule,
+    post_deployment_flow_run,
+    create_secret_block,
 )
 
 
@@ -652,22 +660,22 @@ async def test_create_shell_block_invalid_shell():
     assert str(excinfo.value) == "shell must be a PrefectShellSetup"
 
 
-# @pytest.mark.asyncio
+@pytest.mark.asyncio
 # @patch("proxy.service.ShellOperation", new=MockShellOperation)
-# @patch("proxy.service.ShellOperation.load", new_callable=AsyncMock)
-# async def test_create_shell_block_failure(mock_load):
-#     mock_load.side_effect = Exception('load failed')
+@patch("proxy.service.ShellOperation.save", new_callable=AsyncMock)
+async def test_create_shell_block_failure(mock_save):
+    mock_save.side_effect = Exception("save failed")
 
-#     shell = PrefectShellSetup(
-#         blockName="test_block_name",
-#         commands=["test_command"],
-#         env={"test_key": "test_value"},
-#         workingDir="test_working_dir",
-#     )
+    shell = PrefectShellSetup(
+        blockName="test_block_name",
+        commands=["test_command"],
+        env={"test_key": "test_value"},
+        workingDir="/tmp",
+    )
 
-#     with pytest.raises(PrefectException) as excinfo:
-#         await create_shell_block(shell)
-#     assert str(excinfo.value) == 'failed to create shell block'
+    with pytest.raises(PrefectException) as excinfo:
+        await create_shell_block(shell)
+    assert str(excinfo.value) == "failed to create shell block"
 
 
 @patch("proxy.service.prefect_delete")
@@ -937,6 +945,16 @@ async def test_delete_dbt_core_block_type_error():
 
 
 @pytest.mark.asyncio
+@patch("proxy.service.Secret.save", new_callable=AsyncMock)
+async def test_create_secret_block(mock_save: AsyncMock):
+    mock_save.side_effect = Exception("exception thrown")
+    payload = PrefectSecretBlockCreate(secret="my-secret", blockName="my-blockname")
+    with pytest.raises(PrefectException) as excinfo:
+        await create_secret_block(payload)
+    assert str(excinfo.value) == "Could not create a secret block"
+
+
+@pytest.mark.asyncio
 @patch(
     "proxy.service.DbtCoreOperation.load",
     AsyncMock(side_effect=Exception()),
@@ -1142,6 +1160,39 @@ async def test_post_deployment(deployment_schedule_flow, mock_build):
     )
 
 
+def test_put_deployment_bad_param():
+    payload = 123
+    with pytest.raises(TypeError) as excinfo:
+        put_deployment("deployment-id", payload)
+    assert str(excinfo.value) == "payload must be a DeploymentUpdate"
+
+
+@patch("proxy.service.prefect_patch")
+def test_put_deployment(mock_patch: Mock):
+    payload = DeploymentUpdate(cron="* * * * *")
+    mock_patch.return_value = "retval"
+    response = put_deployment("deployment-id", payload)
+    mock_patch.assert_called_once_with(
+        f"deployments/deployment-id",
+        {"schedule": CronSchedule(cron="* * * * *").dict()},
+    )
+    assert response == "retval"
+
+
+def test_get_deployment_bad_param():
+    with pytest.raises(TypeError) as excinfo:
+        get_deployment(123)
+    assert str(excinfo.value) == "deployment_id must be a string"
+
+
+@patch("proxy.service.prefect_get")
+def test_put_deployment(mock_get: Mock):
+    mock_get.return_value = "retval"
+    response = get_deployment("deployment-id")
+    mock_get.assert_called_once_with(f"deployments/deployment-id")
+    assert response == "retval"
+
+
 def test_get_flow_runs_by_deployment_id_type_error():
     with pytest.raises(TypeError):
         get_flow_runs_by_deployment_id(123, 10)
@@ -1215,7 +1266,16 @@ def test_get_deployments_by_filter_prefect_post():
     with patch("proxy.service.prefect_post") as prefect_post_mock:
         org_slug = "org_slug"
         deployment_ids = ["deployment1", "deployment2"]
-        get_deployments_by_filter(org_slug, deployment_ids)
+        prefect_post_mock.return_value = [
+            {
+                "name": "name1",
+                "id": "id1",
+                "tags": "tags1",
+                "schedule": {"cron": "cron1"},
+                "is_schedule_active": True,
+            }
+        ]
+        response = get_deployments_by_filter(org_slug, deployment_ids)
         query = {
             "deployments": {
                 "operator": "and_",
@@ -1224,6 +1284,39 @@ def test_get_deployments_by_filter_prefect_post():
             }
         }
         prefect_post_mock.assert_called_with("deployments/filter", query)
+        assert response == [
+            {
+                "name": "name1",
+                "deploymentId": "id1",
+                "tags": "tags1",
+                "cron": "cron1",
+                "isScheduleActive": True,
+            }
+        ]
+
+
+@pytest.mark.asyncio
+async def test_post_deployment_flow_run_badargs():
+    with pytest.raises(TypeError) as excinfo:
+        await post_deployment_flow_run(123)
+    assert str(excinfo.value) == "deployment_id must be a string"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.run_deployment", new_callable=AsyncMock)
+async def test_post_deployment_flow_run(mock_run_deployment: AsyncMock):
+    mock_run_deployment.return_value = Mock(id="return-id")
+    response = await post_deployment_flow_run("deployment-id")
+    assert response["flow_run_id"] == "return-id"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.run_deployment", new_callable=AsyncMock)
+async def test_post_deployment_flow_run_failed(mock_run_deployment: AsyncMock):
+    mock_run_deployment.side_effect = Exception("exception")
+    with pytest.raises(PrefectException) as excinfo:
+        await post_deployment_flow_run("deployment-id")
+    assert str(excinfo.value) == "Failed to create deployment flow run"
 
 
 def test_parse_log_type_error():
@@ -1250,6 +1343,14 @@ def test_traverse_flow_run_graph_type_error():
         traverse_flow_run_graph(123, [])
     with pytest.raises(TypeError):
         traverse_flow_run_graph("flow_run_id", "invalid flow_runs")
+
+
+@patch("proxy.service.prefect_get")
+def test_traverse_flow_run_graph_1(mock_get: Mock):
+    mock_get.return_value = []
+    response = traverse_flow_run_graph("4", ["1", "2", "3"])
+
+    assert response == ["1", "2", "3", "4"]
 
 
 def test_get_flow_run_logs_type_error():
@@ -1328,6 +1429,22 @@ def test_set_deployment_schedule_prefect_post():
         prefect_post_mock.assert_called_with(
             f"deployments/{deployment_id}/set_schedule_inactive", {}
         )
+
+
+@patch("proxy.service.prefect_get")
+def test_get_flow_run_success(mock_get: Mock):
+    mock_get.return_value = "flow-run"
+    response = get_flow_run("flow-run-id")
+    mock_get.assert_called_once_with("flow_runs/flow-run-id")
+    assert response == "flow-run"
+
+
+@patch("proxy.service.prefect_get")
+def test_get_flow_run_falure(mock_get: Mock):
+    mock_get.side_effect = Exception("exception")
+    with pytest.raises(PrefectException) as excinfo:
+        get_flow_run("flow-run-id")
+    assert str(excinfo.value) == "failed to fetch a flow-run"
 
 
 def test_set_deployment_schedule_result():
