@@ -74,10 +74,12 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
 
             try:
                 # fetch the secret block having the git oauth token-based url to pull code from private repos
-                # the key "secret-git-pull-url-block" will always be present. Value will be empty if no token was submitted by user
+                # the key "secret-git-pull-url-block" will always be present. Value will be empty string if no token was submitted by user
                 secret_block_name = shell_op.env["secret-git-pull-url-block"]
-                secret_blk = Secret.load(secret_block_name)
-                git_repo_endpoint = secret_blk.get()
+                git_repo_endpoint = ""
+                if secret_block_name and len(secret_block_name) > 0:
+                    secret_blk = Secret.load(secret_block_name)
+                    git_repo_endpoint = secret_blk.get()
 
                 # update the commands to account for the token
                 commands = shell_op.commands
