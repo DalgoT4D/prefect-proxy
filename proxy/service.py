@@ -5,9 +5,9 @@ from fastapi import HTTPException
 
 from prefect.deployments import Deployment, run_deployment
 from prefect.server.schemas.schedules import CronSchedule
+from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
 from prefect_airbyte import AirbyteConnection, AirbyteServer
-from prefect.blocks.system import Secret
 
 from prefect_gcp import GcpCredentials
 from prefect_dbt.cli.configs import TargetConfigs
@@ -302,7 +302,7 @@ async def get_shell_block_id(blockname: str) -> str | None:
         )
 
 
-async def create_shell_block(shell: PrefectShellSetup) -> str:
+async def create_shell_block(shell: PrefectShellSetup):
     """Create a prefect shell block"""
     if not isinstance(shell, PrefectShellSetup):
         raise TypeError("shell must be a PrefectShellSetup")

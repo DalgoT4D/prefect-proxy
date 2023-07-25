@@ -2,10 +2,10 @@
 
 import os
 from prefect import flow
+from prefect.blocks.system import Secret
 from prefect_airbyte.flows import run_connection_sync
 from prefect_airbyte import AirbyteConnection
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
-from prefect.blocks.system import Secret
 from logger import logger
 
 
@@ -26,10 +26,13 @@ def run_airbyte_connection_flow(block_name: str):
         logger.info("airbyte connection sync result=")
         logger.info(result)
         return result
-    except Exception as error:  # pylint: disable=broad-exception-caught
+    except (
+        Exception
+    ) as error:  # pylint: disable=broad-exception-caught # skipcq PYL-W0703
         # logger.exception(error)
         logger.error(str(error))  # "Job <num> failed."
-        # raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return None
 
 
 @flow
@@ -41,9 +44,10 @@ def run_dbtcore_flow(block_name: str):
         if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
             os.unlink(dbt_op.profiles_dir / "profiles.yml")
         return dbt_op.run()
-    except Exception as error:
+    except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
-        # raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return None
 
 
 @flow
@@ -61,9 +65,8 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
         airbyte_connection = AirbyteConnection.load(block["blockName"])
         try:
             run_connection_sync(airbyte_connection)
-        except Exception as error:
+        except Exception as error:  # skipcq PYL-W0703
             logger.exception(error)
-            # raise HTTPException(status_code=400, detail=str(error)) from error
 
     # run dbt blocks
     for block in dbt_blocks:
@@ -86,7 +89,7 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
 
                 # run the shell command(s)
                 shell_op.run()
-            except Exception as error:
+            except Exception as error:  # skipcq PYL-W0703
                 logger.exception(error)
 
             continue
@@ -97,6 +100,7 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
                 os.unlink(dbt_op.profiles_dir / "profiles.yml")
             try:
                 dbt_op.run()
-            except Exception as error:
+            except Exception as error:  # skipcq PYL-W0703
                 logger.exception(error)
-                # raise HTTPException(status_code=400, detail=str(error)) from error
+
+    return None
