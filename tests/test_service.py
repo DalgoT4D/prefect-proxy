@@ -590,7 +590,7 @@ class MockShellOperation:
     def __init__(self, commands, env, working_dir):
         pass
 
-    async def save(self, block_name):
+    async def save(self, block_name, overwrite=False):
         pass
 
     def dict(self):
@@ -641,7 +641,7 @@ async def test_create_shell_block(mock_load):
         workingDir="test_working_dir",
     )
     result = await create_shell_block(shell)
-    assert result == "expected_block_id"
+    assert result[0] == "expected_block_id"
 
 
 @pytest.mark.asyncio

@@ -427,9 +427,9 @@ async def test_post_shell_success():
         workingDir="test_dir",
         env={"TEST_ENV": "test_value"},
     )
-    with patch("proxy.main.create_shell_block", return_value="12345"):
+    with patch("proxy.main.create_shell_block", return_value=("12345", "test_shell")):
         response = await post_shell(request, payload)
-        assert response == {"block_id": "12345"}
+        assert response == {"block_id": "12345", "block_name": "test_shell"}
 
 
 @pytest.mark.asyncio

@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from prefect.deployments import Deployment, run_deployment
 from prefect.server.schemas.schedules import CronSchedule
+from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 
@@ -25,6 +26,7 @@ from proxy.schemas import (
     DbtCoreCreate,
     DeploymentCreate,
     DeploymentUpdate,
+    PrefectSecretBlockCreate,
 )
 from proxy.flows import (
     deployment_schedule_flow,
@@ -300,7 +302,7 @@ async def get_shell_block_id(blockname: str) -> str | None:
         )
 
 
-async def create_shell_block(shell: PrefectShellSetup) -> str:
+async def create_shell_block(shell: PrefectShellSetup):
     """Create a prefect shell block"""
     if not isinstance(shell, PrefectShellSetup):
         raise TypeError("shell must be a PrefectShellSetup")
@@ -309,12 +311,12 @@ async def create_shell_block(shell: PrefectShellSetup) -> str:
     )
     try:
         block_name_for_save = cleaned_name_for_prefectblock(shell.blockName)
-        await shell_operation_block.save(block_name_for_save)
+        await shell_operation_block.save(block_name_for_save, overwrite=True)
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create shell block") from error
     logger.info("created shell operation block %s", shell.blockName)
-    return _block_id(shell_operation_block)
+    return _block_id(shell_operation_block), block_name_for_save
 
 
 def delete_shell_block(blockid: str) -> dict:
@@ -421,6 +423,18 @@ def delete_dbt_core_block(block_id: str) -> dict:
 
     logger.info("deleting dbt core operation block %s", block_id)
     return prefect_delete(f"block_documents/{block_id}")
+
+
+async def create_secret_block(payload: PrefectSecretBlockCreate):
+    """Create a prefect block of type secret"""
+    try:
+        secret_block = Secret(value=payload.secret)
+        cleaned_blockname = cleaned_name_for_prefectblock(payload.blockName)
+        await secret_block.save(cleaned_blockname, overwrite=True)
+    except Exception as error:
+        raise PrefectException("Could not create a secret block") from error
+
+    return _block_id(secret_block), cleaned_blockname
 
 
 async def update_postgres_credentials(dbt_blockname, new_extras):

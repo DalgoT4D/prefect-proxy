@@ -30,6 +30,7 @@ from proxy.service import (
     set_deployment_schedule,
     get_deployment,
     get_flow_run,
+    create_secret_block,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -45,6 +46,7 @@ from proxy.schemas import (
     FlowRunRequest,
     PrefectBlocksDelete,
     AirbyteConnectionBlocksFetch,
+    PrefectSecretBlockCreate,
 )
 from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
 
@@ -273,14 +275,14 @@ async def post_shell(request: Request, payload: PrefectShellSetup):
         raise TypeError("payload is invalid")
     logger.info(payload)
     try:
-        block_id = await create_shell_block(payload)
+        block_id, cleaned_blockname = await create_shell_block(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
             status_code=400, detail="failed to create shell block"
         ) from error
     logger.info("Created new shell block with ID: %s", block_id)
-    return {"block_id": block_id}
+    return {"block_id": block_id, "block_name": cleaned_blockname}
 
 
 # =============================================================================
@@ -378,6 +380,27 @@ async def put_dbtcore_schema(request: Request, payload: DbtCoreSchemaUpdate):
 
 
 # =============================================================================
+@app.post("/proxy/blocks/secret/")
+async def post_secret_block(request: Request, payload: PrefectSecretBlockCreate):
+    """create a new prefect secret block with this block name to store a secret string"""
+    if not isinstance(payload, PrefectSecretBlockCreate):
+        raise TypeError("payload is invalid")
+    try:
+        block_id, cleaned_blockname = await create_secret_block(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to prefect secret block"
+        ) from error
+    logger.info(
+        "Created new secret block with ID: %s and name: %s",
+        block_id,
+        cleaned_blockname,
+    )
+    return {"block_id": block_id, "block_name": cleaned_blockname}
+
+
+# =============================================================================
 @app.delete("/delete-a-block/{block_id}")
 async def delete_block(request: Request, block_id):
     """we can break this up into four different deleters later if we want to"""
@@ -405,9 +428,7 @@ async def sync_airbyte_connection_flow(request: Request, payload: RunFlow):
         raise HTTPException(status_code=400, detail="received empty blockName")
     logger.info("Running airbyte connection sync flow")
     try:
-        result = airbytesync(
-            payload.blockName, payload.flowName, payload.flowRunName
-        )
+        result = airbytesync(payload.blockName, payload.flowName, payload.flowRunName)
         logger.info(result)
         return result
     except Exception as error:
@@ -426,9 +447,7 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
         raise HTTPException(status_code=400, detail="received empty blockName")
     logger.info("running dbtcore-run for dbt-core-op %s", payload.blockName)
     try:
-        result = dbtrun(
-            payload.blockName, payload.flowName, payload.flowRunName
-        )
+        result = dbtrun(payload.blockName, payload.flowName, payload.flowRunName)
         logger.info(result)
         return {"status": "success", "result": result}
     except Exception as error:
