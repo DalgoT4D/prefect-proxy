@@ -6,7 +6,9 @@ from prefect.blocks.system import Secret
 from prefect_airbyte.flows import run_connection_sync
 from prefect_airbyte import AirbyteConnection
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
-from logger import logger
+from proxy.helpers import CustomLogger
+
+logger = CustomLogger("prefect-proxy")
 
 
 # django prefect block names
