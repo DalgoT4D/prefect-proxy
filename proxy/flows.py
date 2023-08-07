@@ -53,62 +53,62 @@ def run_dbtcore_flow(block_name: str):
 
 # =============================================================================
 # ==== deprecated soon after 2023-08-06
-# @flow
-# def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
-#     # pylint: disable=broad-exception-caught
-#     """A general flow function that will help us create deployments"""
-#     # sort the dbt blocks by seq
-#     dbt_blocks.sort(key=lambda blk: blk["seq"])
+@flow
+def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
+    # pylint: disable=broad-exception-caught
+    """A general flow function that will help us create deployments"""
+    # sort the dbt blocks by seq
+    dbt_blocks.sort(key=lambda blk: blk["seq"])
 
-#     # sort the airbyte blocks by seq
-#     airbyte_blocks.sort(key=lambda blk: blk["seq"])
+    # sort the airbyte blocks by seq
+    airbyte_blocks.sort(key=lambda blk: blk["seq"])
 
-#     # run airbyte blocks
-#     for block in airbyte_blocks:
-#         airbyte_connection = AirbyteConnection.load(block["blockName"])
-#         try:
-#             run_connection_sync(airbyte_connection)
-#         except Exception as error:  # skipcq PYL-W0703
-#             logger.exception(error)
+    # run airbyte blocks
+    for block in airbyte_blocks:
+        airbyte_connection = AirbyteConnection.load(block["blockName"])
+        try:
+            run_connection_sync(airbyte_connection)
+        except Exception as error:  # skipcq PYL-W0703
+            logger.exception(error)
 
-#     # run dbt blocks
-#     for block in dbt_blocks:
-#         if block["blockType"] == SHELLOPERATION:
-#             shell_op = ShellOperation.load(block["blockName"])
+    # run dbt blocks
+    for block in dbt_blocks:
+        if block["blockType"] == SHELLOPERATION:
+            shell_op = ShellOperation.load(block["blockName"])
 
-#             try:
-#                 # fetch the secret block having the git oauth token-based url to pull code from
-#                 # private repos
-#                 # the key "secret-git-pull-url-block" will always be present. Value will be empty
-#                 # string if no token was submitted by user
-#                 secret_block_name = shell_op.env["secret-git-pull-url-block"]
-#                 git_repo_endpoint = ""
-#                 if secret_block_name and len(secret_block_name) > 0:
-#                     secret_blk = Secret.load(secret_block_name)
-#                     git_repo_endpoint = secret_blk.get()
+            try:
+                # fetch the secret block having the git oauth token-based url to pull code from
+                # private repos
+                # the key "secret-git-pull-url-block" will always be present. Value will be empty
+                # string if no token was submitted by user
+                secret_block_name = shell_op.env["secret-git-pull-url-block"]
+                git_repo_endpoint = ""
+                if secret_block_name and len(secret_block_name) > 0:
+                    secret_blk = Secret.load(secret_block_name)
+                    git_repo_endpoint = secret_blk.get()
 
-#                 # update the commands to account for the token
-#                 commands = shell_op.commands
-#                 updated_cmds = []
-#                 for cmd in commands:
-#                     updated_cmds.append(f"{cmd} {git_repo_endpoint}")
-#                 shell_op.commands = updated_cmds
+                # update the commands to account for the token
+                commands = shell_op.commands
+                updated_cmds = []
+                for cmd in commands:
+                    updated_cmds.append(f"{cmd} {git_repo_endpoint}")
+                shell_op.commands = updated_cmds
 
-#                 # run the shell command(s)
-#                 shell_op.run()
-#             except Exception as error:  # skipcq PYL-W0703
-#                 logger.exception(error)
+                # run the shell command(s)
+                shell_op.run()
+            except Exception as error:  # skipcq PYL-W0703
+                logger.exception(error)
 
-#             continue
+            continue
 
-#         elif block["blockType"] == DBTCORE:
-#             dbt_op = DbtCoreOperation.load(block["blockName"])
-#             if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
-#                 os.unlink(dbt_op.profiles_dir / "profiles.yml")
-#             try:
-#                 dbt_op.run()
-#             except Exception as error:  # skipcq PYL-W0703
-#                 logger.exception(error)
+        elif block["blockType"] == DBTCORE:
+            dbt_op = DbtCoreOperation.load(block["blockName"])
+            if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
+                os.unlink(dbt_op.profiles_dir / "profiles.yml")
+            try:
+                dbt_op.run()
+            except Exception as error:  # skipcq PYL-W0703
+                logger.exception(error)
 
 
 # =============================================================================
