@@ -99,8 +99,6 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
             except Exception as error:  # skipcq PYL-W0703
                 logger.exception(error)
 
-            continue
-
         elif block["blockType"] == DBTCORE:
             dbt_op = DbtCoreOperation.load(block["blockName"])
             if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
