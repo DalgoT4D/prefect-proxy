@@ -29,7 +29,7 @@ from proxy.schemas import (
     PrefectSecretBlockCreate,
 )
 from proxy.flows import (
-    deployment_schedule_flow,
+    deployment_schedule_flow_v2,
 )
 
 load_dotenv()
@@ -548,7 +548,7 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
     logger.info(payload)
 
     deployment = await Deployment.build_from_flow(
-        flow=deployment_schedule_flow.with_options(name=payload.flow_name),
+        flow=deployment_schedule_flow_v2.with_options(name=payload.flow_name),
         name=payload.deployment_name,
         work_queue_name="ddp",
         tags=[payload.org_slug],

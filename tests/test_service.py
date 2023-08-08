@@ -1129,10 +1129,10 @@ async def test_post_deployment_bad_payload():
 @pytest.mark.asyncio
 @patch("proxy.service.Deployment.build_from_flow", new_callable=AsyncMock)
 @patch(
-    "proxy.service.deployment_schedule_flow",
+    "proxy.service.deployment_schedule_flow_v2",
     new_callable=Mock,
 )
-async def test_post_deployment(deployment_schedule_flow, mock_build):
+async def test_post_deployment(deployment_schedule_flow_v2, mock_build):
     payload = DeploymentCreate(
         flow_name="flow-name",
         deployment_name="deployment-name",
@@ -1147,7 +1147,7 @@ async def test_post_deployment(deployment_schedule_flow, mock_build):
     deployment.name = "deployment-name"
 
     mock_build.return_value = deployment
-    deployment_schedule_flow.with_options = Mock(return_value="dsf")
+    deployment_schedule_flow_v2.with_options = Mock(return_value="dsf")
 
     response = await post_deployment(payload)
     assert response["id"] == "deployment-id"
