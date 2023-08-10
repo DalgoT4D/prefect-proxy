@@ -347,7 +347,7 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
     """credentials are decrypted by now"""
     if not isinstance(payload, DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
-    logger.info(payload)
+    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
         target_configs = TargetConfigs(
             type="postgres",
@@ -393,7 +393,7 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
     """Create a dbt core block in prefect"""
     if not isinstance(payload, DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
-    logger.info(payload)
+    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
 
     dbt_cli_profile = await _create_dbt_cli_profile(payload)
     dbt_core_operation = DbtCoreOperation(
