@@ -306,7 +306,7 @@ async def post_dbtcore(request: Request, payload: DbtCoreCreate):
     create a new dbt_core block with this block name,
     raise an exception if the name is already in use
     """
-    logger.info(payload)
+    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if not isinstance(payload, DbtCoreCreate):
         raise TypeError("payload is invalid")
     try:
