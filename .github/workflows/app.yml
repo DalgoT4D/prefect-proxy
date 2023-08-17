@@ -22,7 +22,6 @@ jobs:
       - name: Create logs directory
         run: |
           mkdir -p logs
-          echo "LOGDIR=logs" >> $GITHUB_ENV
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
@@ -31,6 +30,7 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           touch ~/.ssh/known_hosts
+          cat ~/.ssh/known_hosts
       - name: Add remote host key to known_hosts
         run: ssh-keyscan ${{ secrets.SERVERIP }} >> ~/.ssh/known_hosts
       - name: Set up port forwarding via SSH
