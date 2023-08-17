@@ -1,5 +1,6 @@
 import asyncio
-from unittest.mock import AsyncMock, patch
+import tempfile
+from unittest.mock import AsyncMock, patch, Mock
 
 import pytest
 import requests
@@ -12,6 +13,9 @@ from proxy.schemas import (
     DbtCoreCreate,
     DbtProfileCreate,
     PrefectShellSetup,
+    DeploymentCreate,
+    DeploymentUpdate,
+    PrefectSecretBlockCreate,
 )
 from proxy.service import (
     _create_dbt_cli_profile,
@@ -28,6 +32,7 @@ from proxy.service import (
     get_airbyte_server_block_id,
     get_dbtcore_block_id,
     get_deployments_by_filter,
+    get_flow_run,
     get_flow_run_logs,
     get_flow_runs_by_deployment_id,
     get_flow_runs_by_name,
@@ -36,8 +41,21 @@ from proxy.service import (
     prefect_delete,
     prefect_get,
     prefect_post,
+    prefect_patch,
     set_deployment_schedule,
     traverse_flow_run_graph,
+    post_filter_blocks,
+    update_airbyte_server_block,
+    update_airbyte_connection_block,
+    update_postgres_credentials,
+    update_bigquery_credentials,
+    update_target_configs_schema,
+    post_deployment,
+    put_deployment,
+    get_deployment,
+    CronSchedule,
+    post_deployment_flow_run,
+    create_secret_block,
 )
 
 
@@ -91,9 +109,77 @@ def test_prefect_post_failure(mock_getenv, mock_post):
     assert excinfo.value.detail == "Invalid input data"
 
 
+def test_prefect_patch_invalid_endpoint():
+    with pytest.raises(TypeError) as excinfo:
+        prefect_patch(123, {})
+    assert str(excinfo.value) == "endpoint must be a string"
+
+
+def test_prefect_patch_invalid_payload():
+    with pytest.raises(TypeError) as excinfo:
+        prefect_patch("test_endpoint", "invalid_payload")
+    assert str(excinfo.value) == "payload must be a dictionary"
+
+
+@patch("requests.patch")
+@patch("os.getenv")
+def test_prefect_patch_success(mock_getenv, mock_patch):
+    mock_getenv.return_value = "http://localhost"
+    mock_response = requests.Response()
+    mock_response.status_code = 200
+    mock_response._content = b'{"key": "value"}'
+    mock_patch.return_value = mock_response
+
+    endpoint = "test_endpoint"
+    payload = {"test_key": "test_value"}
+    response = prefect_patch(endpoint, payload)
+
+    assert response == {"key": "value"}
+    mock_patch.assert_called_once_with(
+        "http://localhost/test_endpoint", timeout=30, json=payload
+    )
+
+
+@patch("requests.patch")
+@patch("os.getenv")
+def test_prefect_patch_success_204(mock_getenv, mock_patch):
+    mock_getenv.return_value = "http://localhost"
+    mock_response = requests.Response()
+    mock_response.status_code = 204
+    mock_patch.return_value = mock_response
+
+    endpoint = "test_endpoint"
+    payload = {"test_key": "test_value"}
+    response = prefect_patch(endpoint, payload)
+
+    assert response == {}
+    mock_patch.assert_called_once_with(
+        "http://localhost/test_endpoint", timeout=30, json=payload
+    )
+
+
+@patch("requests.patch")
+@patch("os.getenv")
+def test_prefect_patch_failure(mock_getenv, mock_patch):
+    mock_getenv.return_value = "http://localhost"
+    mock_response = requests.Response()
+    mock_response.status_code = 400
+    mock_response._content = b"Invalid input data"
+    mock_patch.return_value = mock_response
+
+    endpoint = "test_endpoint"
+    payload = {"test_key": "test_value"}
+
+    with pytest.raises(HTTPException) as excinfo:
+        prefect_patch(endpoint, payload)
+
+    assert excinfo.value.status_code == 400
+    assert excinfo.value.detail == "Invalid input data"
+
+
 def test_prefect_get_invalid_endpoint():
     with pytest.raises(TypeError) as excinfo:
-        prefect_post(123, {})
+        prefect_get(123)
     assert str(excinfo.value) == "endpoint must be a string"
 
 
@@ -133,7 +219,7 @@ def test_prefect_get_success(mock_getenv, mock_get):
 
 def test_prefect_delete_invalid_endpoint():
     with pytest.raises(TypeError) as excinfo:
-        prefect_post(123, {})
+        prefect_delete(123)
     assert str(excinfo.value) == "endpoint must be a string"
 
 
@@ -166,6 +252,43 @@ def test_prefect_delete_success(mock_delete):
     response = prefect_delete(endpoint)
 
     assert response == {"key": "value"}
+
+
+@patch("requests.delete")
+def test_prefect_delete_success_204(mock_delete):
+    mock_response = requests.Response()
+    mock_response.status_code = 204
+    mock_delete.return_value = mock_response
+
+    endpoint = "test_endpoint"
+    response = prefect_delete(endpoint)
+
+    assert response == {}
+
+
+@patch("proxy.service.prefect_post")
+def test_post_filter_blocks_failure(mock_prefect_post):
+    block_names = ["block_one", "block_two"]
+    mock_prefect_post.side_effect = PrefectException("failed to filter blocks")
+    with pytest.raises(PrefectException) as excinfo:
+        post_filter_blocks(block_names)
+
+    assert str(excinfo.value) == "failed to filter blocks"
+
+
+@patch("proxy.service.prefect_post")
+def test_post_filter_blocks_success(mock_prefect_post):
+    block_names = ["block_one", "block_two"]
+    post_filter_blocks(block_names)
+    mock_prefect_post.assert_called_once_with(
+        "block_documents/filter",
+        {
+            "block_documents": {
+                "operator": "and_",
+                "name": {"any_": block_names},
+            }
+        },
+    )
 
 
 class MockBlock:
@@ -262,6 +385,19 @@ def test_delete_airbyte_server_block_invalid_blockid():
     with pytest.raises(TypeError) as excinfo:
         delete_airbyte_server_block(blockid)
     assert str(excinfo.value) == "blockid must be a string"
+
+
+# =================================================================================================
+def test_update_airbyte_server_block_must_be_string():
+    with pytest.raises(TypeError) as excinfo:
+        update_airbyte_server_block(123)
+    assert str(excinfo.value) == "blockname must be a string"
+
+
+def test_update_airbyte_server_block_not_implemented():
+    with pytest.raises(PrefectException) as excinfo:
+        update_airbyte_server_block("blockname")
+    assert str(excinfo.value) == "not implemented"
 
 
 # =================================================================================================
@@ -425,6 +561,20 @@ async def test_create_airbyte_connection_block_invalid_conninfo():
 
 
 # =================================================================================================
+# =================================================================================================
+def test_update_airbyte_connection_block_must_be_string():
+    with pytest.raises(TypeError) as excinfo:
+        update_airbyte_connection_block(123)
+    assert str(excinfo.value) == "blockname must be a string"
+
+
+def test_update_airbyte_connection_block_not_implemented():
+    with pytest.raises(PrefectException) as excinfo:
+        update_airbyte_connection_block("blockname")
+    assert str(excinfo.value) == "not implemented"
+
+
+# =================================================================================================
 
 
 @patch("proxy.service.prefect_delete")
@@ -448,7 +598,7 @@ class MockShellOperation:
     def __init__(self, commands, env, working_dir):
         pass
 
-    async def save(self, block_name):
+    async def save(self, block_name, overwrite=False):
         pass
 
     def dict(self):
@@ -499,7 +649,7 @@ async def test_create_shell_block(mock_load):
         workingDir="test_working_dir",
     )
     result = await create_shell_block(shell)
-    assert result == "expected_block_id"
+    assert result[0] == "expected_block_id"
 
 
 @pytest.mark.asyncio
@@ -510,22 +660,22 @@ async def test_create_shell_block_invalid_shell():
     assert str(excinfo.value) == "shell must be a PrefectShellSetup"
 
 
-# @pytest.mark.asyncio
+@pytest.mark.asyncio
 # @patch("proxy.service.ShellOperation", new=MockShellOperation)
-# @patch("proxy.service.ShellOperation.load", new_callable=AsyncMock)
-# async def test_create_shell_block_failure(mock_load):
-#     mock_load.side_effect = Exception('load failed')
+@patch("proxy.service.ShellOperation.save", new_callable=AsyncMock)
+async def test_create_shell_block_failure(mock_save):
+    mock_save.side_effect = Exception("save failed")
 
-#     shell = PrefectShellSetup(
-#         blockName="test_block_name",
-#         commands=["test_command"],
-#         env={"test_key": "test_value"},
-#         workingDir="test_working_dir",
-#     )
+    shell = PrefectShellSetup(
+        blockName="test_block_name",
+        commands=["test_command"],
+        env={"test_key": "test_value"},
+        workingDir="/tmp",
+    )
 
-#     with pytest.raises(PrefectException) as excinfo:
-#         await create_shell_block(shell)
-#     assert str(excinfo.value) == 'failed to create shell block'
+    with pytest.raises(PrefectException) as excinfo:
+        await create_shell_block(shell)
+    assert str(excinfo.value) == "failed to create shell block"
 
 
 @patch("proxy.service.prefect_delete")
@@ -587,7 +737,6 @@ async def test_get_dbtcore_block_id_invalid_blockname():
 #         blockName="test_block_name",
 #         profile=DbtProfileCreate(
 #             name="test_name",
-#             target="test_target",
 #             target_configs_schema="test_outputs_path",
 #         ),
 #         wtype="postgres",
@@ -608,7 +757,7 @@ async def test_get_dbtcore_block_id_invalid_blockname():
 #     result = await _create_dbt_cli_profile(payload)
 
 #     assert result.name == payload.profile.name
-#     assert result.target == payload.profile.target
+#     assert result.target == payload.profile.target_configs_schema
 
 
 @pytest.mark.asyncio
@@ -618,7 +767,6 @@ async def test_create_dbt_cli_profile_failure():
         blockName="test_block_name",
         profile=DbtProfileCreate(
             name="test_name",
-            target="test_target",
             target_configs_schema="test_outputs_path",
         ),
         wtype="invalid_wtype",  # Use an invalid wtype value
@@ -663,7 +811,6 @@ async def test_create_dbt_cli_profile_exception(mock_save):
         blockName="test_block_name",
         profile=DbtProfileCreate(
             name="test_name",
-            target="test_target",
             target_configs_schema="test_outputs_path",
         ),
         wtype="postgres",
@@ -687,38 +834,41 @@ async def test_create_dbt_cli_profile_exception(mock_save):
     assert str(excinfo.value) == "failed to create dbt cli profile"
 
 
-# @pytest.mark.asyncio
-# @patch("proxy.service.DbtCliProfile.save", new_callable=AsyncMock)
-# @patch("proxy.service.DbtCoreOperation.__init__", return_value=None)
-# @patch("proxy.service.DbtCoreOperation.save", new_callable=AsyncMock)
-# @patch("proxy.service._block_id", return_value=("test_block_id", "test_cleaned_blockname"))
-# async def test_create_dbt_core_block_success(mock_block_id, mock_dbtcoreoperation_save, mock_dbtcoreoperation_init, mock_save):
-#     with tempfile.TemporaryDirectory() as tempdir:
-#         payload = DbtCoreCreate(
-#             blockName="test_block_name",
-#             profile=DbtProfileCreate(
-#                 name="test_name",
-#                 target="test_target",
-#                 target_configs_schema="test_outputs_path",
-#             ),
-#             wtype="postgres",
-#             credentials={
-#                 "username": "test_username",
-#                 "password": "test_password",
-#                 "database": "test_database",
-#                 "host": "test_host",
-#                 "port": "test_port",
-#             },
-#             commands=["run"],
-#             env={"test_key": "test_value"},
-#             working_dir=tempdir,
-#             profiles_dir="test_profiles_dir",
-#             project_dir="test_project_dir",
-#         )
+@pytest.mark.asyncio
+@patch("proxy.service.DbtCliProfile.save", new_callable=AsyncMock)
+@patch("proxy.service.DbtCoreOperation.__init__", return_value=None)
+@patch("proxy.service.DbtCoreOperation.save", new_callable=AsyncMock)
+@patch(
+    "proxy.service._block_id", return_value=("test_block_id", "test_cleaned_blockname")
+)
+async def test_create_dbt_core_block_success(
+    mock_block_id, mock_dbtcoreoperation_save, mock_dbtcoreoperation_init, mock_save
+):
+    with tempfile.TemporaryDirectory() as tempdir:
+        payload = DbtCoreCreate(
+            blockName="test_block_name",
+            profile=DbtProfileCreate(
+                name="test_name",
+                target_configs_schema="test_outputs_path",
+            ),
+            wtype="postgres",
+            credentials={
+                "username": "test_username",
+                "password": "test_password",
+                "database": "test_database",
+                "host": "test_host",
+                "port": "test_port",
+            },
+            commands=["run"],
+            env={"test_key": "test_value"},
+            working_dir=tempdir,
+            profiles_dir="test_profiles_dir",
+            project_dir="test_project_dir",
+        )
 
-#         result = await create_dbt_core_block(payload)
+        result = await create_dbt_core_block(payload)
 
-#         assert result == (('test_block_id', 'test_cleaned_blockname'), 'testblockname')
+        assert result == (("test_block_id", "test_cleaned_blockname"), "testblockname")
 
 
 @pytest.mark.asyncio
@@ -731,41 +881,42 @@ async def test_create_dbt_core_block_failure():
     assert str(excinfo.value) == "payload must be a DbtCoreCreate"
 
 
-# @pytest.mark.asyncio
-# @patch("proxy.service.DbtCliProfile.save", new_callable=AsyncMock)
-# @patch("proxy.service.DbtCoreOperation.__init__", return_value=None)
-# @patch("proxy.service.DbtCoreOperation.save", side_effect=Exception("Test error"))
-# @patch("proxy.service._block_id", return_value=("test_block_id", "test_cleaned_blockname"))
-# async def test_create_dbt_core_block_exception(
-#     mock_block_id, mock_dbtcoreoperation_save, mock_dbtcoreoperation_init, mock_save
-# ):
-#     with tempfile.TemporaryDirectory() as tempdir:
-#         payload = DbtCoreCreate(
-#             blockName="test_block_name",
-#             profile=DbtProfileCreate(
-#                 name="test_name",
-#                 target="test_target",
-#                 target_configs_schema="test_outputs_path",
-#             ),
-#             wtype="postgres",
-#             credentials={
-#                 "username": "test_username",
-#                 "password": "test_password",
-#                 "database": "test_database",
-#                 "host": "test_host",
-#                 "port": "test_port",
-#             },
-#             commands=["run"],
-#             env={"test_key": "test_value"},
-#             working_dir=tempdir,
-#             profiles_dir="test_profiles_dir",
-#             project_dir="test_project_dir",
-#         )
+@pytest.mark.asyncio
+@patch("proxy.service.DbtCliProfile.save", new_callable=AsyncMock)
+@patch("proxy.service.DbtCoreOperation.__init__", return_value=None)
+@patch("proxy.service.DbtCoreOperation.save", side_effect=Exception("Test error"))
+@patch(
+    "proxy.service._block_id", return_value=("test_block_id", "test_cleaned_blockname")
+)
+async def test_create_dbt_core_block_exception(
+    mock_block_id, mock_dbtcoreoperation_save, mock_dbtcoreoperation_init, mock_save
+):
+    with tempfile.TemporaryDirectory() as tempdir:
+        payload = DbtCoreCreate(
+            blockName="test_block_name",
+            profile=DbtProfileCreate(
+                name="test_name",
+                target_configs_schema="test_outputs_path",
+            ),
+            wtype="postgres",
+            credentials={
+                "username": "test_username",
+                "password": "test_password",
+                "database": "test_database",
+                "host": "test_host",
+                "port": "test_port",
+            },
+            commands=["run"],
+            env={"test_key": "test_value"},
+            working_dir=tempdir,
+            profiles_dir="test_profiles_dir",
+            project_dir="test_project_dir",
+        )
 
-#         with pytest.raises(PrefectException) as exc_info:
-#             await create_dbt_core_block(payload)
+        with pytest.raises(PrefectException) as exc_info:
+            await create_dbt_core_block(payload)
 
-#         assert str(exc_info.value) == "failed to create dbt core op block"
+        assert str(exc_info.value) == "failed to create dbt core op block"
 
 
 @pytest.mark.asyncio
@@ -791,6 +942,255 @@ async def test_delete_dbt_core_block_type_error():
         await delete_dbt_core_block(block_id)
 
     assert str(exc_info.value) == "block_id must be a string"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.Secret.save", new_callable=AsyncMock)
+async def test_create_secret_block(mock_save: AsyncMock):
+    mock_save.side_effect = Exception("exception thrown")
+    payload = PrefectSecretBlockCreate(secret="my-secret", blockName="my-blockname")
+    with pytest.raises(PrefectException) as excinfo:
+        await create_secret_block(payload)
+    assert str(excinfo.value) == "Could not create a secret block"
+
+
+@pytest.mark.asyncio
+@patch(
+    "proxy.service.DbtCoreOperation.load",
+    AsyncMock(side_effect=Exception()),
+)
+async def test_update_postgres_credentials_wrong_name():
+    with pytest.raises(PrefectException) as excinfo:
+        await update_postgres_credentials("dne", {})
+    assert str(excinfo.value) == "no dbt core op block named dne"
+
+
+@pytest.mark.asyncio
+@patch(
+    "proxy.service.DbtCoreOperation.load",
+    AsyncMock(
+        return_value=Mock(
+            dbt_cli_profile=Mock(target_configs=Mock(type="not-postgres"))
+        )
+    ),
+)
+async def test_update_postgres_credentials_wrong_blocktype():
+    with pytest.raises(TypeError) as excinfo:
+        await update_postgres_credentials("blockname", {})
+    assert str(excinfo.value) == "wrong blocktype"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.DbtCoreOperation.load", new_callable=AsyncMock)
+async def test_update_postgres_credentials_success(mock_load):
+    dbt_coreop_block = Mock(
+        dbt_cli_profile=Mock(
+            target_configs=Mock(
+                type="postgres",
+                dict=Mock(
+                    return_value={
+                        "extras": {
+                            "host": "old_host",
+                            "database": "old_database",
+                            "user": "old_user",
+                            "password": "old_password",
+                        },
+                        "schema": "old_schema",
+                    }
+                ),
+            ),
+            save=AsyncMock(),
+        ),
+        save=AsyncMock(),
+    )
+    dbt_coreop_block.dbt_cli_profile.name = "block-name"
+    mock_load.return_value = dbt_coreop_block
+
+    await update_postgres_credentials(
+        "block-name", {"host": "new_host", "dbname": "new_database"}
+    )
+
+    dbt_coreop_block.dbt_cli_profile.save.assert_called_once_with(
+        name="block-name", overwrite=True
+    )
+    dbt_coreop_block.save.assert_called_once_with("block-name", overwrite=True)
+
+    assert dbt_coreop_block.dbt_cli_profile.target_configs.type == "postgres"
+    assert dbt_coreop_block.dbt_cli_profile.target_configs.extras == {
+        "host": "new_host",
+        "database": "new_database",
+        "user": "old_user",
+        "password": "old_password",
+    }
+
+
+@pytest.mark.asyncio
+@patch(
+    "proxy.service.DbtCoreOperation.load",
+    AsyncMock(side_effect=Exception()),
+)
+async def test_update_bigquery_credentials_wrong_name():
+    with pytest.raises(PrefectException) as excinfo:
+        await update_bigquery_credentials("dne", {})
+    assert str(excinfo.value) == "no dbt core op block named dne"
+
+
+@pytest.mark.asyncio
+@patch(
+    "proxy.service.DbtCoreOperation.load",
+    AsyncMock(
+        return_value=Mock(
+            dbt_cli_profile=Mock(target_configs=Mock(type="not-bigquery"))
+        )
+    ),
+)
+async def test_update_bigquery_credentials_wrong_blocktype():
+    with pytest.raises(TypeError) as excinfo:
+        await update_bigquery_credentials("blockname", {})
+    assert str(excinfo.value) == "wrong blocktype"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.DbtCoreOperation.load", new_callable=AsyncMock)
+@patch("proxy.service.GcpCredentials", Mock(return_value={}))
+@patch("proxy.service.BigQueryTargetConfigs", Mock())
+async def test_update_bigquery_credentials_success(mock_load):
+    dbt_coreop_block = Mock(
+        dbt_cli_profile=Mock(
+            target_configs=Mock(
+                type="bigquery",
+                dict=Mock(
+                    return_value={
+                        "extras": {},
+                        "schema_": "old_schema",
+                    }
+                ),
+            ),
+            save=AsyncMock(),
+        ),
+        save=AsyncMock(),
+    )
+    dbt_coreop_block.dbt_cli_profile.name = "block-name"
+    mock_load.return_value = dbt_coreop_block
+
+    await update_bigquery_credentials("block-name", {})
+
+    dbt_coreop_block.dbt_cli_profile.save.assert_called_once_with(
+        name="block-name", overwrite=True
+    )
+    dbt_coreop_block.save.assert_called_once_with("block-name", overwrite=True)
+
+
+@pytest.mark.asyncio
+@patch(
+    "proxy.service.DbtCoreOperation.load",
+    AsyncMock(side_effect=Exception()),
+)
+async def test_update_target_configs_schema_no_block_named():
+    with pytest.raises(PrefectException) as excinfo:
+        await update_target_configs_schema("dne", {})
+    assert str(excinfo.value) == "no dbt core op block named dne"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.DbtCoreOperation.load", new_callable=AsyncMock)
+async def test_update_target_configs_schema(mock_load):
+    dbt_coreop_block = Mock(
+        dbt_cli_profile=Mock(
+            target_configs=Mock(schema="oldtarget"),
+            target="oldtarget",
+            save=AsyncMock(),
+        ),
+        commands=["dbt run --target oldtarget"],
+        save=AsyncMock(),
+    )
+    dbt_coreop_block.dbt_cli_profile.name = "block-name"
+    mock_load.return_value = dbt_coreop_block
+
+    await update_target_configs_schema("block-name", "newtarget")
+
+    dbt_coreop_block.dbt_cli_profile.save.assert_called_once_with(
+        name="block-name", overwrite=True
+    )
+    dbt_coreop_block.save.assert_called_once_with("block-name", overwrite=True)
+
+    assert dbt_coreop_block.dbt_cli_profile.target_configs.schema == "newtarget"
+    assert dbt_coreop_block.dbt_cli_profile.target == "newtarget"
+    assert dbt_coreop_block.commands[0] == "dbt run --target newtarget"
+
+
+@pytest.mark.asyncio
+async def test_post_deployment_bad_payload():
+    with pytest.raises(TypeError) as excinfo:
+        await post_deployment(123)
+    assert str(excinfo.value) == "payload must be a DeploymentCreate"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.Deployment.build_from_flow", new_callable=AsyncMock)
+@patch(
+    "proxy.service.deployment_schedule_flow_v2",
+    new_callable=Mock,
+)
+async def test_post_deployment(deployment_schedule_flow_v2, mock_build):
+    payload = DeploymentCreate(
+        flow_name="flow-name",
+        deployment_name="deployment-name",
+        org_slug="org-slug",
+        connection_blocks=[],
+        dbt_blocks=[],
+        cron=None,
+    )
+    deployment = Mock(
+        apply=AsyncMock(return_value="deployment-id"),
+    )
+    deployment.name = "deployment-name"
+
+    mock_build.return_value = deployment
+    deployment_schedule_flow_v2.with_options = Mock(return_value="dsf")
+
+    response = await post_deployment(payload)
+    assert response["id"] == "deployment-id"
+    assert response["name"] == "deployment-name"
+    mock_build.assert_called_once_with(
+        flow="dsf",
+        name=payload.deployment_name,
+        work_queue_name="ddp",
+        tags=[payload.org_slug],
+    )
+
+
+def test_put_deployment_bad_param():
+    payload = 123
+    with pytest.raises(TypeError) as excinfo:
+        put_deployment("deployment-id", payload)
+    assert str(excinfo.value) == "payload must be a DeploymentUpdate"
+
+
+@patch("proxy.service.prefect_patch")
+def test_put_deployment(mock_patch: Mock):
+    payload = DeploymentUpdate(cron="* * * * *")
+    mock_patch.return_value = "retval"
+    response = put_deployment("deployment-id", payload)
+    mock_patch.assert_called_once_with(
+        f"deployments/deployment-id",
+        {"schedule": CronSchedule(cron="* * * * *").dict()},
+    )
+    assert response == "retval"
+
+
+def test_get_deployment_bad_param():
+    with pytest.raises(TypeError) as excinfo:
+        get_deployment(123)
+    assert str(excinfo.value) == "deployment_id must be a string"
+
+
+@patch("proxy.service.prefect_get")
+def test_put_deployment(mock_get: Mock):
+    mock_get.return_value = "retval"
+    response = get_deployment("deployment-id")
+    mock_get.assert_called_once_with(f"deployments/deployment-id")
+    assert response == "retval"
 
 
 def test_get_flow_runs_by_deployment_id_type_error():
@@ -866,7 +1266,16 @@ def test_get_deployments_by_filter_prefect_post():
     with patch("proxy.service.prefect_post") as prefect_post_mock:
         org_slug = "org_slug"
         deployment_ids = ["deployment1", "deployment2"]
-        get_deployments_by_filter(org_slug, deployment_ids)
+        prefect_post_mock.return_value = [
+            {
+                "name": "name1",
+                "id": "id1",
+                "tags": "tags1",
+                "schedule": {"cron": "cron1"},
+                "is_schedule_active": True,
+            }
+        ]
+        response = get_deployments_by_filter(org_slug, deployment_ids)
         query = {
             "deployments": {
                 "operator": "and_",
@@ -875,6 +1284,39 @@ def test_get_deployments_by_filter_prefect_post():
             }
         }
         prefect_post_mock.assert_called_with("deployments/filter", query)
+        assert response == [
+            {
+                "name": "name1",
+                "deploymentId": "id1",
+                "tags": "tags1",
+                "cron": "cron1",
+                "isScheduleActive": True,
+            }
+        ]
+
+
+@pytest.mark.asyncio
+async def test_post_deployment_flow_run_badargs():
+    with pytest.raises(TypeError) as excinfo:
+        await post_deployment_flow_run(123)
+    assert str(excinfo.value) == "deployment_id must be a string"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.run_deployment", new_callable=AsyncMock)
+async def test_post_deployment_flow_run(mock_run_deployment: AsyncMock):
+    mock_run_deployment.return_value = Mock(id="return-id")
+    response = await post_deployment_flow_run("deployment-id")
+    assert response["flow_run_id"] == "return-id"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.run_deployment", new_callable=AsyncMock)
+async def test_post_deployment_flow_run_failed(mock_run_deployment: AsyncMock):
+    mock_run_deployment.side_effect = Exception("exception")
+    with pytest.raises(PrefectException) as excinfo:
+        await post_deployment_flow_run("deployment-id")
+    assert str(excinfo.value) == "Failed to create deployment flow run"
 
 
 def test_parse_log_type_error():
@@ -901,6 +1343,14 @@ def test_traverse_flow_run_graph_type_error():
         traverse_flow_run_graph(123, [])
     with pytest.raises(TypeError):
         traverse_flow_run_graph("flow_run_id", "invalid flow_runs")
+
+
+@patch("proxy.service.prefect_get")
+def test_traverse_flow_run_graph_1(mock_get: Mock):
+    mock_get.return_value = []
+    response = traverse_flow_run_graph("4", ["1", "2", "3"])
+
+    assert response == ["1", "2", "3", "4"]
 
 
 def test_get_flow_run_logs_type_error():
@@ -979,6 +1429,22 @@ def test_set_deployment_schedule_prefect_post():
         prefect_post_mock.assert_called_with(
             f"deployments/{deployment_id}/set_schedule_inactive", {}
         )
+
+
+@patch("proxy.service.prefect_get")
+def test_get_flow_run_success(mock_get: Mock):
+    mock_get.return_value = "flow-run"
+    response = get_flow_run("flow-run-id")
+    mock_get.assert_called_once_with("flow_runs/flow-run-id")
+    assert response == "flow-run"
+
+
+@patch("proxy.service.prefect_get")
+def test_get_flow_run_falure(mock_get: Mock):
+    mock_get.side_effect = Exception("exception")
+    with pytest.raises(PrefectException) as excinfo:
+        get_flow_run("flow-run-id")
+    assert str(excinfo.value) == "failed to fetch a flow-run"
 
 
 def test_set_deployment_schedule_result():

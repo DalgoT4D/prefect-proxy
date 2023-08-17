@@ -5,6 +5,7 @@ from fastapi import HTTPException
 
 from prefect.deployments import Deployment, run_deployment
 from prefect.server.schemas.schedules import CronSchedule
+from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 
@@ -14,10 +15,9 @@ from prefect_dbt.cli.configs import BigQueryTargetConfigs
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
 from dotenv import load_dotenv
-from logger import logger
 
 
-from proxy.helpers import cleaned_name_for_prefectblock
+from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock
 from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -25,9 +25,11 @@ from proxy.schemas import (
     PrefectShellSetup,
     DbtCoreCreate,
     DeploymentCreate,
+    DeploymentUpdate,
+    PrefectSecretBlockCreate,
 )
 from proxy.flows import (
-    deployment_schedule_flow,
+    deployment_schedule_flow_v2,
 )
 
 load_dotenv()
@@ -35,6 +37,9 @@ load_dotenv()
 FLOW_RUN_FAILED = "FAILED"
 FLOW_RUN_COMPLETED = "COMPLETED"
 FLOW_RUN_SCHEDULED = "SCHEDULED"
+
+
+logger = CustomLogger("prefect-proxy")
 
 
 def prefect_post(endpoint: str, payload: dict) -> dict:
@@ -55,6 +60,29 @@ def prefect_post(endpoint: str, payload: dict) -> dict:
     return res.json()
 
 
+def prefect_patch(endpoint: str, payload: dict) -> dict:
+    """POST request to prefect server"""
+    if not isinstance(endpoint, str):
+        raise TypeError("endpoint must be a string")
+    if not isinstance(payload, dict):
+        raise TypeError("payload must be a dictionary")
+
+    root = os.getenv("PREFECT_API_URL")
+    res = requests.patch(f"{root}/{endpoint}", timeout=30, json=payload)
+    logger.info(res.text)
+    try:
+        res.raise_for_status()
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=res.text) from error
+
+    # no content
+    if res.status_code == 204:
+        return {}
+
+    return res.json()
+
+
 def prefect_get(endpoint: str) -> dict:
     """GET request to prefect server"""
     if not isinstance(endpoint, str):
@@ -67,6 +95,7 @@ def prefect_get(endpoint: str) -> dict:
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
+
     return res.json()
 
 
@@ -82,6 +111,11 @@ def prefect_delete(endpoint: str) -> dict:
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
+
+    # no content
+    if res.status_code == 204:
+        return {}
+
     return res.json()
 
 
@@ -106,7 +140,7 @@ def post_filter_blocks(block_names) -> dict:
         return prefect_post("block_documents/filter", query)
     except Exception as err:
         logger.exception(err)
-        raise PrefectException("failed to create deployment") from err
+        raise PrefectException("failed to filter blocks") from err
 
 
 # ================================================================================================
@@ -116,7 +150,10 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
         raise TypeError("blockname must be a string")
     try:
         block = await AirbyteServer.load(blockname)
-        logger.info("found airbyte server block named %s", blockname)
+        logger.info(
+            "found airbyte server block named %s",
+            blockname,
+        )
         return _block_id(block)
     except ValueError:
         logger.error("no airbyte server block named %s", blockname)
@@ -127,7 +164,6 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
     """Create airbyte server block in prefect"""
     if not isinstance(payload, AirbyteServerCreate):
         raise TypeError("payload must be an AirbyteServerCreate")
-
     airbyteservercblock = AirbyteServer(
         server_host=payload.serverHost,
         server_port=payload.serverPort,
@@ -166,10 +202,16 @@ async def get_airbyte_connection_block_id(blockname: str) -> str | None:
         raise TypeError("blockname must be a string")
     try:
         block = await AirbyteConnection.load(blockname)
-        logger.info("found airbyte connection block named %s", blockname)
+        logger.info(
+            "found airbyte connection block named %s",
+            blockname,
+        )
         return _block_id(block)
     except ValueError:
-        logger.error("no airbyte connection block named %s", blockname)
+        logger.error(
+            "no airbyte connection block named %s",
+            blockname,
+        )
         # pylint: disable=raise-missing-from
         raise HTTPException(
             status_code=404, detail=f"No airbyte connection block named {blockname}"
@@ -198,7 +240,6 @@ async def create_airbyte_connection_block(
     """Create airbyte connection block"""
     if not isinstance(conninfo, AirbyteConnectionCreate):
         raise TypeError("conninfo must be an AirbyteConnectionCreate")
-
     logger.info(conninfo)
     try:
         serverblock = await AirbyteServer.load(conninfo.serverBlockName)
@@ -261,29 +302,27 @@ async def get_shell_block_id(blockname: str) -> str | None:
         )
 
 
-async def create_shell_block(shell: PrefectShellSetup) -> str:
+async def create_shell_block(shell: PrefectShellSetup):
     """Create a prefect shell block"""
     if not isinstance(shell, PrefectShellSetup):
         raise TypeError("shell must be a PrefectShellSetup")
-
     shell_operation_block = ShellOperation(
         commands=shell.commands, env=shell.env, working_dir=shell.workingDir
     )
     try:
         block_name_for_save = cleaned_name_for_prefectblock(shell.blockName)
-        await shell_operation_block.save(block_name_for_save)
+        await shell_operation_block.save(block_name_for_save, overwrite=True)
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create shell block") from error
     logger.info("created shell operation block %s", shell.blockName)
-    return _block_id(shell_operation_block)
+    return _block_id(shell_operation_block), block_name_for_save
 
 
 def delete_shell_block(blockid: str) -> dict:
     """Delete a prefect shell block"""
     if not isinstance(blockid, str):
         raise TypeError("blockid must be a string")
-
     logger.info("deleting shell operation block %s", blockid)
     return prefect_delete(f"block_documents/{blockid}")
 
@@ -308,8 +347,7 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
     """credentials are decrypted by now"""
     if not isinstance(payload, DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
-    logger.info(payload)
-
+    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
         target_configs = TargetConfigs(
             type="postgres",
@@ -328,6 +366,9 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
         target_configs = BigQueryTargetConfigs(
             credentials=dbcredentials,
             schema=payload.profile.target_configs_schema,
+            extras={
+                "location": payload.bqlocation,
+            },
         )
     else:
         raise PrefectException("unknown wtype: " + payload.wtype)
@@ -335,7 +376,7 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
     try:
         dbt_cli_profile = DbtCliProfile(
             name=payload.profile.name,
-            target=payload.profile.target,
+            target=payload.profile.target_configs_schema,
             target_configs=target_configs,
         )
         await dbt_cli_profile.save(
@@ -352,7 +393,7 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
     """Create a dbt core block in prefect"""
     if not isinstance(payload, DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
-    logger.info(payload)
+    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
 
     dbt_cli_profile = await _create_dbt_cli_profile(payload)
     dbt_core_operation = DbtCoreOperation(
@@ -384,6 +425,121 @@ def delete_dbt_core_block(block_id: str) -> dict:
     return prefect_delete(f"block_documents/{block_id}")
 
 
+async def create_secret_block(payload: PrefectSecretBlockCreate):
+    """Create a prefect block of type secret"""
+    try:
+        secret_block = Secret(value=payload.secret)
+        cleaned_blockname = cleaned_name_for_prefectblock(payload.blockName)
+        await secret_block.save(cleaned_blockname, overwrite=True)
+    except Exception as error:
+        raise PrefectException("Could not create a secret block") from error
+
+    return _block_id(secret_block), cleaned_blockname
+
+
+async def update_postgres_credentials(dbt_blockname, new_extras):
+    """updates the database credentials inside a dbt postgres block"""
+    try:
+        block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
+    except Exception as error:
+        raise PrefectException("no dbt core op block named " + dbt_blockname) from error
+
+    if block.dbt_cli_profile.target_configs.type != "postgres":
+        raise TypeError("wrong blocktype")
+
+    aliases = {
+        "dbname": "database",
+        "username": "user",
+    }
+
+    extras = block.dbt_cli_profile.target_configs.dict()["extras"]
+    cleaned_extras = {}
+    # copy existing extras over to cleaned_extras with the right keys
+    for key, value in extras.items():
+        cleaned_extras[aliases.get(key, key)] = value
+
+    # copy new extras over to cleaned_extras with the right keys
+    for key, value in new_extras.items():
+        cleaned_extras[aliases.get(key, key)] = value
+
+    block.dbt_cli_profile.target_configs = TargetConfigs(
+        type=block.dbt_cli_profile.target_configs.type,
+        schema=block.dbt_cli_profile.target_configs.dict()["schema"],
+        extras=cleaned_extras,
+    )
+
+    try:
+        await block.dbt_cli_profile.save(
+            name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
+            overwrite=True,
+        )
+        await block.save(cleaned_name_for_prefectblock(dbt_blockname), overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to update dbt cli profile [postgres]") from error
+
+
+async def update_bigquery_credentials(dbt_blockname: str, credentials: dict):
+    """updates the database credentials inside a dbt bigquery block"""
+    try:
+        block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
+    except Exception as error:
+        raise PrefectException("no dbt core op block named " + dbt_blockname) from error
+
+    if block.dbt_cli_profile.target_configs.type != "bigquery":
+        raise TypeError("wrong blocktype")
+
+    dbcredentials = GcpCredentials(service_account_info=credentials)
+
+    block.dbt_cli_profile.target_configs = BigQueryTargetConfigs(
+        credentials=dbcredentials,
+        schema=block.dbt_cli_profile.target_configs.dict()["schema_"],
+        extras=block.dbt_cli_profile.target_configs.dict()["extras"],
+    )
+
+    try:
+        await block.dbt_cli_profile.save(
+            name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
+            overwrite=True,
+        )
+        await block.save(cleaned_name_for_prefectblock(dbt_blockname), overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to update dbt cli profile [bigquery]") from error
+
+
+async def update_target_configs_schema(dbt_blockname: str, target_configs_schema: str):
+    """updates the target inside a dbt bigquery block"""
+    try:
+        block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
+    except Exception as error:
+        raise PrefectException("no dbt core op block named " + dbt_blockname) from error
+
+    block.dbt_cli_profile.target_configs.schema = target_configs_schema
+    block.dbt_cli_profile.target = target_configs_schema
+
+    # update the dbt command "dbt <command> --target <target>"
+    if len(block.commands) > 0:
+        option_index = block.commands[0].find("--target")
+        if option_index > -1:
+            prefix = block.commands[0][: option_index + len("--target ")]
+            new_command = prefix + target_configs_schema
+            block.commands[0] = new_command
+
+    try:
+        await block.dbt_cli_profile.save(
+            name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
+            overwrite=True,
+        )
+        await block.save(cleaned_name_for_prefectblock(dbt_blockname), overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException(
+            "failed to update dbt cli profile target_configs schema for "
+            + dbt_blockname
+        ) from error
+
+
 # ================================================================================================
 async def post_deployment(payload: DeploymentCreate) -> dict:
     """create a deployment from a flow and a schedule"""
@@ -391,10 +547,8 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
         raise TypeError("payload must be a DeploymentCreate")
     logger.info(payload)
 
-    logger.info(payload)
-
     deployment = await Deployment.build_from_flow(
-        flow=deployment_schedule_flow.with_options(name=payload.flow_name),
+        flow=deployment_schedule_flow_v2.with_options(name=payload.flow_name),
         name=payload.deployment_name,
         work_queue_name="ddp",
         tags=[payload.org_slug],
@@ -412,11 +566,27 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
     return {"id": deployment_id, "name": deployment.name}
 
 
+def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:
+    """create a deployment from a flow and a schedule"""
+    if not isinstance(payload, DeploymentUpdate):
+        raise TypeError("payload must be a DeploymentUpdate")
+
+    logger.info(payload)
+
+    schedule = CronSchedule(cron=payload.cron).dict()
+
+    payload = {"schedule": schedule}
+
+    # res will be any empty json if success since status code is 204
+    res = prefect_patch(f"deployments/{deployment_id}", payload)
+    logger.info("Update deployment with ID: %s", deployment_id)
+    return res
+
+
 def get_deployment(deployment_id: str) -> dict:
     """Fetch deployment and its details"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
-
     res = prefect_get(f"deployments/{deployment_id}")
     logger.info("Fetched deployment with ID: %s", deployment_id)
     return res
@@ -515,7 +685,6 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
 async def post_deployment_flow_run(deployment_id: str):
     # pylint: disable=broad-exception-caught
     """Create deployment flow run"""
-
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     try:
@@ -607,6 +776,16 @@ def get_flow_runs_by_name(flow_run_name: str) -> dict:
         logger.exception(error)
         raise PrefectException("failed to fetch flow-runs by name") from error
     return flow_runs
+
+
+def get_flow_run(flow_run_id: str) -> dict:
+    """Get a flow run by its id"""
+    try:
+        flow_run = prefect_get(f"flow_runs/{flow_run_id}")
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException("failed to fetch a flow-run") from err
+    return flow_run
 
 
 def set_deployment_schedule(deployment_id: str, status: str) -> None:

@@ -46,7 +46,6 @@ class DbtProfileCreate(BaseModel):
     """this is part of the dbt block creation payload"""
 
     name: str
-    target: str
     target_configs_schema: str
 
 
@@ -65,6 +64,7 @@ class DbtCoreCreate(BaseModel):
 
     profile: DbtProfileCreate
     wtype: str
+    bqlocation: str = None
     credentials: dict
 
     commands: list
@@ -72,6 +72,20 @@ class DbtCoreCreate(BaseModel):
     working_dir: str
     profiles_dir: str
     project_dir: str
+
+
+class DbtCoreCredentialUpdate(BaseModel):
+    """payload to update a dbt core command block's credentials"""
+
+    blockName: str
+    credentials: dict
+
+
+class DbtCoreSchemaUpdate(BaseModel):
+    """payload to update a dbt core command block's schema and target"""
+
+    blockName: str
+    target_configs_schema: str
 
 
 class DbtCoreBlockResponse(BaseModel):
@@ -118,6 +132,12 @@ class DeploymentCreate(BaseModel):
     cron: str = None
 
 
+class DeploymentUpdate(BaseModel):
+    """parameters to create a deployment from a flow"""
+
+    cron: str
+
+
 class DeploymentFetch(BaseModel):
     """parameters to filter deployments by while fetching"""
 
@@ -141,3 +161,10 @@ class PrefectBlocksDelete(BaseModel):
     """Delete each block having the block ids in the array"""
 
     block_ids: list[str] | None
+
+
+class PrefectSecretBlockCreate(BaseModel):
+    """Schema for creating a block to store a secret string in prefect"""
+
+    secret: str
+    blockName: str
