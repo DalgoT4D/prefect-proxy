@@ -30,7 +30,6 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           touch ~/.ssh/known_hosts
-          cat ~/.ssh/known_hosts
       - name: Add remote host key to known_hosts
         run: ssh-keyscan ${{ secrets.SERVERIP }} >> ~/.ssh/known_hosts
       - name: Set up port forwarding via SSH
@@ -44,7 +43,9 @@ jobs:
       - name: Test with pytest
         env: 
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/google_credentials.json
+          LOGDIR: ${{ env.GITHUB_WORKSPACE }}/logs
         run: |
+          mkdir -p $LOGDIR
           coverage run -m pytest
           coverage report --fail-under=70
           coverage xml
