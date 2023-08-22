@@ -260,9 +260,9 @@ async def test_post_airbyte_server_success():
         apiVersion="v1",
     )
     request = client.request("POST", "/")
-    with patch("proxy.main.create_airbyte_server_block", return_value="12345"):
+    with patch("proxy.main.create_airbyte_server_block", return_value=("12345", "testserver")):
         response = await post_airbyte_server(request, payload)
-        assert response == {"block_id": "12345"}
+        assert response == {"block_id": "12345", "cleaned_block_name": "testserver"}
 
 
 @pytest.mark.asyncio

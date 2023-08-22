@@ -160,7 +160,7 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
         return None
 
 
-async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
+async def create_airbyte_server_block(payload: AirbyteServerCreate):
     """Create airbyte server block in prefect"""
     if not isinstance(payload, AirbyteServerCreate):
         raise TypeError("payload must be an AirbyteServerCreate")
