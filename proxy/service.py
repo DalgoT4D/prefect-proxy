@@ -176,7 +176,7 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
         logger.exception(error)
         raise PrefectException("failed to create airbyte server block") from error
     logger.info("created airbyte server block named %s", payload.blockName)
-    return _block_id(airbyteservercblock)
+    return _block_id(airbyteservercblock), block_name_for_save
 
 
 def update_airbyte_server_block(blockname: str):

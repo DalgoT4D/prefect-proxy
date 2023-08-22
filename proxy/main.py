@@ -201,14 +201,14 @@ async def post_airbyte_server(request: Request, payload: AirbyteServerCreate):
     if not isinstance(payload, AirbyteServerCreate):
         raise TypeError("payload is invalid")
     try:
-        block_id = await create_airbyte_server_block(payload)
+        block_id, cleaned_block_name = await create_airbyte_server_block(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
             status_code=400, detail="failed to create airbyte server block"
         ) from error
     logger.info("Created new airbyte server block with ID: %s", block_id)
-    return {"block_id": block_id}
+    return {"block_id": block_id, "cleaned_block_name": cleaned_block_name}
 
 
 # =============================================================================
