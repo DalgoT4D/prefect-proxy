@@ -160,7 +160,7 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
         return None
 
 
-async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
+async def create_airbyte_server_block(payload: AirbyteServerCreate):
     """Create airbyte server block in prefect"""
     if not isinstance(payload, AirbyteServerCreate):
         raise TypeError("payload must be an AirbyteServerCreate")
@@ -176,7 +176,7 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate) -> str:
         logger.exception(error)
         raise PrefectException("failed to create airbyte server block") from error
     logger.info("created airbyte server block named %s", payload.blockName)
-    return _block_id(airbyteservercblock)
+    return _block_id(airbyteservercblock), block_name_for_save
 
 
 def update_airbyte_server_block(blockname: str):

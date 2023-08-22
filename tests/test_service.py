@@ -345,7 +345,7 @@ async def test_create_airbyte_server_block():
         apiVersion="test_version",
     )
     result = await create_airbyte_server_block(payload)
-    assert result == "expected_block_id"
+    assert result == ("expected_block_id", "testblock")
 
 
 @pytest.mark.asyncio
