@@ -41,14 +41,7 @@ def run_airbyte_connection_flow(block_name: str):
 def run_dbtcore_flow(block_name: str):
     # pylint: disable=broad-exception-caught
     """Prefect flow to run dbt"""
-    try:
-        dbt_op: DbtCoreOperation = DbtCoreOperation.load(block_name)
-        if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
-            os.unlink(dbt_op.profiles_dir / "profiles.yml")
-        return dbt_op.run()
-    except Exception as error:  # skipcq PYL-W0703
-        logger.exception(error)
-        raise
+    return dbtjob(block_name)
 
 
 # =============================================================================
