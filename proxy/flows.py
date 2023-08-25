@@ -6,7 +6,7 @@ https://docs.prefect.io/2.11.3/concepts/flows/#final-state-determination
 import os
 from prefect import flow, task
 from prefect.blocks.system import Secret
-from prefect.states import State
+from prefect.states import State, StateType
 from prefect_airbyte.flows import run_connection_sync
 from prefect_airbyte import AirbyteConnection
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
@@ -138,6 +138,7 @@ def dbtjob(dbt_op_name: str):
     errors are propagated to the flow except those from "dbt test"
     """
     dbt_op: DbtCoreOperation = DbtCoreOperation.load(dbt_op_name)
+    logger.info("running dbtjob with DBT_TEST_FAILED update")
 
     if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
         os.unlink(dbt_op.profiles_dir / "profiles.yml")
@@ -146,7 +147,11 @@ def dbtjob(dbt_op_name: str):
         return dbt_op.run()
     except Exception:  # skipcq PYL-W0703
         if dbt_op_name.endswith("-test"):
-            return State(type="COMPLETED", message=f"WARNING: {dbt_op_name} failed")
+            return State(
+                type=StateType.CRASHED,
+                name="DBT_TEST_FAILED",
+                message=f"WARNING: {dbt_op_name} failed",
+            )
 
         raise
 
