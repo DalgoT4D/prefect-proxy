@@ -632,7 +632,7 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
         query = {
             "flow_runs": {
                 "operator": "and_",
-                "id": {"any_": [all_ids_to_look_at]},
+                "id": {"any_": all_ids_to_look_at},
             },
         }
         result = prefect_post("task_runs/filter/", query)
