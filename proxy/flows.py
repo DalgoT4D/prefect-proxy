@@ -183,3 +183,32 @@ def deployment_schedule_flow_v2(airbyte_blocks: list, dbt_blocks: list):
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
         raise
+
+
+@flow
+def deployment_schedule_flow_v3(airbyte_blocks: list, dbt_blocks: list):
+    # pylint: disable=broad-exception-caught
+    """modification so dbt test failures are not propagated as flow failures"""
+    # sort the airbyte blocks by seq
+    airbyte_blocks.sort(key=lambda blk: blk["seq"])
+
+    # sort the dbt blocks by seq
+    dbt_blocks.sort(key=lambda blk: blk["seq"])
+
+    try:
+        # run airbyte blocks, fail if sync fails
+        for block in airbyte_blocks:
+            airbyte_connection = AirbyteConnection.load(block["blockName"])
+            run_connection_sync(airbyte_connection)
+
+        # run dbt blocks, fail on block failure unless the failing block is a dbt-test
+        for block in dbt_blocks:
+            if block["blockType"] == SHELLOPERATION:
+                gitpulljob(block["blockName"])
+
+            elif block["blockType"] == DBTCORE:
+                dbtjob(block["blockName"])
+
+    except Exception as error:  # skipcq PYL-W0703
+        logger.exception(error)
+        raise
