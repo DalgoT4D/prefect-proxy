@@ -52,7 +52,7 @@ def prefect_post(endpoint: str, payload: dict) -> dict:
 
     root = os.getenv("PREFECT_API_URL")
     res = requests.post(f"{root}/{endpoint}", timeout=30, json=payload)
-    logger.info(res.text)
+    # logger.info(res.text)
     try:
         res.raise_for_status()
     except Exception as error:
@@ -70,7 +70,7 @@ def prefect_patch(endpoint: str, payload: dict) -> dict:
 
     root = os.getenv("PREFECT_API_URL")
     res = requests.patch(f"{root}/{endpoint}", timeout=30, json=payload)
-    logger.info(res.text)
+    # logger.info(res.text)
     try:
         res.raise_for_status()
     except Exception as error:
