@@ -119,6 +119,8 @@ def dbtrun(block_name: str, flow_name: str, flow_run_name: str):
     try:
         result = flow(block_name)
         return result
+    except CrashedRun as crashed_run:
+        return str(crashed_run)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
@@ -451,8 +453,6 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
         result = dbtrun(payload.blockName, payload.flowName, payload.flowRunName)
         logger.info(result)
         return {"status": "success", "result": result}
-    except CrashedRun as crashed_run:
-        return {"status": "crashed", "result": str(crashed_run)}
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=str(error)) from error
