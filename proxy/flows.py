@@ -11,7 +11,6 @@ from prefect_airbyte.flows import run_connection_sync
 from prefect_airbyte import AirbyteConnection
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from proxy.helpers import CustomLogger
-from prefect.exceptions import CrashedRun
 
 logger = CustomLogger("prefect-proxy")
 
@@ -149,7 +148,7 @@ def dbtjob(dbt_op_name: str):
     except Exception:  # skipcq PYL-W0703
         if dbt_op_name.endswith("-test"):
             return State(
-                type=StateType.CRASHED,
+                type=StateType.COMPLETED,
                 name="DBT_TEST_FAILED",
                 message=f"WARNING: {dbt_op_name} failed",
             )
@@ -209,9 +208,6 @@ def deployment_schedule_flow_v3(airbyte_blocks: list, dbt_blocks: list):
 
             elif block["blockType"] == DBTCORE:
                 dbtjob(block["blockName"])
-
-    except CrashedRun as crashed_run:
-        pass
 
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)

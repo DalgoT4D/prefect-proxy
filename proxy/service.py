@@ -37,7 +37,6 @@ load_dotenv()
 FLOW_RUN_FAILED = "FAILED"
 FLOW_RUN_COMPLETED = "COMPLETED"
 FLOW_RUN_SCHEDULED = "SCHEDULED"
-FLOW_RUN_CRASHED = "CRASHED"
 
 
 logger = CustomLogger("prefect-proxy")
@@ -611,11 +610,7 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
         "deployments": {"id": {"any_": [deployment_id]}},
         "flow_runs": {
             "operator": "and_",
-            "state": {
-                "type": {
-                    "any_": [FLOW_RUN_COMPLETED, FLOW_RUN_FAILED, FLOW_RUN_CRASHED]
-                }
-            },
+            "state": {"type": {"any_": [FLOW_RUN_COMPLETED, FLOW_RUN_FAILED]}},
         },
     }
 
