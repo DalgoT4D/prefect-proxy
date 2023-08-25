@@ -5,6 +5,7 @@ import requests
 from fastapi import FastAPI, HTTPException, Request
 from prefect_airbyte import AirbyteConnection
 from proxy.helpers import CustomLogger
+from prefect.exceptions import CrashedRun
 
 from proxy.service import (
     get_airbyte_server_block_id,
@@ -450,6 +451,8 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
         result = dbtrun(payload.blockName, payload.flowName, payload.flowRunName)
         logger.info(result)
         return {"status": "success", "result": result}
+    except CrashedRun as crashed_run:
+        return {"status": "crashed", "result": str(crashed_run)}
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=str(error)) from error
