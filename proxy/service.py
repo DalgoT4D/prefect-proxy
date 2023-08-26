@@ -250,8 +250,7 @@ async def create_airbyte_connection_block(
         ) from exc
 
     connection_block = AirbyteConnection(
-        airbyte_server=serverblock,
-        connection_id=conninfo.connectionId,
+        airbyte_server=serverblock, connection_id=conninfo.connectionId, timeout=15
     )
     try:
         block_name_for_save = cleaned_name_for_prefectblock(
