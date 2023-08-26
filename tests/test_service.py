@@ -487,9 +487,10 @@ class MockAirbyteServer:
 
 
 class MockAirbyteConnection:
-    def __init__(self, airbyte_server, connection_id):
+    def __init__(self, airbyte_server, connection_id, timeout):
         self.airbyte_server = airbyte_server
         self.connection_id = connection_id
+        self.timeout = timeout
 
     async def save(self, block_name):
         if self.connection_id == "test_error_connection_id":
