@@ -1130,10 +1130,10 @@ async def test_post_deployment_bad_payload():
 @pytest.mark.asyncio
 @patch("proxy.service.Deployment.build_from_flow", new_callable=AsyncMock)
 @patch(
-    "proxy.service.deployment_schedule_flow_v2",
+    "proxy.service.deployment_schedule_flow_v3",
     new_callable=Mock,
 )
-async def test_post_deployment(deployment_schedule_flow_v2, mock_build):
+async def test_post_deployment(deployment_schedule_flow_v3, mock_build):
     payload = DeploymentCreate(
         flow_name="flow-name",
         deployment_name="deployment-name",
@@ -1148,7 +1148,7 @@ async def test_post_deployment(deployment_schedule_flow_v2, mock_build):
     deployment.name = "deployment-name"
 
     mock_build.return_value = deployment
-    deployment_schedule_flow_v2.with_options = Mock(return_value="dsf")
+    deployment_schedule_flow_v3.with_options = Mock(return_value="dsf")
 
     response = await post_deployment(payload)
     assert response["id"] == "deployment-id"
@@ -1225,28 +1225,61 @@ def test_get_flow_runs_by_deployment_id_prefect_post():
 
 def test_get_flow_runs_by_deployment_id_result():
     with patch("proxy.service.prefect_post") as prefect_post_mock:
-        flow_run = {
-            "id": "flow_run_id",
-            "name": "flow_run_name",
-            "tags": ["tag1", "tag2"],
-            "start_time": "2022-01-01T00:00:00Z",
-            "expected_start_time": "2022-01-01T00:00:00Z",
-            "total_run_time": 60,
-            "state": {"type": "COMPLETED"},
-        }
-        prefect_post_mock.return_value = [flow_run]
-        result = get_flow_runs_by_deployment_id("deployment_id", 10)
-        assert result == [
-            {
-                "id": flow_run["id"],
-                "name": flow_run["name"],
-                "tags": flow_run["tags"],
-                "startTime": flow_run["start_time"],
-                "expectedStartTime": flow_run["expected_start_time"],
-                "totalRunTime": flow_run["total_run_time"],
-                "status": flow_run["state"]["type"],
+        with patch("proxy.service.prefect_get") as prefect_get_mock:
+            prefect_get_mock.return_value = []
+            flow_run = {
+                "id": "flow_run_id",
+                "name": "flow_run_name",
+                "tags": ["tag1", "tag2"],
+                "start_time": "2022-01-01T00:00:00Z",
+                "expected_start_time": "2022-01-01T00:00:00Z",
+                "total_run_time": 60,
+                "state": {"type": "COMPLETED", "name": "Completed"},
             }
-        ]
+            prefect_post_mock.side_effect = [[flow_run], []]
+            result = get_flow_runs_by_deployment_id("deployment_id", 10)
+            assert result == [
+                {
+                    "id": flow_run["id"],
+                    "name": flow_run["name"],
+                    "tags": flow_run["tags"],
+                    "startTime": flow_run["start_time"],
+                    "expectedStartTime": flow_run["expected_start_time"],
+                    "totalRunTime": flow_run["total_run_time"],
+                    "status": flow_run["state"]["type"],
+                    "state_name": "Completed",
+                }
+            ]
+
+
+def test_get_flow_runs_by_deployment_id_result_state_from_task():
+    with patch("proxy.service.prefect_post") as prefect_post_mock:
+        with patch("proxy.service.prefect_get") as prefect_get_mock:
+            prefect_get_mock.return_value = []
+            flow_run = {
+                "id": "flow_run_id",
+                "name": "flow_run_name",
+                "tags": ["tag1", "tag2"],
+                "start_time": "2022-01-01T00:00:00Z",
+                "expected_start_time": "2022-01-01T00:00:00Z",
+                "total_run_time": 60,
+                "state": {"type": "COMPLETED", "name": "Completed"},
+            }
+            task_run = {"state": {"name": "DBT_TEST_FAILED"}}
+            prefect_post_mock.side_effect = [[flow_run], [task_run]]
+            result = get_flow_runs_by_deployment_id("deployment_id", 10)
+            assert result == [
+                {
+                    "id": flow_run["id"],
+                    "name": flow_run["name"],
+                    "tags": flow_run["tags"],
+                    "startTime": flow_run["start_time"],
+                    "expectedStartTime": flow_run["expected_start_time"],
+                    "totalRunTime": flow_run["total_run_time"],
+                    "status": "COMPLETED",
+                    "state_name": "DBT_TEST_FAILED",
+                }
+            ]
 
 
 def test_get_flow_runs_by_deployment_id_exception():

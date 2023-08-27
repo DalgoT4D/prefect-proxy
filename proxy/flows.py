@@ -6,7 +6,7 @@ https://docs.prefect.io/2.11.3/concepts/flows/#final-state-determination
 import os
 from prefect import flow, task
 from prefect.blocks.system import Secret
-from prefect.states import State
+from prefect.states import State, StateType
 from prefect_airbyte.flows import run_connection_sync
 from prefect_airbyte import AirbyteConnection
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
@@ -138,6 +138,7 @@ def dbtjob(dbt_op_name: str):
     errors are propagated to the flow except those from "dbt test"
     """
     dbt_op: DbtCoreOperation = DbtCoreOperation.load(dbt_op_name)
+    logger.info("running dbtjob with DBT_TEST_FAILED update")
 
     if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
         os.unlink(dbt_op.profiles_dir / "profiles.yml")
@@ -146,13 +147,46 @@ def dbtjob(dbt_op_name: str):
         return dbt_op.run()
     except Exception:  # skipcq PYL-W0703
         if dbt_op_name.endswith("-test"):
-            return State(type="COMPLETED", message=f"WARNING: {dbt_op_name} failed")
+            return State(
+                type=StateType.COMPLETED,
+                name="DBT_TEST_FAILED",
+                message=f"WARNING: {dbt_op_name} failed",
+            )
 
         raise
 
 
 @flow
 def deployment_schedule_flow_v2(airbyte_blocks: list, dbt_blocks: list):
+    # pylint: disable=broad-exception-caught
+    """modification so dbt test failures are not propagated as flow failures"""
+    # sort the airbyte blocks by seq
+    airbyte_blocks.sort(key=lambda blk: blk["seq"])
+
+    # sort the dbt blocks by seq
+    dbt_blocks.sort(key=lambda blk: blk["seq"])
+
+    try:
+        # run airbyte blocks, fail if sync fails
+        for block in airbyte_blocks:
+            airbyte_connection = AirbyteConnection.load(block["blockName"])
+            run_connection_sync(airbyte_connection)
+
+        # run dbt blocks, fail on block failure unless the failing block is a dbt-test
+        for block in dbt_blocks:
+            if block["blockType"] == SHELLOPERATION:
+                gitpulljob(block["blockName"])
+
+            elif block["blockType"] == DBTCORE:
+                dbtjob(block["blockName"])
+
+    except Exception as error:  # skipcq PYL-W0703
+        logger.exception(error)
+        raise
+
+
+@flow
+def deployment_schedule_flow_v3(airbyte_blocks: list, dbt_blocks: list):
     # pylint: disable=broad-exception-caught
     """modification so dbt test failures are not propagated as flow failures"""
     # sort the airbyte blocks by seq

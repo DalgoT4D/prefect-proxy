@@ -29,7 +29,7 @@ from proxy.schemas import (
     PrefectSecretBlockCreate,
 )
 from proxy.flows import (
-    deployment_schedule_flow_v2,
+    deployment_schedule_flow_v3,
 )
 
 load_dotenv()
@@ -51,7 +51,7 @@ def prefect_post(endpoint: str, payload: dict) -> dict:
 
     root = os.getenv("PREFECT_API_URL")
     res = requests.post(f"{root}/{endpoint}", timeout=30, json=payload)
-    logger.info(res.text)
+
     try:
         res.raise_for_status()
     except Exception as error:
@@ -69,7 +69,7 @@ def prefect_patch(endpoint: str, payload: dict) -> dict:
 
     root = os.getenv("PREFECT_API_URL")
     res = requests.patch(f"{root}/{endpoint}", timeout=30, json=payload)
-    logger.info(res.text)
+
     try:
         res.raise_for_status()
     except Exception as error:
@@ -547,7 +547,7 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
     logger.info(payload)
 
     deployment = await Deployment.build_from_flow(
-        flow=deployment_schedule_flow_v2.with_options(name=payload.flow_name),
+        flow=deployment_schedule_flow_v3.with_options(name=payload.flow_name),
         name=payload.deployment_name,
         work_queue_name="ddp",
         tags=[payload.org_slug],
@@ -626,6 +626,19 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
             f"failed to fetch flow_runs for deployment {deployment_id}"
         ) from error
     for flow_run in result:
+        # get the tasks if any and check their state names
+        all_ids_to_look_at = traverse_flow_run_graph(flow_run["id"], [])
+        query = {
+            "flow_runs": {
+                "operator": "and_",
+                "id": {"any_": all_ids_to_look_at},
+            },
+        }
+        result = prefect_post("task_runs/filter/", query)
+        if "DBT_TEST_FAILED" in [x["state"]["name"] for x in result]:
+            final_state_name = "DBT_TEST_FAILED"
+        else:
+            final_state_name = flow_run["state"]["name"]
         flow_runs.append(
             {
                 "id": flow_run["id"],
@@ -635,6 +648,7 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
                 "expectedStartTime": flow_run["expected_start_time"],
                 "totalRunTime": flow_run["total_run_time"],
                 "status": flow_run["state"]["type"],
+                "state_name": final_state_name,
             }
         )
 
