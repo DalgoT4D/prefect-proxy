@@ -610,7 +610,7 @@ def get_read_deployment(request: Request, deployment_id):
         "name": deployment["name"],
         "deploymentId": deployment["id"],
         "tags": deployment["tags"],
-        "cron": deployment["schedule"]["cron"],
+        "cron": deployment["schedule"]["cron"] if deployment["schedule"] else "",
         "isScheduleActive": deployment["is_schedule_active"],
         "parameters": deployment["parameters"],
     }
