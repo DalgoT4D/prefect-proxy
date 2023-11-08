@@ -179,7 +179,7 @@ class TestFlowDeployment:
         limit = 10
 
         try:
-            res = get_flow_runs_by_deployment_id(deployment_id, limit)
+            res = get_flow_runs_by_deployment_id(deployment_id, limit, "")
             FlowRunsResponse(flow_runs=res)
         except Exception as e:
             raise ValueError(f"Test failed: {e}")
