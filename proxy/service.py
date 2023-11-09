@@ -591,7 +591,9 @@ def get_deployment(deployment_id: str) -> dict:
     return res
 
 
-def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
+def get_flow_runs_by_deployment_id(
+    deployment_id: str, limit: int, start_time_gt: str
+) -> list:
     """
     Fetch flow runs of a deployment that are FAILED/COMPLETED,
     sorted by descending start time of each run
@@ -612,6 +614,8 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int) -> list:
             "state": {"type": {"any_": [FLOW_RUN_COMPLETED, FLOW_RUN_FAILED]}},
         },
     }
+    if start_time_gt:
+        query["flow_runs"]["start_time"] = {"after_": start_time_gt, "is_null_": True}
 
     if limit > 0:
         query["limit"] = limit

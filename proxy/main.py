@@ -514,7 +514,9 @@ async def get_flowrun(request: Request, payload: FlowRunRequest):
 
 
 @app.get("/proxy/flow_runs")
-def get_flow_runs(request: Request, deployment_id: str, limit: int = 0):
+def get_flow_runs(
+    request: Request, deployment_id: str, limit: int = 0, start_time_gt: str = ""
+):
     """Get Flow Runs for a deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
@@ -524,7 +526,7 @@ def get_flow_runs(request: Request, deployment_id: str, limit: int = 0):
         raise ValueError("limit must be positive")
     logger.info("deployment_id=%s, limit=%s", deployment_id, limit)
     try:
-        flow_runs = get_flow_runs_by_deployment_id(deployment_id, limit)
+        flow_runs = get_flow_runs_by_deployment_id(deployment_id, limit, start_time_gt)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(

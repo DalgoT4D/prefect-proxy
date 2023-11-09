@@ -1196,21 +1196,21 @@ def test_put_deployment(mock_get: Mock):
 
 def test_get_flow_runs_by_deployment_id_type_error():
     with pytest.raises(TypeError):
-        get_flow_runs_by_deployment_id(123, 10)
+        get_flow_runs_by_deployment_id(123, 10, "")
     with pytest.raises(TypeError):
         get_flow_runs_by_deployment_id("deployment_id", "invalid limit")
 
 
 def test_get_flow_runs_by_deployment_id_value_error():
     with pytest.raises(ValueError):
-        get_flow_runs_by_deployment_id("deployment_id", -1)
+        get_flow_runs_by_deployment_id("deployment_id", -1, "")
 
 
 def test_get_flow_runs_by_deployment_id_prefect_post():
     with patch("proxy.service.prefect_post") as prefect_post_mock:
         deployment_id = "deployment_id"
         limit = 10
-        get_flow_runs_by_deployment_id(deployment_id, limit)
+        get_flow_runs_by_deployment_id(deployment_id, limit, "")
         query = {
             "sort": "START_TIME_DESC",
             "deployments": {"id": {"any_": [deployment_id]}},
@@ -1237,7 +1237,7 @@ def test_get_flow_runs_by_deployment_id_result():
                 "state": {"type": "COMPLETED", "name": "Completed"},
             }
             prefect_post_mock.side_effect = [[flow_run], []]
-            result = get_flow_runs_by_deployment_id("deployment_id", 10)
+            result = get_flow_runs_by_deployment_id("deployment_id", 10, "")
             assert result == [
                 {
                     "id": flow_run["id"],
@@ -1267,7 +1267,7 @@ def test_get_flow_runs_by_deployment_id_result_state_from_task():
             }
             task_run = {"state": {"name": "DBT_TEST_FAILED"}}
             prefect_post_mock.side_effect = [[flow_run], [task_run]]
-            result = get_flow_runs_by_deployment_id("deployment_id", 10)
+            result = get_flow_runs_by_deployment_id("deployment_id", 10, "")
             assert result == [
                 {
                     "id": flow_run["id"],
@@ -1286,7 +1286,7 @@ def test_get_flow_runs_by_deployment_id_exception():
     with patch("proxy.service.prefect_post") as prefect_post_mock:
         prefect_post_mock.side_effect = Exception("test error")
         with pytest.raises(PrefectException):
-            get_flow_runs_by_deployment_id("deployment_id", 10)
+            get_flow_runs_by_deployment_id("deployment_id", 10, "")
 
 
 def test_get_deployments_by_filter_type_error():
