@@ -697,7 +697,9 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
                 "name": deployment["name"],
                 "deploymentId": deployment["id"],
                 "tags": deployment["tags"],
-                "cron": deployment["schedule"]["cron"],
+                "cron": deployment["schedule"]["cron"]
+                if deployment["schedule"]
+                else None,
                 "isScheduleActive": deployment["is_schedule_active"],
             }
         )
