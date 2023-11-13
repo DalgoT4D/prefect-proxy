@@ -572,9 +572,15 @@ def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:
 
     logger.info(payload)
 
-    schedule = CronSchedule(cron=payload.cron).dict()
+    schedule = CronSchedule(cron=payload.cron).dict() if payload.cron else None
 
-    payload = {"schedule": schedule}
+    payload = {
+        "schedule": schedule,
+        "parameters": {
+            "airbyte_blocks": payload.connection_blocks,
+            "dbt_blocks": payload.dbt_blocks,
+        },
+    }
 
     # res will be any empty json if success since status code is 204
     res = prefect_patch(f"deployments/{deployment_id}", payload)
