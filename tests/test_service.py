@@ -1170,12 +1170,15 @@ def test_put_deployment_bad_param():
 
 @patch("proxy.service.prefect_patch")
 def test_put_deployment(mock_patch: Mock):
-    payload = DeploymentUpdate(cron="* * * * *")
+    payload = DeploymentUpdate(cron="* * * * *", connection_blocks=[], dbt_blocks=[])
     mock_patch.return_value = "retval"
     response = put_deployment("deployment-id", payload)
     mock_patch.assert_called_once_with(
-        f"deployments/deployment-id",
-        {"schedule": CronSchedule(cron="* * * * *").dict()},
+        "deployments/deployment-id",
+        {
+            "schedule": CronSchedule(cron="* * * * *").dict(),
+            "parameters": {"airbyte_blocks": [], "dbt_blocks": []},
+        },
     )
     assert response == "retval"
 
@@ -1187,7 +1190,7 @@ def test_get_deployment_bad_param():
 
 
 @patch("proxy.service.prefect_get")
-def test_put_deployment(mock_get: Mock):
+def test_get_deployment(mock_get: Mock):
     mock_get.return_value = "retval"
     response = get_deployment("deployment-id")
     mock_get.assert_called_once_with(f"deployments/deployment-id")
@@ -1198,7 +1201,7 @@ def test_get_flow_runs_by_deployment_id_type_error():
     with pytest.raises(TypeError):
         get_flow_runs_by_deployment_id(123, 10, "")
     with pytest.raises(TypeError):
-        get_flow_runs_by_deployment_id("deployment_id", "invalid limit")
+        get_flow_runs_by_deployment_id("deployment_id", "invalid limit", None)
 
 
 def test_get_flow_runs_by_deployment_id_value_error():
