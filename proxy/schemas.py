@@ -135,7 +135,9 @@ class DeploymentCreate(BaseModel):
 class DeploymentUpdate(BaseModel):
     """parameters to create a deployment from a flow"""
 
-    cron: str
+    connection_blocks: list
+    dbt_blocks: list
+    cron: str = None
 
 
 class DeploymentFetch(BaseModel):
