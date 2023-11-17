@@ -621,7 +621,7 @@ def get_flow_runs_by_deployment_id(
         },
     }
     if start_time_gt:
-        query["flow_runs"]["start_time"] = {"after_": start_time_gt, "is_null_": True}
+        query["flow_runs"]["start_time"] = {"after_": start_time_gt}
 
     if limit > 0:
         query["limit"] = limit
