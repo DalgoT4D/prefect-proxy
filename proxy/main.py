@@ -31,6 +31,8 @@ from proxy.service import (
     get_deployment,
     get_flow_run,
     create_secret_block,
+    _create_dbt_cli_profile,
+    _block_id,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -47,6 +49,7 @@ from proxy.schemas import (
     PrefectBlocksDelete,
     AirbyteConnectionBlocksFetch,
     PrefectSecretBlockCreate,
+    DbtCliProfileBlockCreate,
 )
 from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
 
@@ -322,6 +325,32 @@ async def post_dbtcore(request: Request, payload: DbtCoreCreate):
         cleaned_blockname,
     )
     return {"block_id": block_id, "block_name": cleaned_blockname}
+
+
+@app.post("/proxy/blocks/dbtcli/")
+async def post_dbtcore(request: Request, payload: DbtCliProfileBlockCreate):
+    """
+    create a new dbt_core block with this block name,
+    raise an exception if the name is already in use
+    """
+    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
+    if not isinstance(payload, DbtCliProfileBlockCreate):
+        raise TypeError("payload is invalid")
+    try:
+        dbt_cli_profile = await _create_dbt_cli_profile(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create dbt cli profile block"
+        ) from error
+    block_id = _block_id(dbt_cli_profile)
+    block_name = dbt_cli_profile.name
+    logger.info(
+        "Created new dbt cli profile block with ID: %s and name: %s",
+        block_id,
+        block_name,
+    )
+    return {"block_id": block_id, "block_name": block_name}
 
 
 @app.put("/proxy/blocks/dbtcore_edit/postgres/")

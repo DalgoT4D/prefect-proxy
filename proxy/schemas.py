@@ -1,7 +1,7 @@
 """Schemas for requests"""
 
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, Extra
 
 
 class AirbyteServerCreate(BaseModel):
@@ -72,6 +72,15 @@ class DbtCoreCreate(BaseModel):
     working_dir: str
     profiles_dir: str
     project_dir: str
+
+
+class DbtCliProfileBlockCreate(BaseModel, extra=Extra.allow):
+    """payload to create a dbt cli profile block"""
+
+    profile: DbtProfileCreate
+    wtype: str
+    bqlocation: str = None
+    credentials: dict
 
 
 class DbtCoreCredentialUpdate(BaseModel):

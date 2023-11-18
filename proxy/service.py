@@ -27,10 +27,9 @@ from proxy.schemas import (
     DeploymentCreate,
     DeploymentUpdate,
     PrefectSecretBlockCreate,
+    DbtCliProfileBlockCreate,
 )
-from proxy.flows import (
-    deployment_schedule_flow_v3,
-)
+from proxy.flows import deployment_schedule_flow_v3
 
 load_dotenv()
 
@@ -342,10 +341,16 @@ async def get_dbtcore_block_id(blockname: str) -> str | None:
         )
 
 
-async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
+async def _create_dbt_cli_profile(
+    payload: DbtCliProfileBlockCreate | DbtCoreCreate,
+) -> DbtCliProfile:
+    # TODO: remove the DbtCoreCreate type once the api using it is removed
     """credentials are decrypted by now"""
-    if not isinstance(payload, DbtCoreCreate):
-        raise TypeError("payload must be a DbtCoreCreate")
+    if not (
+        isinstance(payload, DbtCliProfileBlockCreate)
+        or isinstance(payload, DbtCoreCreate)
+    ):
+        raise TypeError("payload is of wrong type")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
         target_configs = TargetConfigs(
