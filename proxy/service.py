@@ -379,7 +379,8 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
             target_configs=target_configs,
         )
         await dbt_cli_profile.save(
-            cleaned_name_for_prefectblock(payload.profile.name), overwrite=True
+            cleaned_name_for_prefectblock(payload.cli_profile_block_name),
+            overwrite=True,
         )
     except Exception as error:
         logger.exception(error)
