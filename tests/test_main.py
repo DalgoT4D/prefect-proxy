@@ -260,7 +260,9 @@ async def test_post_airbyte_server_success():
         apiVersion="v1",
     )
     request = client.request("POST", "/")
-    with patch("proxy.main.create_airbyte_server_block", return_value=("12345", "testserver")):
+    with patch(
+        "proxy.main.create_airbyte_server_block", return_value=("12345", "testserver")
+    ):
         response = await post_airbyte_server(request, payload)
         assert response == {"block_id": "12345", "cleaned_block_name": "testserver"}
 
@@ -505,6 +507,7 @@ async def test_post_dbtcore_success():
         ),
         wtype="postgres",
         credentials={"TEST_CREDS": "test_creds"},
+        cli_profile_block_name="test_cli_profile",
         commands=['echo "Hello, World!"'],
         env={"TEST_ENV": "test_value"},
         working_dir="test_dir",
@@ -530,6 +533,7 @@ async def test_post_dbtcore_failure():
         ),
         wtype="postgres",
         credentials={"TEST_CREDS": "test_creds"},
+        cli_profile_block_name="test_cli_profile",
         commands=['echo "Hello, World!"'],
         env={"TEST_ENV": "test_value"},
         working_dir="test_dir",
