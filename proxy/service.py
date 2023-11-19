@@ -1,5 +1,6 @@
 """interface with prefect's python client api"""
 import os
+from time import sleep
 import requests
 from fastapi import HTTPException
 
@@ -54,10 +55,19 @@ def prefect_post(endpoint: str, payload: dict) -> dict:
 
     try:
         res.raise_for_status()
+        return res.json()
+    except Exception as error:  # pylint:disable=broad-exception-caught
+        logger.exception(error)
+        # try again
+        sleep(3)
+
+    res = requests.post(f"{root}/{endpoint}", timeout=30, json=payload)
+    try:
+        res.raise_for_status()
+        return res.json()
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
-    return res.json()
 
 
 def prefect_patch(endpoint: str, payload: dict) -> dict:
@@ -72,15 +82,25 @@ def prefect_patch(endpoint: str, payload: dict) -> dict:
 
     try:
         res.raise_for_status()
+        # no content
+        if res.status_code == 204:
+            return {}
+        return res.json()
+    except Exception as error:  # pylint:disable=broad-exception-caught
+        logger.exception(error)
+        # try again
+        sleep(3)
+
+    res = requests.patch(f"{root}/{endpoint}", timeout=30, json=payload)
+    try:
+        res.raise_for_status()
+        # no content
+        if res.status_code == 204:
+            return {}
+        return res.json()
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
-
-    # no content
-    if res.status_code == 204:
-        return {}
-
-    return res.json()
 
 
 def prefect_get(endpoint: str) -> dict:
@@ -92,11 +112,19 @@ def prefect_get(endpoint: str) -> dict:
     res = requests.get(f"{root}/{endpoint}", timeout=30)
     try:
         res.raise_for_status()
+        return res.json()
+    except Exception as error:  # pylint:disable=broad-exception-caught
+        logger.exception(error)
+        # try again
+        sleep(3)
+
+    res = requests.get(f"{root}/{endpoint}", timeout=30)
+    try:
+        res.raise_for_status()
+        return res.json()
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
-
-    return res.json()
 
 
 def prefect_delete(endpoint: str) -> dict:
@@ -108,15 +136,25 @@ def prefect_delete(endpoint: str) -> dict:
     res = requests.delete(f"{root}/{endpoint}", timeout=30)
     try:
         res.raise_for_status()
-    except Exception as error:
+        # no content
+        if res.status_code == 204:
+            return {}
+        return res.json()
+    except Exception as error:  # pylint:disable=broad-exception-caught
+        logger.exception(error)
+        sleep(3)
+
+    res = requests.delete(f"{root}/{endpoint}", timeout=30)
+    try:
+        res.raise_for_status()
+        # no content
+        if res.status_code == 204:
+            return {}
+        return res.json()
+
+    except Exception as error:  # pylint:disable=broad-exception-caught
         logger.exception(error)
         raise HTTPException(status_code=400, detail=res.text) from error
-
-    # no content
-    if res.status_code == 204:
-        return {}
-
-    return res.json()
 
 
 def _block_id(block: Block) -> str:
