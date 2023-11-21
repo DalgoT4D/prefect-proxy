@@ -882,7 +882,7 @@ async def test_create_dbt_core_block_failure():
     with pytest.raises(TypeError) as excinfo:
         await create_dbt_core_block(payload)
 
-    assert str(excinfo.value) == "payload is of wrong type"
+    assert str(excinfo.value) == "payload must be a DbtCoreCreate"
 
 
 @pytest.mark.asyncio
