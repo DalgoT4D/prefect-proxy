@@ -420,15 +420,16 @@ async def _create_dbt_cli_profile(
             target=payload.profile.target_configs_schema,
             target_configs=target_configs,
         )
+        cleaned_blockname = cleaned_name_for_prefectblock(payload.cli_profile_block_name)
         await dbt_cli_profile.save(
-            cleaned_name_for_prefectblock(payload.cli_profile_block_name),
+            cleaned_blockname,
             overwrite=True,
         )
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create dbt cli profile") from error
 
-    return dbt_cli_profile
+    return dbt_cli_profile, _block_id(dbt_cli_profile), cleaned_blockname
 
 
 async def create_dbt_core_block(payload: DbtCoreCreate):
@@ -437,7 +438,7 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
 
-    dbt_cli_profile = await _create_dbt_cli_profile(payload)
+    dbt_cli_profile, _, _ = await _create_dbt_cli_profile(payload)
     dbt_core_operation = DbtCoreOperation(
         commands=payload.commands,
         env=payload.env,

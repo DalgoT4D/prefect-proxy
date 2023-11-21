@@ -327,8 +327,8 @@ async def post_dbtcore(request: Request, payload: DbtCoreCreate):
     return {"block_id": block_id, "block_name": cleaned_blockname}
 
 
-@app.post("/proxy/blocks/dbtcli/")
-async def post_dbtcore(request: Request, payload: DbtCliProfileBlockCreate):
+@app.post("/proxy/blocks/dbtcli/profile/")
+async def post_dbtcli_profile(request: Request, payload: DbtCliProfileBlockCreate):
     """
     create a new dbt_core block with this block name,
     raise an exception if the name is already in use
@@ -337,20 +337,20 @@ async def post_dbtcore(request: Request, payload: DbtCliProfileBlockCreate):
     if not isinstance(payload, DbtCliProfileBlockCreate):
         raise TypeError("payload is invalid")
     try:
-        dbt_cli_profile = await _create_dbt_cli_profile(payload)
+        _, block_id, cleaned_blockname = await _create_dbt_cli_profile(
+            payload
+        )
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
             status_code=400, detail="failed to create dbt cli profile block"
         ) from error
-    block_id = _block_id(dbt_cli_profile)
-    block_name = dbt_cli_profile.name
     logger.info(
         "Created new dbt cli profile block with ID: %s and name: %s",
         block_id,
-        block_name,
+        cleaned_blockname,
     )
-    return {"block_id": block_id, "block_name": block_name}
+    return {"block_id": block_id, "block_name": cleaned_blockname}
 
 
 @app.put("/proxy/blocks/dbtcore_edit/postgres/")
