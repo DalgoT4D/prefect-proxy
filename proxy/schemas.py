@@ -66,6 +66,7 @@ class DbtCoreCreate(BaseModel):
     wtype: str
     bqlocation: str = None
     credentials: dict
+    cli_profile_block_name: str
 
     commands: list
     env: dict
