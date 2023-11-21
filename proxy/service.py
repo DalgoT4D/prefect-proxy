@@ -344,7 +344,6 @@ async def get_dbtcore_block_id(blockname: str) -> str | None:
 async def _create_dbt_cli_profile(
     payload: DbtCliProfileBlockCreate | DbtCoreCreate,
 ) -> DbtCliProfile:
-    # TODO: remove the DbtCoreCreate type once the api using it is removed
     """credentials are decrypted by now"""
     if not (
         isinstance(payload, DbtCliProfileBlockCreate)

@@ -77,6 +77,7 @@ class DbtCoreCreate(BaseModel):
 class DbtCliProfileBlockCreate(BaseModel, extra=Extra.allow):
     """payload to create a dbt cli profile block"""
 
+    blockName: str
     profile: DbtProfileCreate
     wtype: str
     bqlocation: str = None
