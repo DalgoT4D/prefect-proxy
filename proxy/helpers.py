@@ -79,3 +79,12 @@ def cleaned_name_for_prefectblock(blockname):
     """removes characters which are not lowercase letters, digits or dashes"""
     pattern = re.compile(r"[^\-a-z0-9]")
     return re.sub(pattern, "", blockname.lower())
+
+
+def command_from_dbt_blockname(blockname):
+    """blocknames are of the form orgslug-profile-target-command"""
+    components = blockname.split("-")
+    command = components[3]
+    # for docs-generate this returns docs
+    # see prefect_api.post_prefect_dbt_core_block
+    return command
