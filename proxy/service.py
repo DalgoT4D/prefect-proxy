@@ -32,7 +32,7 @@ from proxy.schemas import (
     DbtCliProfileBlockCreate,
 )
 from proxy.flows import deployment_schedule_flow_v3
-from proxy.flows_v1 import deployment_schedule_flow_v4
+from proxy.prefect_flows import deployment_schedule_flow_v4
 
 load_dotenv()
 
@@ -632,7 +632,11 @@ async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create deployment") from error
-    return {"id": deployment_id, "name": deployment.name, "params": deployment.parameters}
+    return {
+        "id": deployment_id,
+        "name": deployment.name,
+        "params": deployment.parameters,
+    }
 
 
 def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:

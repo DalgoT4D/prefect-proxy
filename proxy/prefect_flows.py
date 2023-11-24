@@ -74,54 +74,24 @@ def gitpulljob_v1(shell_op_name: str):
     return shell_op.run()
 
 
-@flow
-def deployment_schedule_flow_v4(config: dict):
-    # pylint: disable=broad-exception-caught
-    """modification so dbt test failures are not propagated as flow failures"""
-    # sort the airbyte blocks by seq
-    # airbyte_blocks.sort(key=lambda blk: blk["seq"])
-
-    # # sort the dbt blocks by seq
-    # dbt_blocks.sort(key=lambda blk: blk["seq"])
-
-    # try:
-    #     # run airbyte blocks, fail if sync fails
-    #     for block in airbyte_blocks:
-    #         airbyte_connection = AirbyteConnection.load(block["blockName"])
-    #         run_connection_sync(airbyte_connection)
-
-    #     # run dbt blocks, fail on block failure unless the failing block is a dbt-test
-    #     for block in dbt_blocks:
-    #         if block["blockType"] == SHELLOPERATION:
-    #             gitpulljob_v1(block["blockName"])
-
-    #         elif block["blockType"] == DBTCORE:
-    #             dbtjob_v1(
-    #                 block["blockName"], command_from_dbt_blockname(block["blockName"])
-    #             )
-
-    # except Exception as error:  # skipcq PYL-W0703
-    #     logger.exception(error)
-    #     raise
-    print(config)
-
-
 @task(name="dbtjob_v1")
-def dbtjob_v1(dbt_op_name: str):
+def dbtjob_v1(task_config: dict):
     # pylint: disable=broad-exception-caught
     """
     each dbt op will run as a task within the parent flow
     errors are propagated to the flow except those from "dbt test"
     """
+
+    # load the cli block first
+    cli_profile_block = DbtCliProfile.load(task_config["cli_profile_block"])
+
     dbt_op: DbtCoreOperation = DbtCoreOperation(
-        commands=[
-            "/Users/dorjayyolmo/Dev/data/DDP/DBT/ddpui_local_dbt_venv/venv/bin/dbt clean --target prod"
-        ],
-        env={},
-        working_dir="/Users/dorjayyolmo/Dev/data/DDP/DBT/dbt_parametrize/dbtrepo",
-        profiles_dir="/Users/dorjayyolmo/Dev/data/DDP/DBT/dbt_parametrize/dbtrepo/profiles",
-        project_dir="/Users/dorjayyolmo/Dev/data/DDP/DBT/dbt_parametrize/dbtrepo",
-        dbt_cli_profile=DbtCliProfile.load("dummyorg"),
+        commands=task_config["commands"],
+        env=task_config["env"],
+        working_dir=task_config["working_dir"],
+        profiles_dir=task_config["profiles_dir"],
+        project_dir=task_config["project_dir"],
+        dbt_cli_profile=cli_profile_block,
     )
     logger.info("running dbtjob with DBT_TEST_FAILED update")
 
@@ -131,11 +101,56 @@ def dbtjob_v1(dbt_op_name: str):
     try:
         return dbt_op.run()
     except Exception:  # skipcq PYL-W0703
-        if dbt_op_name.endswith("-test"):
+        if task_config["slug"] == "dbt-test":
             return State(
                 type=StateType.COMPLETED,
                 name="DBT_TEST_FAILED",
-                message=f"WARNING: {dbt_op_name} failed",
+                message=f"WARNING: dbt test failed",
             )
 
+        raise
+
+
+# =============================================================================
+
+"""
+deployment_parmas:
+{
+    config: {
+        tasks: [
+            {
+                "type": DBTCORE,
+                "slug": "dbt-run", # coming from django master task table
+                "seq": 1,
+                "commands": [],
+                "env": {},
+                "working_dir": ",
+                "profiles_dir": "",
+                "project_dir": "",
+                "cli_profile_block": "",
+                "cli_args": [],
+            }
+        ]
+    }
+}
+"""
+
+
+@flow
+def deployment_schedule_flow_v4(config: dict):
+    # pylint: disable=broad-exception-caught
+    """modification so dbt test failures are not propagated as flow failures"""
+    config["tasks"].sort(key=lambda blk: blk["seq"])
+
+    try:
+        for task_config in config["tasks"]:
+            if task_config["type"] == DBTCORE:
+                dbtjob_v1(task_config)
+            elif task_config["type"] == SHELLOPERATION:
+                gitpulljob_v1(task_config)
+            else:
+                raise Exception(f"Unknown task type: {task_config['type']}")
+
+    except Exception as error:  # skipcq PYL-W0703
+        logger.exception(error)
         raise
