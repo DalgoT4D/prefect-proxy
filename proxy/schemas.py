@@ -143,6 +143,16 @@ class DeploymentCreate(BaseModel):
     cron: str = None
 
 
+class DeploymentCreate2(BaseModel):
+    """parameters to create a deployment from a flow; going away with blocks"""
+
+    flow_name: str
+    deployment_name: str
+    org_slug: str
+    deployment_params: dict
+    cron: str = None
+
+
 class DeploymentUpdate(BaseModel):
     """parameters to create a deployment from a flow"""
 

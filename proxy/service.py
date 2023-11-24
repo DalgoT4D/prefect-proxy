@@ -26,11 +26,13 @@ from proxy.schemas import (
     PrefectShellSetup,
     DbtCoreCreate,
     DeploymentCreate,
+    DeploymentCreate2,
     DeploymentUpdate,
     PrefectSecretBlockCreate,
     DbtCliProfileBlockCreate,
 )
 from proxy.flows import deployment_schedule_flow_v3
+from proxy.flows_v1 import deployment_schedule_flow_v4
 
 load_dotenv()
 
@@ -420,7 +422,9 @@ async def _create_dbt_cli_profile(
             target=payload.profile.target_configs_schema,
             target_configs=target_configs,
         )
-        cleaned_blockname = cleaned_name_for_prefectblock(payload.cli_profile_block_name)
+        cleaned_blockname = cleaned_name_for_prefectblock(
+            payload.cli_profile_block_name
+        )
         await dbt_cli_profile.save(
             cleaned_blockname,
             overwrite=True,
@@ -607,6 +611,28 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
         logger.exception(error)
         raise PrefectException("failed to create deployment") from error
     return {"id": deployment_id, "name": deployment.name}
+
+
+async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
+    """create a deployment from a flow and a schedule"""
+    if not isinstance(payload, DeploymentCreate2):
+        raise TypeError("payload must be a DeploymentCreate")
+    logger.info(payload)
+
+    deployment = await Deployment.build_from_flow(
+        flow=deployment_schedule_flow_v4.with_options(name=payload.flow_name),
+        name=payload.deployment_name,
+        work_queue_name="ddp",
+        tags=[payload.org_slug],
+    )
+    deployment.parameters = payload.deployment_params
+    deployment.schedule = CronSchedule(cron=payload.cron) if payload.cron else None
+    try:
+        deployment_id = await deployment.apply()
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to create deployment") from error
+    return {"id": deployment_id, "name": deployment.name, "params": deployment.parameters}
 
 
 def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:

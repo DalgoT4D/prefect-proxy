@@ -21,6 +21,7 @@ from proxy.service import (
     get_shell_block_id,
     create_shell_block,
     post_deployment,
+    post_deployment_v1,
     get_flow_runs_by_deployment_id,
     get_deployments_by_filter,
     get_flow_run_logs,
@@ -44,6 +45,7 @@ from proxy.schemas import (
     DbtCoreSchemaUpdate,
     RunFlow,
     DeploymentCreate,
+    DeploymentCreate2,
     DeploymentFetch,
     FlowRunRequest,
     PrefectBlocksDelete,
@@ -337,9 +339,7 @@ async def post_dbtcli_profile(request: Request, payload: DbtCliProfileBlockCreat
     if not isinstance(payload, DbtCliProfileBlockCreate):
         raise TypeError("payload is invalid")
     try:
-        _, block_id, cleaned_blockname = await _create_dbt_cli_profile(
-            payload
-        )
+        _, block_id, cleaned_blockname = await _create_dbt_cli_profile(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
@@ -493,6 +493,24 @@ async def post_dataflow(request: Request, payload: DeploymentCreate):
     logger.info(payload)
     try:
         deployment = await post_deployment(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create deployment"
+        ) from error
+    logger.info("Created new deployment: %s", deployment)
+    return {"deployment": deployment}
+
+
+@app.post("/proxy/v1/deployments/")
+async def post_dataflow_v1(request: Request, payload: DeploymentCreate2):
+    """Create a deployment from an existing flow"""
+    if not isinstance(payload, DeploymentCreate2):
+        raise TypeError("payload is invalid")
+
+    logger.info(payload)
+    try:
+        deployment = await post_deployment_v1(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(

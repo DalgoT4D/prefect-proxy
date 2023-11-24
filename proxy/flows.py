@@ -217,38 +217,3 @@ def deployment_schedule_flow_v3(airbyte_blocks: list, dbt_blocks: list):
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
         raise
-
-
-@task(name="dbtjob")
-def dbtjob_v1(dbt_op_name: str):
-    # pylint: disable=broad-exception-caught
-    """
-    each dbt op will run as a task within the parent flow
-    errors are propagated to the flow except those from "dbt test"
-    """
-    dbt_op: DbtCoreOperation = DbtCoreOperation(
-        commands=[
-            "/Users/dorjayyolmo/Dev/data/DDP/DBT/ddpui_local_dbt_venv/venv/bin/dbt clean --target prod"
-        ],
-        env={},
-        working_dir="/Users/dorjayyolmo/Dev/data/DDP/DBT/dbt_parametrize/dbtrepo",
-        profiles_dir="/Users/dorjayyolmo/Dev/data/DDP/DBT/dbt_parametrize/dbtrepo/profiles",
-        project_dir="/Users/dorjayyolmo/Dev/data/DDP/DBT/dbt_parametrize/dbtrepo",
-        dbt_cli_profile=DbtCliProfile.load("dummyorg"),
-    )
-    logger.info("running dbtjob with DBT_TEST_FAILED update")
-
-    if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
-        os.unlink(dbt_op.profiles_dir / "profiles.yml")
-
-    try:
-        return dbt_op.run()
-    except Exception:  # skipcq PYL-W0703
-        if dbt_op_name.endswith("-test"):
-            return State(
-                type=StateType.COMPLETED,
-                name="DBT_TEST_FAILED",
-                message=f"WARNING: {dbt_op_name} failed",
-            )
-
-        raise
