@@ -10,8 +10,8 @@ from prefect.states import State, StateType
 from prefect_airbyte.flows import run_connection_sync
 from prefect_airbyte import AirbyteConnection
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
+from proxy.helpers import CustomLogger, command_from_dbt_blockname
 from prefect_dbt.cli import DbtCliProfile
-from proxy.helpers import CustomLogger
 
 logger = CustomLogger("prefect-proxy")
 
@@ -42,7 +42,7 @@ def run_airbyte_connection_flow(block_name: str):
 def run_dbtcore_flow(block_name: str):
     # pylint: disable=broad-exception-caught
     """Prefect flow to run dbt"""
-    return dbtjob(block_name)
+    return dbtjob(block_name, command_from_dbt_blockname(block_name))
 
 
 # =============================================================================
@@ -104,7 +104,7 @@ def deployment_schedule_flow(airbyte_blocks: list, dbt_blocks: list):
 
 
 # =============================================================================
-@task(name="gitpulljob")
+@task(name="gitpulljob", task_run_name="gitpull")
 def gitpulljob(shell_op_name: str):
     # pylint: disable=broad-exception-caught
     """loads and runs the git-pull shell operation"""
@@ -131,8 +131,8 @@ def gitpulljob(shell_op_name: str):
     return shell_op.run()
 
 
-@task(name="dbtjob")
-def dbtjob(dbt_op_name: str):
+@task(name="dbtjob", task_run_name="dbtjob-{command}")
+def dbtjob(dbt_op_name: str, command: str):
     # pylint: disable=broad-exception-caught
     """
     each dbt op will run as a task within the parent flow
@@ -147,7 +147,7 @@ def dbtjob(dbt_op_name: str):
     try:
         return dbt_op.run()
     except Exception:  # skipcq PYL-W0703
-        if dbt_op_name.endswith("-test"):
+        if command == "test":
             return State(
                 type=StateType.COMPLETED,
                 name="DBT_TEST_FAILED",
@@ -179,7 +179,9 @@ def deployment_schedule_flow_v2(airbyte_blocks: list, dbt_blocks: list):
                 gitpulljob(block["blockName"])
 
             elif block["blockType"] == DBTCORE:
-                dbtjob(block["blockName"])
+                dbtjob(
+                    block["blockName"], command_from_dbt_blockname(block["blockName"])
+                )
 
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
@@ -208,7 +210,9 @@ def deployment_schedule_flow_v3(airbyte_blocks: list, dbt_blocks: list):
                 gitpulljob(block["blockName"])
 
             elif block["blockType"] == DBTCORE:
-                dbtjob(block["blockName"])
+                dbtjob(
+                    block["blockName"], command_from_dbt_blockname(block["blockName"])
+                )
 
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
