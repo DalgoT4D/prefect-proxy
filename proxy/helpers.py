@@ -84,7 +84,9 @@ def cleaned_name_for_prefectblock(blockname):
 def command_from_dbt_blockname(blockname):
     """blocknames are of the form orgslug-profile-target-command"""
     components = blockname.split("-")
-    command = components[3]
+    command = components[-1]
+    if command == "generate":
+        command = "docs"
     # for docs-generate this returns docs
     # see prefect_api.post_prefect_dbt_core_block
     return command
