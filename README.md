@@ -13,23 +13,23 @@ These endpoints will be called only from the Django server or from testing scrip
 
 Install the Python dependencies
 
-    `pip install -r requirements.txt`
+    pip install -r requirements.txt
 
 ## Run instructions
 
 Start Prefect on port 4200
 
-    `prefect server start`
+    prefect server start
 
 and set `PREFECT_API_URL` in `.env` to `http://localhost:4200/api`. Change the port in this URL if you are running Prefect on a different port.
 
 Next, start a Prefect agent
 
-    `prefect agent start -q ddp --pool default-agent-pool`
+    prefect agent start -q ddp --pool default-agent-pool
 
 The proxy server needs to listen for requests coming from Django; pick an available port and run
 
-    `gunicorn proxy.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:<port number>`
+    gunicorn proxy.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:<port number>
 
 Make sure to add this port number into the `.env` for DDP_backend in the variable `PREFECT_PROXY_API_URL`.
 
@@ -50,4 +50,4 @@ Logs are sent to a single logfile called `prefect-proxy.log` which is written to
 
 Tests are run via `pytest`:
 
-    `GOOGLE_APPLICATION_CREDENTIALS=<your/credentials.json> pytest`
+    GOOGLE_APPLICATION_CREDENTIALS=<your/credentials.json> pytest
