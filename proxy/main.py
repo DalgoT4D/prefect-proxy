@@ -44,6 +44,7 @@ from proxy.schemas import (
     DbtCoreCredentialUpdate,
     DbtCoreSchemaUpdate,
     RunFlow,
+    RunShellOperation,
     DeploymentCreate,
     DeploymentCreate2,
     DeploymentFetch,
@@ -54,6 +55,8 @@ from proxy.schemas import (
     DbtCliProfileBlockCreate,
 )
 from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
+
+from proxy.prefect_flows import run_shell_operation_flow
 
 from logger import setup_logger
 
@@ -127,6 +130,27 @@ def dbtrun(block_name: str, flow_name: str, flow_run_name: str):
         logger.exception(error)
         raise HTTPException(
             status_code=400, detail="failed to run dbt core flow"
+        ) from error
+
+
+def shelloprun(task_config: RunShellOperation):
+    """Run a shell operation flow"""
+    if not isinstance(task_config, RunShellOperation):
+        raise TypeError("invalid task config")
+
+    flow = run_shell_operation_flow
+    if task_config.flowName:
+        flow = flow.with_options(name=task_config.flowName)
+    if task_config.flowRunName:
+        flow = flow.with_options(flow_run_name=task_config.flowRunName)
+
+    try:
+        result = flow(task_config)
+        return result
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to run shell operation flow"
         ) from error
 
 
@@ -477,6 +501,23 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
     logger.info("running dbtcore-run for dbt-core-op %s", payload.blockName)
     try:
         result = dbtrun(payload.blockName, payload.flowName, payload.flowRunName)
+        logger.info(result)
+        return {"status": "success", "result": result}
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/proxy/flows/shell/run/")
+async def sync_shellop_flow(request: Request, payload: RunShellOperation):
+    """Prefect flow to run dbt"""
+    logger.info(payload)
+    if not isinstance(payload, RunShellOperation):
+        raise TypeError("payload is invalid")
+
+    logger.info("running shell operation")
+    try:
+        result = shelloprun(payload)
         logger.info(result)
         return {"status": "success", "result": result}
     except Exception as error:

@@ -46,32 +46,39 @@ def run_dbtcore_flow_v1(block_name: str):
     return dbtjob_v1(block_name, command_from_dbt_blockname(block_name))
 
 
-# =============================================================================
-@task(name="gitpulljob_v1", task_run_name="gitpull")
-def gitpulljob_v1(shell_op_name: str):
+@flow
+def run_shell_operation_flow(payload: dict):
     # pylint: disable=broad-exception-caught
-    """loads and runs the git-pull shell operation"""
-    shell_op: ShellOperation = ShellOperation.load(shell_op_name)
+    """Prefect flow to run shell operation"""
+    return shellopjob(payload)
 
-    # fetch the secret block having the git oauth token-based url to pull code
-    #  from private repos
-    # the key "secret-git-pull-url-block" will always be present. Value will be
-    #  empty string if no token was submitted by user
-    secret_block_name = shell_op.env["secret-git-pull-url-block"]
-    git_repo_endpoint = ""
-    if secret_block_name and len(secret_block_name) > 0:
-        secret_blk = Secret.load(secret_block_name)
-        git_repo_endpoint = secret_blk.get()
 
-    # update the commands to account for the token
-    commands = shell_op.commands
-    updated_cmds = []
-    for cmd in commands:
-        updated_cmds.append(f"{cmd} {git_repo_endpoint}")
-    shell_op.commands = updated_cmds
+# =============================================================================
+# @task(name="gitpulljob_v1", task_run_name="gitpull")
+# def gitpulljob_v1(shell_op_name: str):
+#     # pylint: disable=broad-exception-caught
+#     """loads and runs the git-pull shell operation"""
+#     shell_op: ShellOperation = ShellOperation.load(shell_op_name)
 
-    # run the shell command(s)
-    return shell_op.run()
+#     # fetch the secret block having the git oauth token-based url to pull code
+#     #  from private repos
+#     # the key "secret-git-pull-url-block" will always be present. Value will be
+#     #  empty string if no token was submitted by user
+#     secret_block_name = shell_op.env["secret-git-pull-url-block"]
+#     git_repo_endpoint = ""
+#     if secret_block_name and len(secret_block_name) > 0:
+#         secret_blk = Secret.load(secret_block_name)
+#         git_repo_endpoint = secret_blk.get()
+
+#     # update the commands to account for the token
+#     commands = shell_op.commands
+#     updated_cmds = []
+#     for cmd in commands:
+#         updated_cmds.append(f"{cmd} {git_repo_endpoint}")
+#     shell_op.commands = updated_cmds
+
+#     # run the shell command(s)
+#     return shell_op.run()
 
 
 @task(name="dbtjob_v1")
@@ -109,6 +116,43 @@ def dbtjob_v1(task_config: dict):
             )
 
         raise
+
+
+"""
+{
+    task_config: {
+        commands: [],
+        env: {},
+        workingDir: ""
+    }
+}
+"""
+
+
+@task(name="shellopjob", task_run_name="shellop")
+def shellopjob(task_config: dict):
+    # pylint: disable=broad-exception-caught
+    """loads and runs the shell operation"""
+
+    if task_config["slug"] == "git-pull":
+        secret_block_name = task_config["env"]["secret-git-pull-url-block"]
+        git_repo_endpoint = ""
+        if secret_block_name and len(secret_block_name) > 0:
+            secret_blk = Secret.load(secret_block_name)
+            git_repo_endpoint = secret_blk.get()
+
+        commands = task_config["commands"]
+        updated_cmds = []
+        for cmd in commands:
+            updated_cmds.append(f"{cmd} {git_repo_endpoint}")
+        task_config["commands"] = updated_cmds
+
+    shell_op = ShellOperation(
+        commands=task_config["commands"],
+        env=task_config["env"],
+        working_dir=task_config["workingDir"],
+    )
+    return shell_op.run()
 
 
 # =============================================================================

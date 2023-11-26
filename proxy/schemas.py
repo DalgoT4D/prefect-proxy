@@ -126,6 +126,17 @@ class RunFlow(BaseModel):
     flowRunName: str = None
 
 
+class RunShellOperation(BaseModel):
+    """config payload to run a shell operation in prefect"""
+
+    commands: list
+    workingDir: str
+    env: dict
+    flowName: str
+    flowRunName: str
+    slug: str
+
+
 class FlowRunsResponse(BaseModel):
     """response from the flow runs block"""
 
