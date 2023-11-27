@@ -37,6 +37,7 @@ from proxy.main import (
     post_shell,
     sync_airbyte_connection_flow,
     sync_dbtcore_flow,
+    sync_shellop_flow,
 )
 
 from proxy.schemas import (
@@ -55,6 +56,7 @@ from proxy.schemas import (
     PrefectBlocksDelete,
     PrefectShellSetup,
     RunFlow,
+    RunShellOperation,
 )
 
 app = FastAPI()
@@ -773,6 +775,30 @@ async def test_sync_dbtcore_flow_invalid_payload():
     request = client.request("POST", "/")
     with pytest.raises(TypeError) as excinfo:
         await sync_dbtcore_flow(request, payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
+async def test_sync_shellop_flow_success():
+    payload = RunShellOperation(
+        commands=['echo "Hello, World!"'],
+        workingDir="test_dir",
+        env={"key": "test_value"},
+        flowName="shell_test_flow",
+        flowName="shell_test_flow",
+    )
+    request = client.request("POST", "/")
+    with pytest.raises(HTTPException) as excinfo:
+        await sync_shellop_flow(request, payload)
+    assert excinfo.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_sync_shellop_flow_invalid_payload():
+    payload = None
+    request = client.request("POST", "/")
+    with pytest.raises(TypeError) as excinfo:
+        await sync_shellop_flow(request, payload)
     assert excinfo.value.args[0] == "payload is invalid"
 
 
