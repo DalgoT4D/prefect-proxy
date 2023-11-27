@@ -40,10 +40,10 @@ def run_airbyte_connection_flow_v1(block_name: str):
 
 
 @flow
-def run_dbtcore_flow_v1(block_name: str):
+def run_dbtcore_flow_v1(payload: dict):
     # pylint: disable=broad-exception-caught
     """Prefect flow to run dbt"""
-    return dbtjob_v1(block_name, command_from_dbt_blockname(block_name))
+    return dbtjob_v1(payload)
 
 
 @flow
@@ -79,6 +79,24 @@ def run_shell_operation_flow(payload: dict):
 
 #     # run the shell command(s)
 #     return shell_op.run()
+
+
+"""
+{
+    task_config: {
+        slug: str
+        profiles_dir: str
+        project_dir: str
+        working_dir: str
+        env: dict
+        commands: list
+        cli_profile_block: str
+        cli_args: list = []
+        flow_name: str
+        flow_run_name: str
+    }
+}
+"""
 
 
 @task(name="dbtjob_v1")
@@ -150,7 +168,7 @@ def shellopjob(task_config: dict):
     shell_op = ShellOperation(
         commands=task_config["commands"],
         env=task_config["env"],
-        working_dir=task_config["workingDir"],
+        working_dir=task_config["working_dir"],
     )
     return shell_op.run()
 

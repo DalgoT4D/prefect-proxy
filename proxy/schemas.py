@@ -126,15 +126,30 @@ class RunFlow(BaseModel):
     flowRunName: str = None
 
 
+class RunDbtCoreOperation(BaseModel):
+    """config payload to run a dbt core operation: clean, deps, test"""
+
+    slug: str
+    profiles_dir: str
+    project_dir: str
+    working_dir: str
+    env: dict
+    commands: list
+    cli_profile_block: str
+    cli_args: list = []
+    flow_name: str
+    flow_run_name: str
+
+
 class RunShellOperation(BaseModel):
     """config payload to run a shell operation in prefect"""
 
-    commands: list
-    workingDir: str
-    env: dict
-    flowName: str
-    flowRunName: str
     slug: str
+    commands: list
+    working_dir: str
+    env: dict
+    flow_name: str
+    flow_run_name: str
 
 
 class FlowRunsResponse(BaseModel):

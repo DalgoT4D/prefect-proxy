@@ -44,6 +44,7 @@ from proxy.schemas import (
     DbtCoreCredentialUpdate,
     DbtCoreSchemaUpdate,
     RunFlow,
+    RunDbtCoreOperation,
     RunShellOperation,
     DeploymentCreate,
     DeploymentCreate2,
@@ -56,7 +57,7 @@ from proxy.schemas import (
 )
 from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
 
-from proxy.prefect_flows import run_shell_operation_flow
+from proxy.prefect_flows import run_shell_operation_flow, run_dbtcore_flow_v1
 
 from logger import setup_logger
 
@@ -133,16 +134,36 @@ def dbtrun(block_name: str, flow_name: str, flow_run_name: str):
         ) from error
 
 
+def dbtrun_v1(task_config: RunDbtCoreOperation):
+    """Run a dbt core flow"""
+
+    logger.info("dbt core operation running %s", task_config.slug)
+    flow = run_dbtcore_flow_v1
+    if task_config.flow_name:
+        flow = flow.with_options(name=task_config.flow_name)
+    if task_config.flow_run_name:
+        flow = flow.with_options(flow_run_name=task_config.flow_run_name)
+
+    try:
+        result = flow(task_config)
+        return result
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail=f"failed to run dbt core flow {task_config.slug}"
+        ) from error
+
+
 def shelloprun(task_config: RunShellOperation):
     """Run a shell operation flow"""
     if not isinstance(task_config, RunShellOperation):
         raise TypeError("invalid task config")
 
     flow = run_shell_operation_flow
-    if task_config.flowName:
-        flow = flow.with_options(name=task_config.flowName)
-    if task_config.flowRunName:
-        flow = flow.with_options(flow_run_name=task_config.flowRunName)
+    if task_config.flow_name:
+        flow = flow.with_options(name=task_config.flow_name)
+    if task_config.flow_run_name:
+        flow = flow.with_options(flow_run_name=task_config.flow_run_name)
 
     try:
         result = flow(task_config)
@@ -501,6 +522,23 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
     logger.info("running dbtcore-run for dbt-core-op %s", payload.blockName)
     try:
         result = dbtrun(payload.blockName, payload.flowName, payload.flowRunName)
+        logger.info(result)
+        return {"status": "success", "result": result}
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/proxy/flows/dbtcore/run/v1/")
+async def sync_dbtcore_flow_v1(request: Request, payload: RunDbtCoreOperation):
+    """Prefect flow to run dbt"""
+    logger.info(payload)
+    if not isinstance(payload, RunDbtCoreOperation):
+        raise TypeError("payload is invalid")
+
+    logger.info("running dbtcore-run for dbt-core-op %s", payload.slug)
+    try:
+        result = dbtrun_v1(payload)
         logger.info(result)
         return {"status": "success", "result": result}
     except Exception as error:
