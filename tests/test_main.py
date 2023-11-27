@@ -8,6 +8,7 @@ from proxy.main import (
     airbytesync,
     app,
     dbtrun,
+    shelloprun,
     delete_block,
     delete_deployment,
     get_airbyte_connection_by_blockid,
@@ -153,6 +154,46 @@ def test_dbtrun_failure():
         ) as mock_with_options:
             mock_with_options.return_value = lambda x: expected_result
             result = dbtrun(block_name, flow_name, flow_run_name)
+            assert result == expected_result
+
+
+def test_shelloprun_success():
+    expected_result = {"result": "example_result", "status": "success"}
+    task_config = RunShellOperation(
+        slug="git-pull",
+        commands=["echo test"],
+        workingDir="/tmp",
+        env={},
+        flowName="example_flow",
+        flowRunName="example_flow_run",
+    )
+
+    with patch("proxy.main.run_shell_operation_flow") as mock_run_shell_operation_flow:
+        with patch.object(
+            mock_run_shell_operation_flow.with_options.return_value, "with_options"
+        ) as mock_with_options:
+            mock_with_options.return_value = lambda x: expected_result
+            result = shelloprun(task_config)
+            assert result == expected_result
+
+
+def test_shelloprun_failure():
+    expected_result = {"result": "example_result", "status": "failed"}
+    task_config = RunShellOperation(
+        slug="git-pull",
+        commands=["echo test"],
+        workingDir="/tmp",
+        env={},
+        flowName="example_flow",
+        flowRunName="example_flow_run",
+    )
+
+    with patch("proxy.main.run_shell_operation_flow") as mock_run_shell_operation_flow:
+        with patch.object(
+            mock_run_shell_operation_flow.with_options.return_value, "with_options"
+        ) as mock_with_options:
+            mock_with_options.return_value = lambda x: expected_result
+            result = shelloprun(task_config)
             assert result == expected_result
 
 
@@ -781,16 +822,17 @@ async def test_sync_dbtcore_flow_invalid_payload():
 @pytest.mark.asyncio
 async def test_sync_shellop_flow_success():
     payload = RunShellOperation(
+        slug="test-op",
         commands=['echo "Hello, World!"'],
         workingDir="test_dir",
         env={"key": "test_value"},
         flowName="shell_test_flow",
-        flowName="shell_test_flow",
+        flowRunName="shell_test_flow",
     )
     request = client.request("POST", "/")
-    with pytest.raises(HTTPException) as excinfo:
-        await sync_shellop_flow(request, payload)
-    assert excinfo.value.status_code == 400
+    with patch("proxy.main.shelloprun", return_value="test result"):
+        response = await sync_shellop_flow(request, payload)
+        assert response == {"status": "success", "result": "test result"}
 
 
 @pytest.mark.asyncio
