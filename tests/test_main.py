@@ -162,10 +162,10 @@ def test_shelloprun_success():
     task_config = RunShellOperation(
         slug="git-pull",
         commands=["echo test"],
-        workingDir="/tmp",
+        working_dir="/tmp",
         env={},
-        flowName="example_flow",
-        flowRunName="example_flow_run",
+        flow_name="example_flow",
+        flow_run_name="example_flow_run",
     )
 
     with patch("proxy.main.run_shell_operation_flow") as mock_run_shell_operation_flow:
@@ -182,10 +182,10 @@ def test_shelloprun_failure():
     task_config = RunShellOperation(
         slug="git-pull",
         commands=["echo test"],
-        workingDir="/tmp",
+        working_dir="/tmp",
         env={},
-        flowName="example_flow",
-        flowRunName="example_flow_run",
+        flow_name="example_flow",
+        flow_run_name="example_flow_run",
     )
 
     with patch("proxy.main.run_shell_operation_flow") as mock_run_shell_operation_flow:
@@ -195,6 +195,13 @@ def test_shelloprun_failure():
             mock_with_options.return_value = lambda x: expected_result
             result = shelloprun(task_config)
             assert result == expected_result
+
+
+def test_airbyte_sync_invalid_payload_type():
+    task_config = None
+
+    with pytest.raises(TypeError):
+        shelloprun(task_config)
 
 
 def test_run_dbt_exception():
@@ -824,10 +831,10 @@ async def test_sync_shellop_flow_success():
     payload = RunShellOperation(
         slug="test-op",
         commands=['echo "Hello, World!"'],
-        workingDir="test_dir",
+        working_dir="test_dir",
         env={"key": "test_value"},
-        flowName="shell_test_flow",
-        flowRunName="shell_test_flow",
+        flow_name="shell_test_flow",
+        flow_run_name="shell_test_flow",
     )
     request = client.request("POST", "/")
     with patch("proxy.main.shelloprun", return_value="test result"):

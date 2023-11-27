@@ -54,32 +54,6 @@ def run_shell_operation_flow(payload: dict):
 
 
 # =============================================================================
-# @task(name="gitpulljob_v1", task_run_name="gitpull")
-# def gitpulljob_v1(shell_op_name: str):
-#     # pylint: disable=broad-exception-caught
-#     """loads and runs the git-pull shell operation"""
-#     shell_op: ShellOperation = ShellOperation.load(shell_op_name)
-
-#     # fetch the secret block having the git oauth token-based url to pull code
-#     #  from private repos
-#     # the key "secret-git-pull-url-block" will always be present. Value will be
-#     #  empty string if no token was submitted by user
-#     secret_block_name = shell_op.env["secret-git-pull-url-block"]
-#     git_repo_endpoint = ""
-#     if secret_block_name and len(secret_block_name) > 0:
-#         secret_blk = Secret.load(secret_block_name)
-#         git_repo_endpoint = secret_blk.get()
-
-#     # update the commands to account for the token
-#     commands = shell_op.commands
-#     updated_cmds = []
-#     for cmd in commands:
-#         updated_cmds.append(f"{cmd} {git_repo_endpoint}")
-#     shell_op.commands = updated_cmds
-
-#     # run the shell command(s)
-#     return shell_op.run()
-
 
 """
 {
