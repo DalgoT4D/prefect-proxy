@@ -529,7 +529,7 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
-@app.post("/proxy/flows/dbtcore/run/v1/")
+@app.post("/proxy/v1/flows/dbtcore/run/")
 async def sync_dbtcore_flow_v1(request: Request, payload: RunDbtCoreOperation):
     """Prefect flow to run dbt"""
     logger.info(payload)
