@@ -24,36 +24,11 @@ SHELLOPERATION = "Shell Operation"
 DBTCORE = "dbt Core Operation"
 
 
-""" task config for a airbyte sync operation
-{
-    type AIRBYTECONNECTION,
-    slug: str
-    airbyte_server_block:  str
-    connection_id: str
-    timeout: int
-}
-"""
-
-
 @flow
-def run_airbyte_connection_flow_v1(config: dict):
+def run_airbyte_connection_flow_v1(payload: dict):
     # pylint: disable=broad-exception-caught
     """Prefect flow to run airbyte connection"""
-    try:
-        airbyte_server_block = config["airbyte_server_block"]
-        serverblock = AirbyteServer.load(airbyte_server_block)
-        connection_block = AirbyteConnection(
-            airbyte_server=serverblock,
-            connection_id=config["connection_id"],
-            timeout=config["timeout"] or 15,
-        )
-        result = run_connection_sync(connection_block)
-        logger.info("airbyte connection sync result=")
-        logger.info(result)
-        return result
-    except Exception as error:  # skipcq PYL-W0703
-        logger.error(str(error))  # "Job <num> failed."
-        raise
+    return airbytesyncjob(payload)
 
 
 @flow
@@ -71,6 +46,37 @@ def run_shell_operation_flow(payload: dict):
 
 
 # =============================================================================
+# tasks
+
+""" task config for a airbyte sync operation
+{
+    type AIRBYTECONNECTION,
+    slug: str
+    airbyte_server_block:  str
+    connection_id: str
+    timeout: int
+}
+"""
+
+
+@task(name="airbytesyncjob")
+def airbytesyncjob(task_config: dict):
+    try:
+        airbyte_server_block = task_config["airbyte_server_block"]
+        serverblock = AirbyteServer.load(airbyte_server_block)
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=task_config["connection_id"],
+            timeout=task_config["timeout"] or 15,
+        )
+        result = run_connection_sync(connection_block)
+        logger.info("airbyte connection sync result=")
+        logger.info(result)
+        return result
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job <num> failed."
+        raise
+
 
 """ task config for a dbt core operation
 {
