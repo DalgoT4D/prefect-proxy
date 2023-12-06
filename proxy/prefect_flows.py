@@ -9,7 +9,7 @@ from prefect import flow, task
 from prefect.blocks.system import Secret
 from prefect.states import State, StateType
 from prefect_airbyte.flows import run_connection_sync
-from prefect_airbyte import AirbyteConnection
+from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from proxy.helpers import CustomLogger, command_from_dbt_blockname
 from prefect_dbt.cli import DbtCliProfile
@@ -24,13 +24,30 @@ SHELLOPERATION = "Shell Operation"
 DBTCORE = "dbt Core Operation"
 
 
+""" task config for a airbyte sync operation
+{
+    type AIRBYTECONNECTION,
+    slug: str
+    airbyte_server_block:  str
+    connection_id: str
+    timeout: int
+}
+"""
+
+
 @flow
-def run_airbyte_connection_flow_v1(block_name: str):
+def run_airbyte_connection_flow_v1(config: dict):
     # pylint: disable=broad-exception-caught
     """Prefect flow to run airbyte connection"""
     try:
-        airbyte_connection: AirbyteConnection = AirbyteConnection.load(block_name)
-        result = run_connection_sync(airbyte_connection)
+        airbyte_server_block = config["airbyte_server_block"]
+        serverblock = AirbyteServer.load(airbyte_server_block)
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=config["connection_id"],
+            timeout=config["timeout"] or 15,
+        )
+        result = run_connection_sync(connection_block)
         logger.info("airbyte connection sync result=")
         logger.info(result)
         return result
@@ -55,20 +72,19 @@ def run_shell_operation_flow(payload: dict):
 
 # =============================================================================
 
-"""
+""" task config for a dbt core operation
 {
-    task_config: {
-        slug: str
-        profiles_dir: str
-        project_dir: str
-        working_dir: str
-        env: dict
-        commands: list
-        cli_profile_block: str
-        cli_args: list = []
-        flow_name: str
-        flow_run_name: str
-    }
+    type: DBTCORE,
+    slug: str
+    profiles_dir: str
+    project_dir: str
+    working_dir: str
+    env: dict
+    commands: list
+    cli_profile_block: str
+    cli_args: list = []
+    flow_name: str
+    flow_run_name: str
 }
 """
 
@@ -110,13 +126,12 @@ def dbtjob_v1(task_config: dict):
         raise
 
 
-"""
+""" task config for a shell operation
 {
-    task_config: {
-        commands: [],
-        env: {},
-        workingDir: ""
-    }
+    type: SHELLOPERATION,
+    commands: [],
+    env: {},
+    workingDir: ""
 }
 """
 
@@ -183,7 +198,9 @@ def deployment_schedule_flow_v4(config: dict):
             if task_config["type"] == DBTCORE:
                 dbtjob_v1(task_config)
             elif task_config["type"] == SHELLOPERATION:
-                gitpulljob_v1(task_config)
+                shellopjob(task_config)
+            elif task_config["type"] == AIRBYTECONNECTION:
+                run_airbyte_connection_flow_v1(task_config)
             else:
                 raise Exception(f"Unknown task type: {task_config['type']}")
 
