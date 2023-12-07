@@ -58,14 +58,14 @@ def run_airbyte_connection_flow_v1(payload: dict):
 def run_dbtcore_flow_v1(payload: dict):
     # pylint: disable=broad-exception-caught
     """Prefect flow to run dbt"""
-    return dbtjob_v1(payload)
+    return dbtjob_v1(payload, payload["slug"])
 
 
 @flow
 def run_shell_operation_flow(payload: dict):
     # pylint: disable=broad-exception-caught
     """Prefect flow to run shell operation"""
-    return shellopjob(payload)
+    return shellopjob(payload, payload["slug"])
 
 
 # =============================================================================
@@ -89,8 +89,8 @@ def run_shell_operation_flow(payload: dict):
 """
 
 
-@task(name="dbtjob_v1")
-def dbtjob_v1(task_config: dict):
+@task(name="dbtjob_v1", task_run_name="dbtjob-{task_slug}")
+def dbtjob_v1(task_config: dict, task_slug: str):
     # pylint: disable=broad-exception-caught
     """
     each dbt op will run as a task within the parent flow
@@ -129,6 +129,7 @@ def dbtjob_v1(task_config: dict):
 """ task config for a shell operation
 {
     type: SHELLOPERATION,
+    slug: str,
     commands: [],
     env: {},
     workingDir: ""
@@ -136,8 +137,8 @@ def dbtjob_v1(task_config: dict):
 """
 
 
-@task(name="shellopjob", task_run_name="shellop")
-def shellopjob(task_config: dict):
+@task(name="shellopjob", task_run_name="shellop-{task_slug}")
+def shellopjob(task_config: dict, task_slug: str):
     # pylint: disable=broad-exception-caught
     """loads and runs the shell operation"""
 
@@ -196,9 +197,9 @@ def deployment_schedule_flow_v4(config: dict):
     try:
         for task_config in config["tasks"]:
             if task_config["type"] == DBTCORE:
-                dbtjob_v1(task_config)
+                dbtjob_v1(task_config, task_config["slug"])
             elif task_config["type"] == SHELLOPERATION:
-                shellopjob(task_config)
+                shellopjob(task_config, task_config["slug"])
             elif task_config["type"] == AIRBYTECONNECTION:
                 run_airbyte_connection_flow_v1(task_config)
             else:
