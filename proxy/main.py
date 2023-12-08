@@ -21,6 +21,7 @@ from proxy.service import (
     get_shell_block_id,
     create_shell_block,
     post_deployment,
+    post_deployment_v1,
     get_flow_runs_by_deployment_id,
     get_deployments_by_filter,
     get_flow_run_logs,
@@ -31,6 +32,8 @@ from proxy.service import (
     get_deployment,
     get_flow_run,
     create_secret_block,
+    _create_dbt_cli_profile,
+    _block_id,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -41,14 +44,20 @@ from proxy.schemas import (
     DbtCoreCredentialUpdate,
     DbtCoreSchemaUpdate,
     RunFlow,
+    RunDbtCoreOperation,
+    RunShellOperation,
     DeploymentCreate,
+    DeploymentCreate2,
     DeploymentFetch,
     FlowRunRequest,
     PrefectBlocksDelete,
     AirbyteConnectionBlocksFetch,
     PrefectSecretBlockCreate,
+    DbtCliProfileBlockCreate,
 )
 from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
+
+from proxy.prefect_flows import run_shell_operation_flow, run_dbtcore_flow_v1
 
 from logger import setup_logger
 
@@ -122,6 +131,47 @@ def dbtrun(block_name: str, flow_name: str, flow_run_name: str):
         logger.exception(error)
         raise HTTPException(
             status_code=400, detail="failed to run dbt core flow"
+        ) from error
+
+
+def dbtrun_v1(task_config: RunDbtCoreOperation):
+    """Run a dbt core flow"""
+
+    logger.info("dbt core operation running %s", task_config.slug)
+    flow = run_dbtcore_flow_v1
+    if task_config.flow_name:
+        flow = flow.with_options(name=task_config.flow_name)
+    if task_config.flow_run_name:
+        flow = flow.with_options(flow_run_name=task_config.flow_run_name)
+
+    try:
+        result = flow(task_config)
+        return result
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail=f"failed to run dbt core flow {task_config.slug}"
+        ) from error
+
+
+def shelloprun(task_config: RunShellOperation):
+    """Run a shell operation flow"""
+    if not isinstance(task_config, RunShellOperation):
+        raise TypeError("invalid task config")
+
+    flow = run_shell_operation_flow
+    if task_config.flow_name:
+        flow = flow.with_options(name=task_config.flow_name)
+    if task_config.flow_run_name:
+        flow = flow.with_options(flow_run_name=task_config.flow_run_name)
+
+    try:
+        result = flow(task_config)
+        return result
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to run shell operation flow"
         ) from error
 
 
@@ -324,6 +374,30 @@ async def post_dbtcore(request: Request, payload: DbtCoreCreate):
     return {"block_id": block_id, "block_name": cleaned_blockname}
 
 
+@app.post("/proxy/blocks/dbtcli/profile/")
+async def post_dbtcli_profile(request: Request, payload: DbtCliProfileBlockCreate):
+    """
+    create a new dbt_core block with this block name,
+    raise an exception if the name is already in use
+    """
+    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
+    if not isinstance(payload, DbtCliProfileBlockCreate):
+        raise TypeError("payload is invalid")
+    try:
+        _, block_id, cleaned_blockname = await _create_dbt_cli_profile(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create dbt cli profile block"
+        ) from error
+    logger.info(
+        "Created new dbt cli profile block with ID: %s and name: %s",
+        block_id,
+        cleaned_blockname,
+    )
+    return {"block_id": block_id, "block_name": cleaned_blockname}
+
+
 @app.put("/proxy/blocks/dbtcore_edit/postgres/")
 async def put_dbtcore_postgres(request: Request, payload: DbtCoreCredentialUpdate):
     """update the credentials inside an existing dbt core op block"""
@@ -455,6 +529,40 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
+@app.post("/proxy/v1/flows/dbtcore/run/")
+async def sync_dbtcore_flow_v1(request: Request, payload: RunDbtCoreOperation):
+    """Prefect flow to run dbt"""
+    logger.info(payload)
+    if not isinstance(payload, RunDbtCoreOperation):
+        raise TypeError("payload is invalid")
+
+    logger.info("running dbtcore-run for dbt-core-op %s", payload.slug)
+    try:
+        result = dbtrun_v1(payload)
+        logger.info(result)
+        return {"status": "success", "result": result}
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.post("/proxy/flows/shell/run/")
+async def sync_shellop_flow(request: Request, payload: RunShellOperation):
+    """Prefect flow to run dbt"""
+    logger.info(payload)
+    if not isinstance(payload, RunShellOperation):
+        raise TypeError("payload is invalid")
+
+    logger.info("running shell operation")
+    try:
+        result = shelloprun(payload)
+        logger.info(result)
+        return {"status": "success", "result": result}
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
 @app.post("/proxy/deployments/")
 async def post_dataflow(request: Request, payload: DeploymentCreate):
     """Create a deployment from an existing flow"""
@@ -464,6 +572,24 @@ async def post_dataflow(request: Request, payload: DeploymentCreate):
     logger.info(payload)
     try:
         deployment = await post_deployment(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create deployment"
+        ) from error
+    logger.info("Created new deployment: %s", deployment)
+    return {"deployment": deployment}
+
+
+@app.post("/proxy/v1/deployments/")
+async def post_dataflow_v1(request: Request, payload: DeploymentCreate2):
+    """Create a deployment from an existing flow"""
+    if not isinstance(payload, DeploymentCreate2):
+        raise TypeError("payload is invalid")
+
+    logger.info(payload)
+    try:
+        deployment = await post_deployment_v1(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(

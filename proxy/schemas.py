@@ -1,7 +1,7 @@
 """Schemas for requests"""
 
 from uuid import UUID
-from pydantic import BaseModel
+from pydantic import BaseModel, Extra
 
 
 class AirbyteServerCreate(BaseModel):
@@ -75,6 +75,16 @@ class DbtCoreCreate(BaseModel):
     project_dir: str
 
 
+class DbtCliProfileBlockCreate(BaseModel, extra=Extra.allow):
+    """payload to create a dbt cli profile block"""
+
+    cli_profile_block_name: str
+    profile: DbtProfileCreate
+    wtype: str
+    bqlocation: str = None
+    credentials: dict
+
+
 class DbtCoreCredentialUpdate(BaseModel):
     """payload to update a dbt core command block's credentials"""
 
@@ -116,6 +126,32 @@ class RunFlow(BaseModel):
     flowRunName: str = None
 
 
+class RunDbtCoreOperation(BaseModel):
+    """config payload to run a dbt core operation: clean, deps, test"""
+
+    slug: str
+    profiles_dir: str
+    project_dir: str
+    working_dir: str
+    env: dict
+    commands: list
+    cli_profile_block: str
+    cli_args: list = []
+    flow_name: str
+    flow_run_name: str
+
+
+class RunShellOperation(BaseModel):
+    """config payload to run a shell operation in prefect"""
+
+    slug: str
+    commands: list
+    working_dir: str
+    env: dict
+    flow_name: str
+    flow_run_name: str
+
+
 class FlowRunsResponse(BaseModel):
     """response from the flow runs block"""
 
@@ -130,6 +166,16 @@ class DeploymentCreate(BaseModel):
     org_slug: str
     connection_blocks: list
     dbt_blocks: list
+    cron: str = None
+
+
+class DeploymentCreate2(BaseModel):
+    """parameters to create a deployment from a flow; going away with blocks"""
+
+    flow_name: str
+    deployment_name: str
+    org_slug: str
+    deployment_params: dict
     cron: str = None
 
 

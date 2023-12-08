@@ -26,12 +26,13 @@ from proxy.schemas import (
     PrefectShellSetup,
     DbtCoreCreate,
     DeploymentCreate,
+    DeploymentCreate2,
     DeploymentUpdate,
     PrefectSecretBlockCreate,
+    DbtCliProfileBlockCreate,
 )
-from proxy.flows import (
-    deployment_schedule_flow_v3,
-)
+from proxy.flows import deployment_schedule_flow_v3
+from proxy.prefect_flows import deployment_schedule_flow_v4
 
 load_dotenv()
 
@@ -380,10 +381,15 @@ async def get_dbtcore_block_id(blockname: str) -> str | None:
         )
 
 
-async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
+async def _create_dbt_cli_profile(
+    payload: DbtCliProfileBlockCreate | DbtCoreCreate,
+) -> DbtCliProfile:
     """credentials are decrypted by now"""
-    if not isinstance(payload, DbtCoreCreate):
-        raise TypeError("payload must be a DbtCoreCreate")
+    if not (
+        isinstance(payload, DbtCliProfileBlockCreate)
+        or isinstance(payload, DbtCoreCreate)
+    ):
+        raise TypeError("payload is of wrong type")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
         target_configs = TargetConfigs(
@@ -416,15 +422,18 @@ async def _create_dbt_cli_profile(payload: DbtCoreCreate) -> DbtCliProfile:
             target=payload.profile.target_configs_schema,
             target_configs=target_configs,
         )
+        cleaned_blockname = cleaned_name_for_prefectblock(
+            payload.cli_profile_block_name
+        )
         await dbt_cli_profile.save(
-            cleaned_name_for_prefectblock(payload.cli_profile_block_name),
+            cleaned_blockname,
             overwrite=True,
         )
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create dbt cli profile") from error
 
-    return dbt_cli_profile
+    return dbt_cli_profile, _block_id(dbt_cli_profile), cleaned_blockname
 
 
 async def create_dbt_core_block(payload: DbtCoreCreate):
@@ -433,7 +442,7 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
 
-    dbt_cli_profile = await _create_dbt_cli_profile(payload)
+    dbt_cli_profile, _, _ = await _create_dbt_cli_profile(payload)
     dbt_core_operation = DbtCoreOperation(
         commands=payload.commands,
         env=payload.env,
@@ -602,6 +611,32 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
         logger.exception(error)
         raise PrefectException("failed to create deployment") from error
     return {"id": deployment_id, "name": deployment.name}
+
+
+async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
+    """create a deployment from a flow and a schedule"""
+    if not isinstance(payload, DeploymentCreate2):
+        raise TypeError("payload must be a DeploymentCreate")
+    logger.info(payload)
+
+    deployment = await Deployment.build_from_flow(
+        flow=deployment_schedule_flow_v4.with_options(name=payload.flow_name),
+        name=payload.deployment_name,
+        work_queue_name="ddp",
+        tags=[payload.org_slug],
+    )
+    deployment.parameters = payload.deployment_params
+    deployment.schedule = CronSchedule(cron=payload.cron) if payload.cron else None
+    try:
+        deployment_id = await deployment.apply()
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to create deployment") from error
+    return {
+        "id": deployment_id,
+        "name": deployment.name,
+        "params": deployment.parameters,
+    }
 
 
 def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:

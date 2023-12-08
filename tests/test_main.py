@@ -8,6 +8,7 @@ from proxy.main import (
     airbytesync,
     app,
     dbtrun,
+    shelloprun,
     delete_block,
     delete_deployment,
     get_airbyte_connection_by_blockid,
@@ -37,6 +38,7 @@ from proxy.main import (
     post_shell,
     sync_airbyte_connection_flow,
     sync_dbtcore_flow,
+    sync_shellop_flow,
 )
 
 from proxy.schemas import (
@@ -55,6 +57,7 @@ from proxy.schemas import (
     PrefectBlocksDelete,
     PrefectShellSetup,
     RunFlow,
+    RunShellOperation,
 )
 
 app = FastAPI()
@@ -152,6 +155,53 @@ def test_dbtrun_failure():
             mock_with_options.return_value = lambda x: expected_result
             result = dbtrun(block_name, flow_name, flow_run_name)
             assert result == expected_result
+
+
+def test_shelloprun_success():
+    expected_result = {"result": "example_result", "status": "success"}
+    task_config = RunShellOperation(
+        slug="git-pull",
+        commands=["echo test"],
+        working_dir="/tmp",
+        env={},
+        flow_name="example_flow",
+        flow_run_name="example_flow_run",
+    )
+
+    with patch("proxy.main.run_shell_operation_flow") as mock_run_shell_operation_flow:
+        with patch.object(
+            mock_run_shell_operation_flow.with_options.return_value, "with_options"
+        ) as mock_with_options:
+            mock_with_options.return_value = lambda x: expected_result
+            result = shelloprun(task_config)
+            assert result == expected_result
+
+
+def test_shelloprun_failure():
+    expected_result = {"result": "example_result", "status": "failed"}
+    task_config = RunShellOperation(
+        slug="git-pull",
+        commands=["echo test"],
+        working_dir="/tmp",
+        env={},
+        flow_name="example_flow",
+        flow_run_name="example_flow_run",
+    )
+
+    with patch("proxy.main.run_shell_operation_flow") as mock_run_shell_operation_flow:
+        with patch.object(
+            mock_run_shell_operation_flow.with_options.return_value, "with_options"
+        ) as mock_with_options:
+            mock_with_options.return_value = lambda x: expected_result
+            result = shelloprun(task_config)
+            assert result == expected_result
+
+
+def test_airbyte_sync_invalid_payload_type():
+    task_config = None
+
+    with pytest.raises(TypeError):
+        shelloprun(task_config)
 
 
 def test_run_dbt_exception():
@@ -773,6 +823,31 @@ async def test_sync_dbtcore_flow_invalid_payload():
     request = client.request("POST", "/")
     with pytest.raises(TypeError) as excinfo:
         await sync_dbtcore_flow(request, payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
+async def test_sync_shellop_flow_success():
+    payload = RunShellOperation(
+        slug="test-op",
+        commands=['echo "Hello, World!"'],
+        working_dir="test_dir",
+        env={"key": "test_value"},
+        flow_name="shell_test_flow",
+        flow_run_name="shell_test_flow",
+    )
+    request = client.request("POST", "/")
+    with patch("proxy.main.shelloprun", return_value="test result"):
+        response = await sync_shellop_flow(request, payload)
+        assert response == {"status": "success", "result": "test result"}
+
+
+@pytest.mark.asyncio
+async def test_sync_shellop_flow_invalid_payload():
+    payload = None
+    request = client.request("POST", "/")
+    with pytest.raises(TypeError) as excinfo:
+        await sync_shellop_flow(request, payload)
     assert excinfo.value.args[0] == "payload is invalid"
 
 

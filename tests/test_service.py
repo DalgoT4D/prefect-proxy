@@ -801,7 +801,7 @@ async def test_create_dbt_cli_profile_with_invalid_payload():
     with pytest.raises(TypeError) as excinfo:
         await _create_dbt_cli_profile(payload)
 
-    assert str(excinfo.value) == "payload must be a DbtCoreCreate"
+    assert str(excinfo.value) == "payload is of wrong type"
 
 
 @pytest.mark.asyncio
