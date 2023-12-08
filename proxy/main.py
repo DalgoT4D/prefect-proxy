@@ -33,7 +33,6 @@ from proxy.service import (
     get_flow_run,
     create_secret_block,
     _create_dbt_cli_profile,
-    _block_id,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -44,6 +43,7 @@ from proxy.schemas import (
     DbtCoreCredentialUpdate,
     DbtCoreSchemaUpdate,
     RunFlow,
+    AirbyteSyncFlow,
     RunDbtCoreOperation,
     RunShellOperation,
     DeploymentCreate,
@@ -55,7 +55,11 @@ from proxy.schemas import (
     PrefectSecretBlockCreate,
     DbtCliProfileBlockCreate,
 )
-from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
+from proxy.flows import (
+    run_airbyte_connection_flow,
+    run_airbyte_connection_sync_v1,
+    run_dbtcore_flow,
+)
 
 from proxy.prefect_flows import run_shell_operation_flow, run_dbtcore_flow_v1
 
@@ -87,6 +91,46 @@ def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
     try:
         logger.info("START")
         result = flow(block_name)
+        logger.info("END")
+        logger.info(result)
+        return {"status": "success", "result": result}
+
+    except HTTPException as error:
+        logger.info("ERR-1")
+        # the error message may contain "Job <num> failed."
+        errormessage = error.detail
+        logger.error("celery task caught exception %s", errormessage)
+        pattern = re.compile(r"Job (\d+) failed.")
+        match = pattern.match(errormessage)
+        if match:
+            airbyte_job_num = match.groups()[0]
+            return {"status": "failed", "airbyte_job_num": airbyte_job_num}
+        raise
+
+    except Exception as error:
+        logger.exception(error)
+        raise
+
+
+def airbytesync_v1(
+    server_blockname: str, connection_id: str, flow_name: str, flow_run_name: str
+):
+    """Run an Airbyte Connection sync"""
+    if not isinstance(flow_name, str):
+        raise TypeError("flow_name must be a string")
+    if not isinstance(flow_run_name, str):
+        raise TypeError("flow_run_name must be a string")
+
+    logger.info("airbytesync %s %s", flow_name, flow_run_name)
+    flow = run_airbyte_connection_sync_v1
+    if flow_name:
+        flow = flow.with_options(name=flow_name)
+    if flow_run_name:
+        flow = flow.with_options(flow_run_name=flow_run_name)
+
+    try:
+        logger.info("START")
+        result = flow(server_blockname, connection_id)
         logger.info("END")
         logger.info(result)
         return {"status": "success", "result": result}
@@ -177,7 +221,9 @@ def shelloprun(task_config: RunShellOperation):
 
 # =============================================================================
 @app.post("/proxy/blocks/bulk/delete/")
-async def post_bulk_delete_blocks(request: Request, payload: PrefectBlocksDelete):
+async def post_bulk_delete_blocks(
+    request: Request, payload: PrefectBlocksDelete
+):  # pylint: disable=unused-argument
     """Delete all airbyte connection blocks in the payload array"""
     root = os.getenv("PREFECT_API_URL")
     deleted_blockids = []
@@ -201,7 +247,8 @@ async def post_bulk_delete_blocks(request: Request, payload: PrefectBlocksDelete
 # =============================================================================
 @app.post("/proxy/blocks/airbyte/connection/filter")
 def post_airbyte_connection_blocks(
-    request: Request, payload: AirbyteConnectionBlocksFetch
+    request: Request,  # pylint: disable=unused-argument
+    payload: AirbyteConnectionBlocksFetch,
 ):
     """Filter the prefect blocks with parameters from payload"""
     blocks = post_filter_blocks(payload.block_names)
@@ -221,7 +268,9 @@ def post_airbyte_connection_blocks(
 
 # =============================================================================
 @app.get("/proxy/blocks/airbyte/server/{blockname}")
-async def get_airbyte_server(request: Request, blockname: str):
+async def get_airbyte_server(
+    request: Request, blockname: str
+):  # pylint: disable=unused-argument
     """Look up an Airbyte server block by name and return block_id"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
@@ -242,7 +291,9 @@ async def get_airbyte_server(request: Request, blockname: str):
 
 
 @app.post("/proxy/blocks/airbyte/server/")
-async def post_airbyte_server(request: Request, payload: AirbyteServerCreate):
+async def post_airbyte_server(
+    request: Request, payload: AirbyteServerCreate
+):  # pylint: disable=unused-argument
     """
     create a new airbyte server block with this block name,
     raise an exception if the name is already in use
@@ -263,7 +314,9 @@ async def post_airbyte_server(request: Request, payload: AirbyteServerCreate):
 
 # =============================================================================
 @app.get("/proxy/blocks/airbyte/connection/byblockname/{blockname}")
-async def get_airbyte_connection_by_blockname(request: Request, blockname):
+async def get_airbyte_connection_by_blockname(
+    request: Request, blockname
+):  # pylint: disable=unused-argument
     """look up airbyte connection block by name and return block_id"""
     block_id = await get_airbyte_connection_block_id(blockname)
     if block_id is None:
@@ -274,7 +327,9 @@ async def get_airbyte_connection_by_blockname(request: Request, blockname):
 
 
 @app.get("/proxy/blocks/airbyte/connection/byblockid/{blockid}")
-async def get_airbyte_connection_by_blockid(request: Request, blockid):
+async def get_airbyte_connection_by_blockid(
+    request: Request, blockid
+):  # pylint: disable=unused-argument
     """look up airbyte connection block by id and return block data"""
     block = await get_airbyte_connection_block(blockid)
     if block is None:
@@ -285,7 +340,9 @@ async def get_airbyte_connection_by_blockid(request: Request, blockid):
 
 
 @app.post("/proxy/blocks/airbyte/connection/")
-async def post_airbyte_connection(request: Request, payload: AirbyteConnectionCreate):
+async def post_airbyte_connection(
+    request: Request, payload: AirbyteConnectionCreate
+):  # pylint: disable=unused-argument
     """
     create a new airbyte connection block with this block name,
     raise an exception if the name is already in use
@@ -303,7 +360,7 @@ async def post_airbyte_connection(request: Request, payload: AirbyteConnectionCr
 
 # =============================================================================
 @app.get("/proxy/blocks/shell/{blockname}")
-async def get_shell(request: Request, blockname):
+async def get_shell(request: Request, blockname):  # pylint: disable=unused-argument
     """look up a shell operation block by name and return block_id"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
@@ -316,7 +373,9 @@ async def get_shell(request: Request, blockname):
 
 
 @app.post("/proxy/blocks/shell/")
-async def post_shell(request: Request, payload: PrefectShellSetup):
+async def post_shell(
+    request: Request, payload: PrefectShellSetup
+):  # pylint: disable=unused-argument
     """
     create a new shell block with this block name,
     raise an exception if the name is already in use
@@ -337,7 +396,7 @@ async def post_shell(request: Request, payload: PrefectShellSetup):
 
 # =============================================================================
 @app.get("/proxy/blocks/dbtcore/{blockname}")
-async def get_dbtcore(request: Request, blockname):
+async def get_dbtcore(request: Request, blockname):  # pylint: disable=unused-argument
     """look up a dbt core operation block by name and return block_id"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
@@ -351,7 +410,9 @@ async def get_dbtcore(request: Request, blockname):
 
 
 @app.post("/proxy/blocks/dbtcore/")
-async def post_dbtcore(request: Request, payload: DbtCoreCreate):
+async def post_dbtcore(
+    request: Request, payload: DbtCoreCreate
+):  # pylint: disable=unused-argument
     """
     create a new dbt_core block with this block name,
     raise an exception if the name is already in use
@@ -375,7 +436,9 @@ async def post_dbtcore(request: Request, payload: DbtCoreCreate):
 
 
 @app.post("/proxy/blocks/dbtcli/profile/")
-async def post_dbtcli_profile(request: Request, payload: DbtCliProfileBlockCreate):
+async def post_dbtcli_profile(
+    request: Request, payload: DbtCliProfileBlockCreate
+):  # pylint: disable=unused-argument
     """
     create a new dbt_core block with this block name,
     raise an exception if the name is already in use
@@ -399,7 +462,9 @@ async def post_dbtcli_profile(request: Request, payload: DbtCliProfileBlockCreat
 
 
 @app.put("/proxy/blocks/dbtcore_edit/postgres/")
-async def put_dbtcore_postgres(request: Request, payload: DbtCoreCredentialUpdate):
+async def put_dbtcore_postgres(
+    request: Request, payload: DbtCoreCredentialUpdate
+):  # pylint: disable=unused-argument
     """update the credentials inside an existing dbt core op block"""
     if not isinstance(payload, DbtCoreCredentialUpdate):
         raise TypeError("payload is invalid")
@@ -417,7 +482,9 @@ async def put_dbtcore_postgres(request: Request, payload: DbtCoreCredentialUpdat
 
 
 @app.put("/proxy/blocks/dbtcore_edit/bigquery/")
-async def put_dbtcore_bigquery(request: Request, payload: DbtCoreCredentialUpdate):
+async def put_dbtcore_bigquery(
+    request: Request, payload: DbtCoreCredentialUpdate
+):  # pylint: disable=unused-argument
     """update the credentials inside an existing dbt core op block"""
     if not isinstance(payload, DbtCoreCredentialUpdate):
         raise TypeError("payload is invalid")
@@ -434,7 +501,9 @@ async def put_dbtcore_bigquery(request: Request, payload: DbtCoreCredentialUpdat
 
 
 @app.put("/proxy/blocks/dbtcore_edit_schema/")
-async def put_dbtcore_schema(request: Request, payload: DbtCoreSchemaUpdate):
+async def put_dbtcore_schema(
+    request: Request, payload: DbtCoreSchemaUpdate
+):  # pylint: disable=unused-argument
     """update the target inside an existing dbt core op block"""
     if not isinstance(payload, DbtCoreSchemaUpdate):
         raise TypeError("payload is invalid")
@@ -455,7 +524,9 @@ async def put_dbtcore_schema(request: Request, payload: DbtCoreSchemaUpdate):
 
 # =============================================================================
 @app.post("/proxy/blocks/secret/")
-async def post_secret_block(request: Request, payload: PrefectSecretBlockCreate):
+async def post_secret_block(
+    request: Request, payload: PrefectSecretBlockCreate
+):  # pylint: disable=unused-argument
     """create a new prefect secret block with this block name to store a secret string"""
     if not isinstance(payload, PrefectSecretBlockCreate):
         raise TypeError("payload is invalid")
@@ -476,7 +547,7 @@ async def post_secret_block(request: Request, payload: PrefectSecretBlockCreate)
 
 # =============================================================================
 @app.delete("/delete-a-block/{block_id}")
-async def delete_block(request: Request, block_id):
+async def delete_block(request: Request, block_id):  # pylint: disable=unused-argument
     """we can break this up into four different deleters later if we want to"""
     if not isinstance(block_id, str):
         raise TypeError("block_id must be a string")
@@ -492,7 +563,9 @@ async def delete_block(request: Request, block_id):
 
 # =============================================================================
 @app.post("/proxy/flows/airbyte/connection/sync/")
-async def sync_airbyte_connection_flow(request: Request, payload: RunFlow):
+async def sync_airbyte_connection_flow(
+    request: Request, payload: RunFlow
+):  # pylint: disable=unused-argument
     """Prefect flow to sync an airbyte connection"""
     if not isinstance(payload, RunFlow):
         raise TypeError("payload is invalid")
@@ -510,8 +583,33 @@ async def sync_airbyte_connection_flow(request: Request, payload: RunFlow):
         raise HTTPException(status_code=400, detail=str(error)) from error
 
 
+@app.post("/proxy/v1/flows/airbyte/connection/sync/")
+async def sync_airbyte_connection_flow_v1(
+    request: Request, payload: AirbyteSyncFlow
+):  # pylint: disable=unused-argument
+    """Prefect flow to sync an airbyte connection"""
+    if not isinstance(payload, AirbyteSyncFlow):
+        raise TypeError("payload is invalid")
+    logger.info(payload)
+    logger.info("Running airbyte connection sync flow")
+    try:
+        result = airbytesync_v1(
+            payload.serverBlockName,
+            payload.connectionId,
+            payload.flowName,
+            payload.flowRunName,
+        )
+        logger.info(result)
+        return result
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
 @app.post("/proxy/flows/dbtcore/run/")
-async def sync_dbtcore_flow(request: Request, payload: RunFlow):
+async def sync_dbtcore_flow(
+    request: Request, payload: RunFlow
+):  # pylint: disable=unused-argument
     """Prefect flow to run dbt"""
     logger.info(payload)
     if not isinstance(payload, RunFlow):
@@ -530,7 +628,9 @@ async def sync_dbtcore_flow(request: Request, payload: RunFlow):
 
 
 @app.post("/proxy/v1/flows/dbtcore/run/")
-async def sync_dbtcore_flow_v1(request: Request, payload: RunDbtCoreOperation):
+async def sync_dbtcore_flow_v1(
+    request: Request, payload: RunDbtCoreOperation
+):  # pylint: disable=unused-argument
     """Prefect flow to run dbt"""
     logger.info(payload)
     if not isinstance(payload, RunDbtCoreOperation):
@@ -547,7 +647,9 @@ async def sync_dbtcore_flow_v1(request: Request, payload: RunDbtCoreOperation):
 
 
 @app.post("/proxy/flows/shell/run/")
-async def sync_shellop_flow(request: Request, payload: RunShellOperation):
+async def sync_shellop_flow(
+    request: Request, payload: RunShellOperation
+):  # pylint: disable=unused-argument
     """Prefect flow to run dbt"""
     logger.info(payload)
     if not isinstance(payload, RunShellOperation):
@@ -564,7 +666,9 @@ async def sync_shellop_flow(request: Request, payload: RunShellOperation):
 
 
 @app.post("/proxy/deployments/")
-async def post_dataflow(request: Request, payload: DeploymentCreate):
+async def post_dataflow(
+    request: Request, payload: DeploymentCreate
+):  # pylint: disable=unused-argument
     """Create a deployment from an existing flow"""
     if not isinstance(payload, DeploymentCreate):
         raise TypeError("payload is invalid")
@@ -582,7 +686,9 @@ async def post_dataflow(request: Request, payload: DeploymentCreate):
 
 
 @app.post("/proxy/v1/deployments/")
-async def post_dataflow_v1(request: Request, payload: DeploymentCreate2):
+async def post_dataflow_v1(
+    request: Request, payload: DeploymentCreate2
+):  # pylint: disable=unused-argument
     """Create a deployment from an existing flow"""
     if not isinstance(payload, DeploymentCreate2):
         raise TypeError("payload is invalid")
@@ -600,7 +706,9 @@ async def post_dataflow_v1(request: Request, payload: DeploymentCreate2):
 
 
 @app.put("/proxy/deployments/{deployment_id}")
-def put_dataflow(request: Request, deployment_id, payload: DeploymentUpdate):
+def put_dataflow(
+    request: Request, deployment_id, payload: DeploymentUpdate
+):  # pylint: disable=unused-argument
     """updates a deployment"""
     if not isinstance(payload, DeploymentUpdate):
         raise TypeError("payload is invalid")
@@ -618,7 +726,9 @@ def put_dataflow(request: Request, deployment_id, payload: DeploymentUpdate):
 
 
 @app.post("/proxy/flow_run/")
-async def get_flowrun(request: Request, payload: FlowRunRequest):
+async def get_flowrun(
+    request: Request, payload: FlowRunRequest
+):  # pylint: disable=unused-argument
     """look up a flow run by name and return id if found"""
     if not isinstance(payload, FlowRunRequest):
         raise TypeError("payload is invalid")
@@ -641,7 +751,10 @@ async def get_flowrun(request: Request, payload: FlowRunRequest):
 
 @app.get("/proxy/flow_runs")
 def get_flow_runs(
-    request: Request, deployment_id: str, limit: int = 0, start_time_gt: str = ""
+    request: Request,  # pylint: disable=unused-argument
+    deployment_id: str,
+    limit: int = 0,
+    start_time_gt: str = "",
 ):
     """Get Flow Runs for a deployment"""
     if not isinstance(deployment_id, str):
@@ -663,7 +776,9 @@ def get_flow_runs(
 
 
 @app.get("/proxy/flow_runs/{flow_run_id}")
-def get_flow_run_by_id(request: Request, flow_run_id):
+def get_flow_run_by_id(
+    request: Request, flow_run_id
+):  # pylint: disable=unused-argument
     """Get a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("Flow run id must be a string")
@@ -682,7 +797,9 @@ def get_flow_run_by_id(request: Request, flow_run_id):
 
 
 @app.post("/proxy/deployments/filter")
-def post_deployments(request: Request, payload: DeploymentFetch):
+def post_deployments(
+    request: Request, payload: DeploymentFetch
+):  # pylint: disable=unused-argument
     """Get deployments by various filters"""
     logger.info(payload)
     if not isinstance(payload, DeploymentFetch):
@@ -701,7 +818,9 @@ def post_deployments(request: Request, payload: DeploymentFetch):
 
 
 @app.get("/proxy/flow_runs/logs/{flow_run_id}")
-def get_flow_run_logs_paginated(request: Request, flow_run_id: str, offset: int = 0):
+def get_flow_run_logs_paginated(
+    request: Request, flow_run_id: str, offset: int = 0
+):  # pylint: disable=unused-argument
     """paginate the logs from a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
@@ -720,7 +839,9 @@ def get_flow_run_logs_paginated(request: Request, flow_run_id: str, offset: int 
 
 
 @app.get("/proxy/deployments/{deployment_id}")
-def get_read_deployment(request: Request, deployment_id):
+def get_read_deployment(
+    request: Request, deployment_id
+):  # pylint: disable=unused-argument
     """Fetch deployment and all its details"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
@@ -752,7 +873,9 @@ def get_read_deployment(request: Request, deployment_id):
 
 
 @app.delete("/proxy/deployments/{deployment_id}")
-def delete_deployment(request: Request, deployment_id):
+def delete_deployment(
+    request: Request, deployment_id
+):  # pylint: disable=unused-argument
     """Delete a deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
@@ -769,7 +892,9 @@ def delete_deployment(request: Request, deployment_id):
 
 
 @app.post("/proxy/deployments/{deployment_id}/flow_run")
-async def post_create_deployment_flow_run(request: Request, deployment_id):
+async def post_create_deployment_flow_run(
+    request: Request, deployment_id
+):  # pylint: disable=unused-argument
     """Create a flow run from deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
@@ -786,7 +911,9 @@ async def post_create_deployment_flow_run(request: Request, deployment_id):
 
 
 @app.post("/proxy/deployments/{deployment_id}/set_schedule/{status}")
-def post_deployment_set_schedule(request: Request, deployment_id, status):
+def post_deployment_set_schedule(
+    request: Request, deployment_id, status
+):  # pylint: disable=unused-argument
     """Create a flow run from deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")

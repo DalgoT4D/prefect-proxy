@@ -8,10 +8,10 @@ from prefect import flow, task
 from prefect.blocks.system import Secret
 from prefect.states import State, StateType
 from prefect_airbyte.flows import run_connection_sync
-from prefect_airbyte import AirbyteConnection
+from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from proxy.helpers import CustomLogger, command_from_dbt_blockname
-from prefect_dbt.cli import DbtCliProfile
+from proxy.exception import PrefectException
 
 logger = CustomLogger("prefect-proxy")
 
@@ -29,6 +29,30 @@ def run_airbyte_connection_flow(block_name: str):
     """Prefect flow to run airbyte connection"""
     try:
         airbyte_connection: AirbyteConnection = AirbyteConnection.load(block_name)
+        result = run_connection_sync(airbyte_connection)
+        logger.info("airbyte connection sync result=")
+        logger.info(result)
+        return result
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job <num> failed."
+        raise
+
+
+@flow
+def run_airbyte_connection_sync_v1(server_blockname: str, connection_id: str):
+    """run an airbyte connection sync"""
+    try:
+        serverblock: AirbyteServer = AirbyteServer.load(server_blockname)
+    except ValueError as exc:
+        logger.exception(exc)
+        raise PrefectException(
+            f"could not find Airbyte Server block named {server_blockname}"
+        ) from exc
+
+    airbyte_connection = AirbyteConnection(
+        airbyte_server=serverblock, connection_id=connection_id, timeout=15
+    )
+    try:
         result = run_connection_sync(airbyte_connection)
         logger.info("airbyte connection sync result=")
         logger.info(result)

@@ -126,6 +126,15 @@ class RunFlow(BaseModel):
     flowRunName: str = None
 
 
+class AirbyteSyncFlow(BaseModel):
+    """server block name and connection id"""
+
+    serverBlockName: str
+    connectionId: str
+    flowName: str = None
+    flowRunName: str = None
+
+
 class RunDbtCoreOperation(BaseModel):
     """config payload to run a dbt core operation: clean, deps, test"""
 
