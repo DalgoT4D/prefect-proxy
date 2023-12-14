@@ -129,6 +129,7 @@ class RunFlow(BaseModel):
 class RunDbtCoreOperation(BaseModel):
     """config payload to run a dbt core operation: clean, deps, test"""
 
+    type: str
     slug: str
     profiles_dir: str
     project_dir: str
@@ -144,6 +145,7 @@ class RunDbtCoreOperation(BaseModel):
 class RunShellOperation(BaseModel):
     """config payload to run a shell operation in prefect"""
 
+    type: str
     slug: str
     commands: list
     working_dir: str
