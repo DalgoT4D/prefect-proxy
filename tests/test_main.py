@@ -160,6 +160,7 @@ def test_dbtrun_failure():
 def test_shelloprun_success():
     expected_result = {"result": "example_result", "status": "success"}
     task_config = RunShellOperation(
+        type="Shell operation",
         slug="git-pull",
         commands=["echo test"],
         working_dir="/tmp",
@@ -180,6 +181,7 @@ def test_shelloprun_success():
 def test_shelloprun_failure():
     expected_result = {"result": "example_result", "status": "failed"}
     task_config = RunShellOperation(
+        type="Shell operation",
         slug="git-pull",
         commands=["echo test"],
         working_dir="/tmp",
@@ -829,6 +831,7 @@ async def test_sync_dbtcore_flow_invalid_payload():
 @pytest.mark.asyncio
 async def test_sync_shellop_flow_success():
     payload = RunShellOperation(
+        type="Shell operation", 
         slug="test-op",
         commands=['echo "Hello, World!"'],
         working_dir="test_dir",
