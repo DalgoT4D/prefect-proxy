@@ -15,6 +15,7 @@ from proxy.service import (
     get_dbtcore_block_id,
     create_dbt_core_block,
     put_deployment,
+    put_deployment_v1,
     update_postgres_credentials,
     update_bigquery_credentials,
     update_target_configs_schema,
@@ -54,6 +55,7 @@ from proxy.schemas import (
     AirbyteConnectionBlocksFetch,
     PrefectSecretBlockCreate,
     DbtCliProfileBlockCreate,
+    DeploymentUpdate2,
 )
 from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
 
@@ -608,6 +610,24 @@ def put_dataflow(request: Request, deployment_id, payload: DeploymentUpdate):
     logger.info(payload)
     try:
         put_deployment(deployment_id, payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to update the deployment"
+        ) from error
+    logger.info("Updated the deployment: %s", deployment_id)
+    return {"success": 1}
+
+
+@app.put("/proxy/v1/deployments/{deployment_id}")
+def put_dataflow_v1(request: Request, deployment_id, payload: DeploymentUpdate2):
+    """updates a deployment"""
+    if not isinstance(payload, DeploymentUpdate2):
+        raise TypeError("payload is invalid")
+
+    logger.info(payload)
+    try:
+        put_deployment_v1(deployment_id, payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
