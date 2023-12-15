@@ -30,6 +30,7 @@ from proxy.schemas import (
     DeploymentUpdate,
     PrefectSecretBlockCreate,
     DbtCliProfileBlockCreate,
+    DeploymentUpdate2
 )
 from proxy.flows import deployment_schedule_flow_v3
 from proxy.prefect_flows import deployment_schedule_flow_v4
@@ -654,6 +655,26 @@ def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:
             "airbyte_blocks": payload.connection_blocks,
             "dbt_blocks": payload.dbt_blocks,
         },
+    }
+
+    # res will be any empty json if success since status code is 204
+    res = prefect_patch(f"deployments/{deployment_id}", payload)
+    logger.info("Update deployment with ID: %s", deployment_id)
+    return res
+
+
+def put_deployment_v1(deployment_id: str, payload: DeploymentUpdate2) -> dict:
+    """create a deployment from a flow and a schedule"""
+    if not isinstance(payload, DeploymentUpdate2):
+        raise TypeError("payload must be a DeploymentUpdate2")
+
+    logger.info(payload)
+
+    schedule = CronSchedule(cron=payload.cron).dict() if payload.cron else None
+
+    payload = {
+        "schedule": schedule,
+        "parameters": payload.deployment_params
     }
 
     # res will be any empty json if success since status code is 204
