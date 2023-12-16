@@ -189,7 +189,9 @@ def deployment_schedule_flow_v2(airbyte_blocks: list, dbt_blocks: list):
 
 
 @flow
-def deployment_schedule_flow_v3(airbyte_blocks: list, dbt_blocks: list):
+def deployment_schedule_flow_v3(
+    airbyte_blocks: list, dbt_blocks: list, config: dict = {}
+):
     # pylint: disable=broad-exception-caught
     """modification so dbt test failures are not propagated as flow failures"""
     # sort the airbyte blocks by seq
