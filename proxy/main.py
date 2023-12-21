@@ -35,6 +35,7 @@ from proxy.service import (
     create_secret_block,
     _create_dbt_cli_profile,
     _block_id,
+    get_secret_block_document,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -474,6 +475,24 @@ async def post_secret_block(request: Request, payload: PrefectSecretBlockCreate)
         cleaned_blockname,
     )
     return {"block_id": block_id, "block_name": cleaned_blockname}
+
+
+@app.get("/proxy/blocks/secret/{blockname}")
+async def get_secret_block(request: Request, blockname: str):
+    """fetch the secret block documents"""
+    try:
+        block_id, block_name = await get_secret_block_document(blockname)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch secret block document"
+        ) from error
+    logger.info(
+        "Fetched the secret block with ID: %s and name: %s",
+        block_id,
+        block_name,
+    )
+    return {"block_id": block_id, "block_name": block_name}
 
 
 # =============================================================================

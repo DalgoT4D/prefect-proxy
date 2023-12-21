@@ -30,7 +30,7 @@ from proxy.schemas import (
     DeploymentUpdate,
     PrefectSecretBlockCreate,
     DbtCliProfileBlockCreate,
-    DeploymentUpdate2
+    DeploymentUpdate2,
 )
 from proxy.flows import deployment_schedule_flow_v3
 from proxy.prefect_flows import deployment_schedule_flow_v4
@@ -162,6 +162,11 @@ def prefect_delete(endpoint: str) -> dict:
 def _block_id(block: Block) -> str:
     """Get the id of block"""
     return str(block.dict()["_block_document_id"])
+
+
+def _block_name(block: Block) -> str:
+    """Get the name of block"""
+    return str(block.dict()["_block_document_name"])
 
 
 # ================================================================================================
@@ -485,6 +490,18 @@ async def create_secret_block(payload: PrefectSecretBlockCreate):
     return _block_id(secret_block), cleaned_blockname
 
 
+async def get_secret_block_document(blockname: str):
+    """Get a prefect block of type secret"""
+    try:
+        print("block name", blockname)
+        secret_block = await Secret.load(blockname)
+        print(secret_block.dict())
+    except Exception as error:
+        raise PrefectException("Could not fetch the secret block") from error
+
+    return _block_id(secret_block), _block_name(secret_block)
+
+
 async def update_postgres_credentials(dbt_blockname, new_extras):
     """updates the database credentials inside a dbt postgres block"""
     try:
@@ -672,10 +689,7 @@ def put_deployment_v1(deployment_id: str, payload: DeploymentUpdate2) -> dict:
 
     schedule = CronSchedule(cron=payload.cron).dict() if payload.cron else None
 
-    payload = {
-        "schedule": schedule,
-        "parameters": payload.deployment_params
-    }
+    payload = {"schedule": schedule, "parameters": payload.deployment_params}
 
     # res will be any empty json if success since status code is 204
     res = prefect_patch(f"deployments/{deployment_id}", payload)
