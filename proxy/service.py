@@ -493,9 +493,7 @@ async def create_secret_block(payload: PrefectSecretBlockCreate):
 async def get_secret_block_document(blockname: str):
     """Get a prefect block of type secret"""
     try:
-        print("block name", blockname)
         secret_block = await Secret.load(blockname)
-        print(secret_block.dict())
     except Exception as error:
         raise PrefectException("Could not fetch the secret block") from error
 
