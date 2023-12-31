@@ -34,6 +34,7 @@ from proxy.service import (
     get_flow_run,
     create_secret_block,
     _create_dbt_cli_profile,
+    update_dbt_cli_profile,
     _block_id,
     get_secret_block_document,
 )
@@ -57,6 +58,7 @@ from proxy.schemas import (
     PrefectSecretBlockCreate,
     DbtCliProfileBlockCreate,
     DeploymentUpdate2,
+    DbtCliProfileBlockUpdate,
 )
 from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
 
@@ -395,6 +397,26 @@ async def post_dbtcli_profile(request: Request, payload: DbtCliProfileBlockCreat
         ) from error
     logger.info(
         "Created new dbt cli profile block with ID: %s and name: %s",
+        block_id,
+        cleaned_blockname,
+    )
+    return {"block_id": block_id, "block_name": cleaned_blockname}
+
+
+@app.put("/proxy/blocks/dbtcli/profile/")
+async def put_dbtcli_profile(request: Request, payload: DbtCliProfileBlockUpdate):
+    """Updates the dbt cli block based on the type of warehouse"""
+    if not isinstance(payload, DbtCliProfileBlockUpdate):
+        raise TypeError("payload is invalid")
+    try:
+        _, block_id, cleaned_blockname = await update_dbt_cli_profile(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to update dbt cli profile block"
+        ) from error
+    logger.info(
+        "Updated the dbt cli profile block with ID: %s and name: %s",
         block_id,
         cleaned_blockname,
     )
