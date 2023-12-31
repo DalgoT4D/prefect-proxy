@@ -95,6 +95,7 @@ class DbtCliProfileBlockUpdate(BaseModel, extra=Extra.allow):
     profile: DbtProfileUpdate = None
     credentials: dict = None
     bqlocation: str = None
+    new_block_name: str = None  # this should be passed if the profilename has changed
 
 
 class DbtCoreCredentialUpdate(BaseModel):
