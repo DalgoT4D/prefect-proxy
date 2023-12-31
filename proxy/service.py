@@ -30,6 +30,7 @@ from proxy.schemas import (
     DeploymentUpdate,
     PrefectSecretBlockCreate,
     DbtCliProfileBlockCreate,
+    DbtCliProfileBlockUpdate,
     DeploymentUpdate2,
 )
 from proxy.flows import deployment_schedule_flow_v3
@@ -440,6 +441,70 @@ async def _create_dbt_cli_profile(
         raise PrefectException("failed to create dbt cli profile") from error
 
     return dbt_cli_profile, _block_id(dbt_cli_profile), cleaned_blockname
+
+
+async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
+    """
+    Update the schema, warehouse credentials or profile in cli profile block
+    """
+    try:
+        dbtcli_block: DbtCliProfile = await DbtCliProfile.load(
+            payload.cli_profile_block_name
+        )
+    except Exception as error:
+        raise PrefectException(
+            "no dbt cli profile block named " + payload.cli_profile_block_name
+        ) from error
+
+    if not isinstance(payload, DbtCliProfileBlockUpdate):
+        raise TypeError("payload is of wrong type")
+
+    try:
+        # schema
+        if payload.profile and payload.profile.target_configs_schema:
+            dbtcli_block.target_configs.schema = payload.profile.target_configs_schema
+            dbtcli_block.target = (
+                payload.profile.target_configs_schema
+            )  # by default output(s) target in profiles.yml will be target_configs_schema
+
+        # target
+        if payload.profile and payload.profile.target:
+            dbtcli_block.target = payload.profile.target
+
+        # profile name present in profiles.yml; should be the same as dbt_project.yml
+        if payload.profile and payload.profile.name:
+            dbtcli_block.name = payload.profile.name
+
+        # update credentials
+        if payload.credentials:
+            if payload.wtype == "postgres":
+                dbtcli_block.target_configs.extras = {
+                    "user": payload.credentials["username"],
+                    "password": payload.credentials["password"],
+                    "dbname": payload.credentials["database"],
+                    "host": payload.credentials["host"],
+                    "port": payload.credentials["port"],
+                }
+
+            elif payload.wtype == "bigquery":
+                dbcredentials = GcpCredentials(service_account_info=payload.credentials)
+                dbtcli_block.target_configs.credentials = dbcredentials
+                dbtcli_block.target_configs.extras = {
+                    "location": payload.bqlocation,
+                }
+            else:
+                raise PrefectException("unknown wtype: " + payload.wtype)
+
+        await dbtcli_block.save(
+            name=cleaned_name_for_prefectblock(payload.cli_profile_block_name),
+            overwrite=True,
+        )
+
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to update dbt cli profile") from error
+
+    return dbtcli_block, _block_id(dbtcli_block), payload.cli_profile_block_name
 
 
 async def create_dbt_core_block(payload: DbtCoreCreate):

@@ -46,15 +46,7 @@ class DbtProfileCreate(BaseModel):
     """this is part of the dbt block creation payload"""
 
     name: str
-    target_configs_schema: str
-
-
-class DbtCliProfile(BaseModel):
-    """this is part of the dbt block creation payload"""
-
-    name: str
-    target: str
-    target_configs: str
+    target_configs_schema: str  # schema that dbt will write against in the warehouse
 
 
 class DbtCoreCreate(BaseModel):
@@ -83,6 +75,26 @@ class DbtCliProfileBlockCreate(BaseModel, extra=Extra.allow):
     wtype: str
     bqlocation: str = None
     credentials: dict
+
+
+class DbtProfileUpdate(BaseModel):
+    """schema to update dbt profile"""
+
+    name: str = None  # profile name in profiles.yml that should be the same as in dbt_project.yml
+    target_configs_schema: str = (
+        None  # schema that dbt will write against in the warehouse
+    )
+    target: str = None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
+
+
+class DbtCliProfileBlockUpdate(BaseModel, extra=Extra.allow):
+    """update a dbt cli profile block's warehouse credentials, schema and target"""
+
+    cli_profile_block_name: str
+    wtype: str
+    profile: DbtProfileUpdate = None
+    credentials: dict = None
+    bqlocation: str = None
 
 
 class DbtCoreCredentialUpdate(BaseModel):
