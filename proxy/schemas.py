@@ -91,7 +91,7 @@ class DbtCliProfileBlockUpdate(BaseModel, extra=Extra.allow):
     """update a dbt cli profile block's warehouse credentials, schema and target"""
 
     cli_profile_block_name: str
-    wtype: str
+    wtype: str = None
     profile: DbtProfileUpdate = None
     credentials: dict = None
     bqlocation: str = None

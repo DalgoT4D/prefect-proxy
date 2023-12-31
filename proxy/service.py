@@ -477,6 +477,8 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
 
         # update credentials
         if payload.credentials:
+            if payload.wtype is None:
+                raise TypeError("wtype is required")
             if payload.wtype == "postgres":
                 dbtcli_block.target_configs.extras = {
                     "user": payload.credentials["username"],
