@@ -189,7 +189,9 @@ deployment_parmas:
 
 
 @flow
-def deployment_schedule_flow_v4(config: dict):
+def deployment_schedule_flow_v4(
+    config: dict, dbt_blocks: list = [], airbyte_blocks: list = []
+):
     # pylint: disable=broad-exception-caught
     """modification so dbt test failures are not propagated as flow failures"""
     config["tasks"].sort(key=lambda blk: blk["seq"])
