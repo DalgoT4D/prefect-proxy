@@ -11,8 +11,8 @@ from prefect.states import State, StateType
 from prefect_airbyte.flows import run_connection_sync
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
-from proxy.helpers import CustomLogger, command_from_dbt_blockname
 from prefect_dbt.cli import DbtCliProfile
+from proxy.helpers import CustomLogger
 
 logger = CustomLogger("prefect-proxy")
 
@@ -24,19 +24,18 @@ SHELLOPERATION = "Shell Operation"
 DBTCORE = "dbt Core Operation"
 
 
-""" task config for a airbyte sync operation
-{
-    type AIRBYTECONNECTION,
-    slug: str
-    airbyte_server_block:  str
-    connection_id: str
-    timeout: int
-}
-"""
-
-
+# =============================================================================
+# task config for a airbyte sync operation
+# {
+#     type AIRBYTECONNECTION,
+#     slug: str
+#     airbyte_server_block:  str
+#     connection_id: str
+#     timeout: int
+# }
 @flow
 def run_airbyte_connection_flow_v1(payload: dict):
+    """run an airbyte sync"""
     try:
         airbyte_server_block = payload["airbyte_server_block"]
         serverblock = AirbyteServer.load(airbyte_server_block)
@@ -70,27 +69,22 @@ def run_shell_operation_flow(payload: dict):
 
 # =============================================================================
 # tasks
-
-
-""" task config for a dbt core operation
-{
-    type: DBTCORE,
-    slug: str
-    profiles_dir: str
-    project_dir: str
-    working_dir: str
-    env: dict
-    commands: list
-    cli_profile_block: str
-    cli_args: list = []
-    flow_name: str
-    flow_run_name: str
-}
-"""
-
-
+# task config for a dbt core operation
+# {
+#     type: DBTCORE,
+#     slug: str
+#     profiles_dir: str
+#     project_dir: str
+#     working_dir: str
+#     env: dict
+#     commands: list
+#     cli_profile_block: str
+#     cli_args: list = []
+#     flow_name: str
+#     flow_run_name: str
+# }
 @task(name="dbtjob_v1", task_run_name="dbtjob-{task_slug}")
-def dbtjob_v1(task_config: dict, task_slug: str):
+def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     # pylint: disable=broad-exception-caught
     """
     each dbt op will run as a task within the parent flow
@@ -120,25 +114,23 @@ def dbtjob_v1(task_config: dict, task_slug: str):
             return State(
                 type=StateType.COMPLETED,
                 name="DBT_TEST_FAILED",
-                message=f"WARNING: dbt test failed",
+                message="WARNING: dbt test failed",
             )
 
         raise
 
 
-""" task config for a shell operation
-{
-    type: SHELLOPERATION,
-    slug: str,
-    commands: [],
-    env: {},
-    workingDir: ""
-}
-"""
-
-
+# =============================================================================
+# task config for a shell operation
+# {
+#     type: SHELLOPERATION,
+#     slug: str,
+#     commands: [],
+#     env: {},
+#     workingDir: ""
+# }
 @task(name="shellopjob", task_run_name="shellop-{task_slug}")
-def shellopjob(task_config: dict, task_slug: str):
+def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     # pylint: disable=broad-exception-caught
     """loads and runs the shell operation"""
 
@@ -164,30 +156,25 @@ def shellopjob(task_config: dict, task_slug: str):
 
 
 # =============================================================================
-
-"""
-deployment_parmas:
-{
-    config: {
-        tasks: [
-            {
-                "type": DBTCORE,
-                "slug": "dbt-run", # coming from django master task table
-                "seq": 1,
-                "commands": [],
-                "env": {},
-                "working_dir": ",
-                "profiles_dir": "",
-                "project_dir": "",
-                "cli_profile_block": "",
-                "cli_args": [],
-            }
-        ]
-    }
-}
-"""
-
-
+# deployment_parmas:
+# {
+#     config: {
+#         tasks: [
+#             {
+#                 "type": DBTCORE,
+#                 "slug": "dbt-run", # coming from django master task table
+#                 "seq": 1,
+#                 "commands": [],
+#                 "env": {},
+#                 "working_dir": ",
+#                 "profiles_dir": "",
+#                 "project_dir": "",
+#                 "cli_profile_block": "",
+#                 "cli_args": [],
+#             }
+#         ]
+#     }
+# }
 @flow
 def deployment_schedule_flow_v4(
     config: dict, dbt_blocks: list = [], airbyte_blocks: list = []
@@ -200,10 +187,13 @@ def deployment_schedule_flow_v4(
         for task_config in config["tasks"]:
             if task_config["type"] == DBTCORE:
                 dbtjob_v1(task_config, task_config["slug"])
+
             elif task_config["type"] == SHELLOPERATION:
                 shellopjob(task_config, task_config["slug"])
+
             elif task_config["type"] == AIRBYTECONNECTION:
                 run_airbyte_connection_flow_v1(task_config)
+
             else:
                 raise Exception(f"Unknown task type: {task_config['type']}")
 
