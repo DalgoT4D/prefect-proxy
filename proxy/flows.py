@@ -11,7 +11,6 @@ from prefect_airbyte.flows import run_connection_sync
 from prefect_airbyte import AirbyteConnection
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from proxy.helpers import CustomLogger, command_from_dbt_blockname
-from prefect_dbt.cli import DbtCliProfile
 
 logger = CustomLogger("prefect-proxy")
 

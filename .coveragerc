@@ -7,3 +7,4 @@ omit=*/tests/*
      */proxy/helpers.py
      */logger.py
      */proxy/flows.py
+     */proxy/prefect_flows.py
