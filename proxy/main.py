@@ -35,7 +35,6 @@ from proxy.service import (
     create_secret_block,
     _create_dbt_cli_profile,
     update_dbt_cli_profile,
-    _block_id,
     get_secret_block_document,
 )
 from proxy.schemas import (
