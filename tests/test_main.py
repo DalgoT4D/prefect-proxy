@@ -8,6 +8,7 @@ from proxy.main import (
     airbytesync,
     app,
     dbtrun,
+    dbtrun_v1,
     shelloprun,
     delete_block,
     delete_deployment,
@@ -27,18 +28,24 @@ from proxy.main import (
     post_create_deployment_flow_run,
     post_dataflow,
     post_dbtcore,
+    post_dbtcli_profile,
+    put_dbtcli_profile,
     put_dbtcore_postgres,
     put_dbtcore_bigquery,
     put_dbtcore_schema,
     put_dataflow,
     get_flow_run_by_id,
     post_secret_block,
+    get_secret_block,
     post_deployment_set_schedule,
     post_deployments,
     post_shell,
     sync_airbyte_connection_flow,
     sync_dbtcore_flow,
     sync_shellop_flow,
+    sync_dbtcore_flow_v1,
+    post_dataflow_v1,
+    put_dataflow_v1,
 )
 
 from proxy.schemas import (
@@ -49,7 +56,10 @@ from proxy.schemas import (
     DbtCoreCredentialUpdate,
     DbtProfileCreate,
     DbtCoreSchemaUpdate,
+    RunDbtCoreOperation,
     PrefectSecretBlockCreate,
+    DbtCliProfileBlockCreate,
+    DbtCliProfileBlockUpdate,
     DeploymentCreate,
     DeploymentUpdate,
     DeploymentFetch,
@@ -58,6 +68,8 @@ from proxy.schemas import (
     PrefectShellSetup,
     RunFlow,
     RunShellOperation,
+    DeploymentCreate2,
+    DeploymentUpdate2,
 )
 
 app = FastAPI()
@@ -98,6 +110,21 @@ def test_airbytesync_failure():
             mock_with_options.return_value = lambda x: inner_result
             result = airbytesync(block_name, flow_name, flow_run_name)
             assert result == expected_result
+
+
+def test_airbytesync_http_exception():
+    block_name = "example_block"
+    flow_name = ""
+    flow_run_name = ""
+
+    with patch(
+        "proxy.main.run_airbyte_connection_flow"
+    ) as mock_run_airbyte_connection_flow:
+        mock_run_airbyte_connection_flow.side_effect = HTTPException(
+            status_code=400, detail="Job 12345 failed."
+        )
+        result = airbytesync(block_name, flow_name, flow_run_name)
+        assert result == {"status": "failed", "airbyte_job_num": "12345"}
 
 
 def test_airbyte_sync_with_invalid_block_name():
@@ -155,6 +182,27 @@ def test_dbtrun_failure():
             mock_with_options.return_value = lambda x: expected_result
             result = dbtrun(block_name, flow_name, flow_run_name)
             assert result == expected_result
+
+
+def test_dbtrun_v1():
+    """tests dbtrun_v1"""
+    task_config = RunDbtCoreOperation(
+        flow_name="",
+        flow_run_name="",
+        type="TYPE",
+        slug="SLUG",
+        profiles_dir=".",
+        project_dir=".",
+        working_dir=".",
+        env={},
+        commands=[],
+        cli_profile_block="block-name",
+    )
+    with patch("proxy.main.run_dbtcore_flow_v1") as mock_run_dbtcore_flow_v1:
+        mock_run_dbtcore_flow_v1.return_value = {"result": "example_result"}
+        result = dbtrun_v1(task_config)
+        assert result == {"result": "example_result"}
+        mock_run_dbtcore_flow_v1.assert_called_once_with(task_config)
 
 
 def test_shelloprun_success():
@@ -632,6 +680,74 @@ async def test_put_dbtcore_postgres_failure(mock_update: AsyncMock):
 
 
 @pytest.mark.asyncio
+@patch("proxy.main._create_dbt_cli_profile")
+async def test_post_dbtcli_profile_success(mock__create_dbt_cli_profile: AsyncMock):
+    """tests post_dbtcli_profile"""
+    request = Mock()
+    payload = DbtCliProfileBlockCreate(
+        cli_profile_block_name="block-name",
+        profile={"name": "NAME", "target_configs_schema": "SCHEMA"},
+        wtype="postgres",
+        credentials={},
+    )
+
+    mock__create_dbt_cli_profile.return_value = ("ignore", "block-id", "block-name")
+    result = await post_dbtcli_profile(request, payload)
+    assert result == {"block_id": "block-id", "block_name": "block-name"}
+
+
+@pytest.mark.asyncio
+@patch("proxy.main._create_dbt_cli_profile")
+async def test_post_dbtcli_profile_raise(mock__create_dbt_cli_profile: AsyncMock):
+    """tests post_dbtcli_profile"""
+    request = Mock()
+    payload = DbtCliProfileBlockCreate(
+        cli_profile_block_name="block-name",
+        profile={"name": "NAME", "target_configs_schema": "SCHEMA"},
+        wtype="postgres",
+        credentials={},
+    )
+    mock__create_dbt_cli_profile.side_effect = Exception("exception")
+    with pytest.raises(HTTPException) as excinfo:
+        await post_dbtcli_profile(request, payload)
+    assert excinfo.value.detail == "failed to create dbt cli profile block"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.update_dbt_cli_profile")
+async def test_put_dbtcli_profile_success(mock_update_dbt_cli_profile: AsyncMock):
+    """tests put_dbtcli_profile"""
+    request = Mock()
+    payload = DbtCliProfileBlockUpdate(
+        cli_profile_block_name="block-name",
+        profile={"name": "NAME", "target_configs_schema": "SCHEMA"},
+        wtype="postgres",
+        credentials={},
+    )
+
+    mock_update_dbt_cli_profile.return_value = ("ignore", "block-id", "block-name")
+    result = await put_dbtcli_profile(request, payload)
+    assert result == {"block_id": "block-id", "block_name": "block-name"}
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.update_dbt_cli_profile")
+async def test_put_dbtcli_profile_raise(mock_update_dbt_cli_profile: AsyncMock):
+    """tests put_dbtcli_profile"""
+    request = Mock()
+    payload = DbtCliProfileBlockUpdate(
+        cli_profile_block_name="block-name",
+        profile={"name": "NAME", "target_configs_schema": "SCHEMA"},
+        wtype="postgres",
+        credentials={},
+    )
+    mock_update_dbt_cli_profile.side_effect = Exception("exception")
+    with pytest.raises(HTTPException) as excinfo:
+        await put_dbtcli_profile(request, payload)
+    assert excinfo.value.detail == "failed to update dbt cli profile block"
+
+
+@pytest.mark.asyncio
 @patch("proxy.main.update_postgres_credentials")
 async def test_put_dbtcore_postgres_success(mock_update: AsyncMock):
     request = Mock()
@@ -740,6 +856,27 @@ async def test_post_secret_block_success(mock_create: AsyncMock):
 
 
 @pytest.mark.asyncio
+@patch("proxy.main.get_secret_block_document")
+async def test_get_secret_block_success(mock_get_secret_block_document: AsyncMock):
+    request = Mock()
+
+    mock_get_secret_block_document.return_value = "block_id", "block_name"
+    response = await get_secret_block(request, "block-name")
+    assert response == {"block_id": "block_id", "block_name": "block_name"}
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.get_secret_block_document")
+async def test_get_secret_block_failure(mock_get_secret_block_document: AsyncMock):
+    request = Mock()
+
+    mock_get_secret_block_document.side_effect = Exception()
+    with pytest.raises(HTTPException) as excinfo:
+        await get_secret_block(request, "block-name")
+    assert excinfo.value.detail == "failed to fetch secret block document"
+
+
+@pytest.mark.asyncio
 async def test_delete_block_success():
     request = client.request("POST", "/")
     with patch("proxy.main.requests.delete") as mock_delete:
@@ -831,7 +968,7 @@ async def test_sync_dbtcore_flow_invalid_payload():
 @pytest.mark.asyncio
 async def test_sync_shellop_flow_success():
     payload = RunShellOperation(
-        type="Shell operation", 
+        type="Shell operation",
         slug="test-op",
         commands=['echo "Hello, World!"'],
         working_dir="test_dir",
@@ -852,6 +989,28 @@ async def test_sync_shellop_flow_invalid_payload():
     with pytest.raises(TypeError) as excinfo:
         await sync_shellop_flow(request, payload)
     assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
+async def test_sync_dbtcore_flow_v1():
+    """tests sync_dbtcore_flow_v1"""
+    request = Mock()
+    payload = RunDbtCoreOperation(
+        slug="slug",
+        type="dbtrun",
+        profiles_dir=".",
+        project_dir=".",
+        working_dir=".",
+        env={},
+        commands=[],
+        cli_profile_block="block",
+        flow_name="",
+        flow_run_name="",
+    )
+    with patch("proxy.main.dbtrun_v1") as mock_dbtrun_v1:
+        mock_dbtrun_v1.return_value = "test result"
+        result = await sync_dbtcore_flow_v1(request, payload)
+        assert result == {"status": "success", "result": "test result"}
 
 
 @pytest.mark.asyncio
@@ -902,6 +1061,48 @@ def test_put_dataflow_badparams():
     with pytest.raises(TypeError) as excinfo:
         put_dataflow(request, "deployment-id", 123)
     assert str(excinfo.value) == "payload is invalid"
+
+
+def test_put_dataflow_raises():
+    """put_dataflow raises http exception"""
+    request = Mock()
+    with patch("proxy.main.put_deployment") as mock_put_dataflow:
+        mock_put_dataflow.side_effect = Exception()
+        payload = DeploymentUpdate(connection_blocks=[], dbt_blocks=[])
+        with pytest.raises(HTTPException) as excinfo:
+            put_dataflow(request, "deployment-id", payload)
+        assert excinfo.value.status_code == 400
+        assert excinfo.value.detail == "failed to update the deployment"
+
+
+def test_put_dataflow_success():
+    """put_dataflow raises http exception"""
+    request = Mock()
+    with patch("proxy.main.put_deployment"):
+        payload = DeploymentUpdate(connection_blocks=[], dbt_blocks=[])
+        result = put_dataflow(request, "deployment-id", payload)
+        assert result == {"success": 1}
+
+
+def test_put_dataflow_v1_raises():
+    """put_dataflow_v1 raises http exception"""
+    request = Mock()
+    with patch("proxy.main.put_deployment_v1") as mock_put_dataflow_v1:
+        mock_put_dataflow_v1.side_effect = Exception()
+        payload = DeploymentUpdate2(deployment_params={})
+        with pytest.raises(HTTPException) as excinfo:
+            put_dataflow_v1(request, "deployment-id", payload)
+        assert excinfo.value.status_code == 400
+        assert excinfo.value.detail == "failed to update the deployment"
+
+
+def test_put_dataflow_v1_success():
+    """put_dataflow_v1 raises http exception"""
+    request = Mock()
+    with patch("proxy.main.put_deployment_v1"):
+        payload = DeploymentUpdate2(deployment_params={})
+        result = put_dataflow_v1(request, "deployment-id", payload)
+        assert result == {"success": 1}
 
 
 @patch("proxy.main.put_deployment")
@@ -1196,3 +1397,33 @@ def test_post_deployment_set_schedule_invalid_status():
     with pytest.raises(TypeError) as excinfo:
         post_deployment_set_schedule(request, "12345", None)
     assert excinfo.value.args[0] == "status must be a string"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.post_deployment_v1")
+async def test_post_dataflow_v1_success(mock_post_deployment_v1: AsyncMock):
+    """tests post_dataflow_v1"""
+    request = Mock()
+    payload = DeploymentCreate2(
+        flow_name="", deployment_name="", org_slug="org", deployment_params={}
+    )
+
+    mock_post_deployment_v1.return_value = {"id": "12345"}
+
+    result = await post_dataflow_v1(request, payload)
+    assert result == {"deployment": {"id": "12345"}}
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.post_deployment_v1")
+async def test_post_dataflow_v1_failure(mock_post_deployment_v1: AsyncMock):
+    """tests post_dataflow_v1"""
+    request = Mock()
+    payload = DeploymentCreate2(
+        flow_name="", deployment_name="", org_slug="org", deployment_params={}
+    )
+
+    mock_post_deployment_v1.side_effect = Exception()
+    with pytest.raises(HTTPException) as excinfo:
+        await post_dataflow_v1(request, payload)
+    assert excinfo.value.detail == "failed to create deployment"
