@@ -35,6 +35,7 @@ from proxy.service import (
     get_flow_run,
     get_flow_run_logs,
     get_flow_runs_by_deployment_id,
+    get_running_flow_runs_by_deployment_id,
     get_flow_runs_by_name,
     get_shell_block_id,
     parse_log,
@@ -1294,6 +1295,43 @@ def test_get_flow_runs_by_deployment_id_exception():
         prefect_post_mock.side_effect = Exception("test error")
         with pytest.raises(PrefectException):
             get_flow_runs_by_deployment_id("deployment_id", 10, "")
+
+
+def test_get_running_flow_runs_by_deployment_id():
+    with patch("proxy.service.prefect_post") as prefect_post_mock:
+        deployment_id = "deployment_id"
+        prefect_post_mock.return_value = [
+            {
+                "id": "flow_run_id",
+                "name": "flow_run_name",
+                "tags": ["tag1", "tag2"],
+                "start_time": "2022-01-01T00:00:00Z",
+                "expected_start_time": "2022-01-01T00:00:00Z",
+                "total_run_time": 60,
+                "state": {"type": "RUNNING", "name": "Running"},
+            }
+        ]
+        result = get_running_flow_runs_by_deployment_id(deployment_id)
+        query = {
+            "sort": "START_TIME_DESC",
+            "deployments": {"id": {"any_": [deployment_id]}},
+            "flow_runs": {
+                "operator": "and_",
+                "state": {"type": {"any_": ["RUNNING", "PENDING"]}},
+            },
+        }
+        prefect_post_mock.assert_called_with("flow_runs/filter", query)
+        assert result == [
+            {
+                "id": "flow_run_id",
+                "name": "flow_run_name",
+                "tags": ["tag1", "tag2"],
+                "startTime": "2022-01-01T00:00:00Z",
+                "expectedStartTime": "2022-01-01T00:00:00Z",
+                "totalRunTime": 60,
+                "status": "RUNNING",
+            }
+        ]
 
 
 def test_get_deployments_by_filter_type_error():

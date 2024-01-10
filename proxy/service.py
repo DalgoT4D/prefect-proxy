@@ -41,6 +41,8 @@ load_dotenv()
 FLOW_RUN_FAILED = "FAILED"
 FLOW_RUN_COMPLETED = "COMPLETED"
 FLOW_RUN_SCHEDULED = "SCHEDULED"
+FLOW_RUN_RUNNING = "RUNNING"
+FLOW_RUN_PENDING = "PENDING"
 
 
 logger = CustomLogger("prefect-proxy")
@@ -839,6 +841,43 @@ def get_flow_runs_by_deployment_id(
                 "totalRunTime": flow_run["total_run_time"],
                 "status": flow_run["state"]["type"],
                 "state_name": final_state_name,
+            }
+        )
+
+    return flow_runs
+
+
+def get_running_flow_runs_by_deployment_id(deployment_id: str):
+    """get running flow runs for a deployment"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    query = {
+        "sort": "START_TIME_DESC",
+        "deployments": {"id": {"any_": [deployment_id]}},
+        "flow_runs": {
+            "operator": "and_",
+            "state": {"type": {"any_": [FLOW_RUN_RUNNING, FLOW_RUN_PENDING]}},
+        },
+    }
+    flow_runs = []
+
+    try:
+        result = prefect_post("flow_runs/filter", query)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException(
+            f"failed to fetch flow_runs for deployment {deployment_id}"
+        ) from error
+    for flow_run in result:
+        flow_runs.append(
+            {
+                "id": flow_run["id"],
+                "name": flow_run["name"],
+                "tags": flow_run["tags"],
+                "startTime": flow_run["start_time"],
+                "expectedStartTime": flow_run["expected_start_time"],
+                "totalRunTime": flow_run["total_run_time"],
+                "status": flow_run["state"]["type"],
             }
         )
 

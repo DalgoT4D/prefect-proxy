@@ -24,6 +24,7 @@ from proxy.service import (
     post_deployment,
     post_deployment_v1,
     get_flow_runs_by_deployment_id,
+    get_running_flow_runs_by_deployment_id,
     get_deployments_by_filter,
     get_flow_run_logs,
     post_deployment_flow_run,
@@ -719,6 +720,25 @@ def get_flow_runs(
             status_code=400, detail="failed to fetch flow_runs for deployment"
         ) from error
     logger.info("Found flow runs for deployment ID: %s", deployment_id)
+    return {"flow_runs": flow_runs}
+
+
+@app.get("/proxy/running_flow_runs/{deployment_id}")
+def get_running_flow_runs(request: Request, deployment_id: str):
+    """get running flow run(s) for this deployment"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    try:
+        flow_runs = get_running_flow_runs_by_deployment_id(deployment_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch running flow_runs for deployment"
+        ) from error
+    if len(flow_runs) > 0:
+        logger.info("Found running flow runs for deployment ID: %s", deployment_id)
+    else:
+        logger.info("No running flow runs for deployment ID: %s", deployment_id)
     return {"flow_runs": flow_runs}
 
 
