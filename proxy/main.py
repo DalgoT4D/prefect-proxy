@@ -1,4 +1,5 @@
 """Route handlers"""
+
 import os
 import re
 import requests
@@ -829,13 +830,15 @@ def delete_deployment(request: Request, deployment_id):
 
 
 @app.post("/proxy/deployments/{deployment_id}/flow_run")
-async def post_create_deployment_flow_run(request: Request, deployment_id):
+async def post_create_deployment_flow_run(
+    request: Request, deployment_id, payload: dict = None
+):
     """Create a flow run from deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     logger.info("deployment_id=%s", deployment_id)
     try:
-        res = await post_deployment_flow_run(deployment_id)
+        res = await post_deployment_flow_run(deployment_id, payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(

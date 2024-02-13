@@ -1,4 +1,5 @@
 """interface with prefect's python client api"""
+
 import os
 from time import sleep
 import requests
@@ -877,9 +878,9 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
                 "name": deployment["name"],
                 "deploymentId": deployment["id"],
                 "tags": deployment["tags"],
-                "cron": deployment["schedule"]["cron"]
-                if deployment["schedule"]
-                else None,
+                "cron": (
+                    deployment["schedule"]["cron"] if deployment["schedule"] else None
+                ),
                 "isScheduleActive": deployment["is_schedule_active"],
             }
         )
@@ -887,13 +888,13 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
     return deployments
 
 
-async def post_deployment_flow_run(deployment_id: str):
+async def post_deployment_flow_run(deployment_id: str, run_params: dict = None):
     # pylint: disable=broad-exception-caught
     """Create deployment flow run"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     try:
-        flow_run = await run_deployment(deployment_id, timeout=0)
+        flow_run = await run_deployment(deployment_id, timeout=0, parameters=run_params)
         return {"flow_run_id": flow_run.id}
     except Exception as exc:
         logger.exception(exc)
