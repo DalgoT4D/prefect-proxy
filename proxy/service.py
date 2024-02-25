@@ -1,5 +1,4 @@
 """interface with prefect's python client api"""
-
 import os
 from time import sleep
 import requests
@@ -17,6 +16,9 @@ from prefect_dbt.cli.configs import BigQueryTargetConfigs
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
 from dotenv import load_dotenv
+
+from prefect.client import get_client
+from prefect.server.schemas.states import Cancelled
 
 
 from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock
@@ -1003,4 +1005,17 @@ def set_deployment_schedule(deployment_id: str, status: str) -> None:
     if status == "inactive":
         prefect_post(f"deployments/{deployment_id}/set_schedule_inactive", {})
 
+    return None
+
+def cancel_flow_run(flow_run_id: str) -> dict:
+    """"Cancel a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+    try:
+        with get_client() as client:
+            # set the state of the provided flow-run to cancelled
+            client.set_flow_run_state(flow_run_id=flow_run_id, state=Cancelled())
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException("failed to cancel flow-run") from err
     return None
