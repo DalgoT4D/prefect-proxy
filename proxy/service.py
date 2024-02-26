@@ -1,4 +1,5 @@
 """interface with prefect's python client api"""
+import asyncio
 import os
 from time import sleep
 import requests
@@ -1007,14 +1008,14 @@ def set_deployment_schedule(deployment_id: str, status: str) -> None:
 
     return None
 
-def cancel_flow_run(flow_run_id: str) -> dict:
+async def cancel_flow_run(flow_run_id: str) -> dict:
     """"Cancel a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
     try:
-        with get_client() as client:
+        async with get_client() as client:
             # set the state of the provided flow-run to cancelled
-            client.set_flow_run_state(flow_run_id=flow_run_id, state=Cancelled())
+            await client.set_flow_run_state(flow_run_id=flow_run_id, state=Cancelled())
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to cancel flow-run") from err
