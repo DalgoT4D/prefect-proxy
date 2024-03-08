@@ -1496,20 +1496,20 @@ def test_set_deployment_schedule_result():
         assert result is None
 
 
-def test_cancel_flow_runs_type_error():
+async def test_cancel_flow_runs_type_error():
     with pytest.raises(TypeError):
-        cancel_flow_run(123)
+        await cancel_flow_run(123)
 
-def test_cancel_flow_run_failure():
-    with patch("proxy.service.cancel_flow_run") as mock_cancel:
+async def test_cancel_flow_run_failure():
+    with patch("proxy.service.get_client") as mock_cancel:
         mock_cancel.side_effect = Exception("exception")
         with pytest.raises(PrefectException) as excinfo:
-            cancel_flow_run("flow_run_id")
+            await cancel_flow_run("flow_run_id")
             assert str(excinfo.value) == "failed to cancel flow-run"
 
 
-def test_cancel_flow_run_success():
-    with patch("proxy.service.cancel_flow_run"):
+async def test_cancel_flow_run_success():
+    with patch("proxy.service.get_client"):
         flow_run_id = "valid_flow_run_id"
-        result  = cancel_flow_run(flow_run_id)
+        result  = await cancel_flow_run(flow_run_id)
         assert result is None
