@@ -56,6 +56,7 @@ from proxy.service import (
     CronSchedule,
     post_deployment_flow_run,
     create_secret_block,
+    cancel_flow_run,
 )
 
 
@@ -1492,4 +1493,23 @@ def test_set_deployment_schedule_result():
     with patch("proxy.service.prefect_post"):
         deployment_id = "deployment_id"
         result = set_deployment_schedule(deployment_id, "active")
+        assert result is None
+
+
+async def test_cancel_flow_runs_type_error():
+    with pytest.raises(TypeError):
+        await cancel_flow_run(123)
+
+async def test_cancel_flow_run_failure():
+    with patch("proxy.service.get_client") as mock_cancel:
+        mock_cancel.side_effect = Exception("exception")
+        with pytest.raises(PrefectException) as excinfo:
+            await cancel_flow_run("flow_run_id")
+            assert str(excinfo.value) == "failed to cancel flow-run"
+
+
+async def test_cancel_flow_run_success():
+    with patch("proxy.service.get_client"):
+        flow_run_id = "valid_flow_run_id"
+        result  = await cancel_flow_run(flow_run_id)
         assert result is None
