@@ -41,7 +41,7 @@ jobs:
           LOGDIR: ${{ github.workspace }}/logs
         run: |
           mkdir -p $LOGDIR
-          coverage run -m pytest
+          coverage run -m pytest --asyncio-mode=auto
           coverage report --fail-under=70
           coverage xml
           pytest --cov
