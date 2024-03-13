@@ -28,8 +28,6 @@ Change directory into the cloned folder and run the following commands:
 
 ## Run instructions
 
-Set the value for the
-
 Start Prefect on port 4200
 
     prefect server start
