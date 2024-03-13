@@ -10,8 +10,9 @@ These endpoints will be called only from the Django server or from testing scrip
 
 ## Installation instructions
 
-Clone the [repository](https://github.com/DalgoT4D/prefect-proxy)
-Change directory into the cloned folder and run the following commands:
+Clone the [Prefect Proxy](https://github.com/DalgoT4D/prefect-proxy) repository
+
+In the cloned repository, run the following commands:
 
 - `pyenv local 3.10`
 
