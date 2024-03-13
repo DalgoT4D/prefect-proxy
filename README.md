@@ -8,14 +8,27 @@ Since Prefect exposes an async Python interface and Django does not play well wi
 
 These endpoints will be called only from the Django server or from testing scripts. More project documentation can be found in [the wiki](https://github.com/DalgoT4D/prefect-proxy/wiki)
 
-
 ## Installation instructions
 
-Install the Python dependencies
+Clone the [repository](https://github.com/DalgoT4D/prefect-proxy)
+Change directory into the cloned folder and run the following commands:
 
-    pip install -r requirements.txt
+- `pyenv local 3.10`
+
+- `pyenv exec python -m venv venv`
+
+- `source venv/bin/activate`
+
+- `pip install --upgrade pip`
+
+- `pip install -r requirements.txt`
+
+- create `.env` from `.env.template`
+- set the value for the `LOGDIR` in the `.env` file with the name of the directory to hold the logs. The directory will be automatically created on running the prefect proxy
 
 ## Run instructions
+
+Set the value for the
 
 Start Prefect on port 4200
 
