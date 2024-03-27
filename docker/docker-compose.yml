@@ -11,7 +11,7 @@ services:
       - PREFECT_UI_URL=${PREFECT_API_URL}
       - PREFECT_API_URL=${PREFECT_API_URL}
       - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_API_DATABASE_CONNECTION_URL=${DATABASE_CONNECTION_URL}
+      - PREFECT_API_DATABASE_CONNECTION_URL=${DB_CONNECTION_URL}
       # Uncomment the following line to use the 'S3 Bucket' storage
       # - EXTRA_PIP_PACKAGES=prefect-aws
     ports:
@@ -28,9 +28,9 @@ services:
         "agent",
         "start",
         "-q",
-        ${PREFECT_WORK_QUEUE_NAME},
+        "${PREFECT_WORK_QUEUE_NAME}",
         "--pool",
-        ${PREFECT_POOL_NAME}
+        "${PREFECT_POOL_NAME}",
       ]
     environment:
       - PREFECT_API_URL=${PREFECT_API_URL}
@@ -38,7 +38,6 @@ services:
   ## Prefect Proxy
   prefect_proxy:
     build: .
-    image: prefect_proxy
     restart: always
 
 volumes:
