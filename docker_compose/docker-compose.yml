@@ -1,0 +1,54 @@
+version: "3.9"
+services:
+  ## Prefect Proxy
+  prefect_proxy:
+    build: ..
+    restart: always
+    environment:
+      - LOGDIR=${LOGDIR}
+    ports:
+      - 4300:4300
+
+  ### Prefect Server API and UI
+  server:
+    image: prefecthq/prefect:2-python3.10
+    restart: always
+    volumes:
+      - prefect:/root/.prefect
+    entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
+    environment:
+      - PREFECT_UI_URL=${PREFECT_API_URL}
+      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_SERVER_API_HOST=0.0.0.0
+      - PREFECT_API_DATABASE_CONNECTION_URL=${DB_CONNECTION_URL}
+      - HTTP_PROXY=http://prefect_proxy:${PREFECT_PROXY_API_PORT}
+      - HTTPS_PROXY=https://prefect_proxy:${PREFECT_PROXY_API_PORT}
+    ports:
+      - 4200:4200
+
+  ## Prefect Agent
+  agent:
+    image: prefecthq/prefect:2-python3.10
+    restart: always
+    entrypoint:
+      [
+        "/opt/prefect/entrypoint.sh",
+        "prefect",
+        "agent",
+        "start",
+        "-q",
+        "${PREFECT_WORK_QUEUE_NAME}",
+        "--pool",
+        "${PREFECT_POOL_NAME}",
+      ]
+    environment:
+      - PREFECT_API_URL=http://server:4200/api
+      - HTTP_PROXY=http://prefect_proxy:${PREFECT_PROXY_API_PORT}
+      - HTTPS_PROXY=https://prefect_proxy:${PREFECT_PROXY_API_PORT}
+
+volumes:
+  prefect:
+networks:
+  default:
+    name: compose-postgres_prefect-network
+    external: true
