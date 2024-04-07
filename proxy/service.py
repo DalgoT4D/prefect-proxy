@@ -1,4 +1,5 @@
 """interface with prefect's python client api"""
+
 import asyncio
 import os
 from time import sleep
@@ -403,16 +404,12 @@ async def _create_dbt_cli_profile(
         raise TypeError("payload is of wrong type")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
+        extras = payload.credentials
+        extras["user"] = extras["username"]
         target_configs = TargetConfigs(
             type="postgres",
             schema=payload.profile.target_configs_schema,
-            extras={
-                "user": payload.credentials["username"],
-                "password": payload.credentials["password"],
-                "dbname": payload.credentials["database"],
-                "host": payload.credentials["host"],
-                "port": payload.credentials["port"],
-            },
+            extras=extras,
         )
 
     elif payload.wtype == "bigquery":
@@ -484,13 +481,10 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
             if payload.wtype is None:
                 raise TypeError("wtype is required")
             if payload.wtype == "postgres":
-                dbtcli_block.target_configs.extras = {
-                    "user": payload.credentials["username"],
-                    "password": payload.credentials["password"],
-                    "dbname": payload.credentials["database"],
-                    "host": payload.credentials["host"],
-                    "port": payload.credentials["port"],
-                }
+                dbtcli_block.target_configs.extras = payload.credentials
+                dbtcli_block.target_configs.extras["user"] = (
+                    dbtcli_block.target_configs.extras["username"]
+                )
 
             elif payload.wtype == "bigquery":
                 dbcredentials = GcpCredentials(service_account_info=payload.credentials)
@@ -1008,8 +1002,9 @@ def set_deployment_schedule(deployment_id: str, status: str) -> None:
 
     return None
 
+
 async def cancel_flow_run(flow_run_id: str) -> dict:
-    """"Cancel a flow run"""
+    """Cancel a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
     try:
