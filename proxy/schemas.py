@@ -196,6 +196,8 @@ class DeploymentCreate2(BaseModel):
     org_slug: str
     deployment_params: dict
     cron: str = None
+    work_queue_name: str = None
+    work_pool_name: str = None
 
 
 class DeploymentUpdate(BaseModel):
@@ -209,7 +211,7 @@ class DeploymentUpdate(BaseModel):
 class DeploymentUpdate2(BaseModel):
     """parameters to create a deployment from a flow"""
 
-    deployment_params: dict
+    deployment_params: dict = {}
     cron: str = None
     work_queue_name: str = None
     work_pool_name: str = None
