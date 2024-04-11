@@ -1,4 +1,5 @@
 """interface with prefect's python client api"""
+
 import asyncio
 import os
 from time import sleep
@@ -762,12 +763,19 @@ def put_deployment_v1(deployment_id: str, payload: DeploymentUpdate2) -> dict:
 
     logger.info(payload)
 
-    schedule = CronSchedule(cron=payload.cron).dict() if payload.cron else None
+    newpayload = {"parameters": payload.deployment_params}
 
-    payload = {"schedule": schedule, "parameters": payload.deployment_params}
+    if payload.cron:
+        newpayload["schedule"] = CronSchedule(cron=payload.cron).dict()
+
+    if payload.work_pool_name:
+        newpayload["work_pool_name"] = payload.work_pool_name
+
+    if payload.work_queue_name:
+        newpayload["work_queue_name"] = payload.work_queue_name
 
     # res will be any empty json if success since status code is 204
-    res = prefect_patch(f"deployments/{deployment_id}", payload)
+    res = prefect_patch(f"deployments/{deployment_id}", newpayload)
     logger.info("Update deployment with ID: %s", deployment_id)
     return res
 
@@ -1008,8 +1016,9 @@ def set_deployment_schedule(deployment_id: str, status: str) -> None:
 
     return None
 
+
 async def cancel_flow_run(flow_run_id: str) -> dict:
-    """"Cancel a flow run"""
+    """Cancel a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
     try:
