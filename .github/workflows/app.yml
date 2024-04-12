@@ -19,7 +19,10 @@ jobs:
         run: |
           echo "Event not triggered by a collaborator."
           exit 1
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
