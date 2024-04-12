@@ -80,11 +80,15 @@ class DbtCliProfileBlockCreate(BaseModel, extra=Extra.allow):
 class DbtProfileUpdate(BaseModel):
     """schema to update dbt profile"""
 
-    name: str = None  # profile name in profiles.yml that should be the same as in dbt_project.yml
+    name: str = (
+        None  # profile name in profiles.yml that should be the same as in dbt_project.yml
+    )
     target_configs_schema: str = (
         None  # schema that dbt will write against in the warehouse
     )
-    target: str = None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
+    target: str = (
+        None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
+    )
 
 
 class DbtCliProfileBlockUpdate(BaseModel, extra=Extra.allow):
@@ -192,6 +196,8 @@ class DeploymentCreate2(BaseModel):
     org_slug: str
     deployment_params: dict
     cron: str = None
+    work_queue_name: str = None
+    work_pool_name: str = None
 
 
 class DeploymentUpdate(BaseModel):
@@ -205,8 +211,10 @@ class DeploymentUpdate(BaseModel):
 class DeploymentUpdate2(BaseModel):
     """parameters to create a deployment from a flow"""
 
-    deployment_params: dict
+    deployment_params: dict = {}
     cron: str = None
+    work_queue_name: str = None
+    work_pool_name: str = None
 
 
 class DeploymentFetch(BaseModel):
