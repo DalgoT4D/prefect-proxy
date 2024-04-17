@@ -36,6 +36,7 @@ from proxy.service import (
     create_secret_block,
     _create_dbt_cli_profile,
     update_dbt_cli_profile,
+    get_dbt_cli_profile,
     get_secret_block_document,
 )
 from proxy.schemas import (
@@ -421,6 +422,21 @@ async def put_dbtcli_profile(request: Request, payload: DbtCliProfileBlockUpdate
         cleaned_blockname,
     )
     return {"block_id": block_id, "block_name": cleaned_blockname}
+
+
+@app.get("/proxy/blocks/dbtcli/profile/{cli_profile_block_name}")
+async def get_dbtcli_profile(request: Request, cli_profile_block_name: str):
+    """Fetches the dbt cli block"""
+    if not isinstance(cli_profile_block_name, str):
+        raise TypeError("cli_profile_block_name is invalid")
+    try:
+        profile = await get_dbt_cli_profile(cli_profile_block_name)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch dbt cli profile block"
+        ) from error
+    return {"profile": profile}
 
 
 @app.put("/proxy/blocks/dbtcore_edit/postgres/")

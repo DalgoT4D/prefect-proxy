@@ -1,4 +1,5 @@
 """interface with prefect's python client api"""
+
 import asyncio
 import os
 from time import sleep
@@ -7,8 +8,10 @@ from fastapi import HTTPException
 
 from prefect.deployments import Deployment, run_deployment
 from prefect.server.schemas.schedules import CronSchedule
+from prefect.server.schemas.states import Cancelled
 from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
+from prefect.client import get_client
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 
 from prefect_gcp import GcpCredentials
@@ -17,9 +20,6 @@ from prefect_dbt.cli.configs import BigQueryTargetConfigs
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
 from dotenv import load_dotenv
-
-from prefect.client import get_client
-from prefect.server.schemas.states import Cancelled
 
 
 from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock
@@ -392,6 +392,22 @@ async def get_dbtcore_block_id(blockname: str) -> str | None:
         )
 
 
+async def get_dbt_cli_profile(cli_profile_block_name: str) -> dict:
+    """look up a dbt cli profile block by name and return block_id"""
+    if not isinstance(cli_profile_block_name, str):
+        raise TypeError("blockname must be a string")
+
+    try:
+        block = await DbtCliProfile.load(cli_profile_block_name)
+        return block.get_profile()
+    except ValueError:
+        # pylint: disable=raise-missing-from
+        raise HTTPException(
+            status_code=404,
+            detail=f"No dbt cli profile block named {cli_profile_block_name}",
+        )
+
+
 async def _create_dbt_cli_profile(
     payload: DbtCliProfileBlockCreate | DbtCoreCreate,
 ) -> DbtCliProfile:
@@ -403,16 +419,12 @@ async def _create_dbt_cli_profile(
         raise TypeError("payload is of wrong type")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
+        extras = payload.credentials
+        extras["user"] = extras["username"]
         target_configs = TargetConfigs(
             type="postgres",
             schema=payload.profile.target_configs_schema,
-            extras={
-                "user": payload.credentials["username"],
-                "password": payload.credentials["password"],
-                "dbname": payload.credentials["database"],
-                "host": payload.credentials["host"],
-                "port": payload.credentials["port"],
-            },
+            extras=extras,
         )
 
     elif payload.wtype == "bigquery":
@@ -484,13 +496,10 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
             if payload.wtype is None:
                 raise TypeError("wtype is required")
             if payload.wtype == "postgres":
-                dbtcli_block.target_configs.extras = {
-                    "user": payload.credentials["username"],
-                    "password": payload.credentials["password"],
-                    "dbname": payload.credentials["database"],
-                    "host": payload.credentials["host"],
-                    "port": payload.credentials["port"],
-                }
+                dbtcli_block.target_configs.extras = payload.credentials
+                dbtcli_block.target_configs.extras["user"] = (
+                    dbtcli_block.target_configs.extras["username"]
+                )
 
             elif payload.wtype == "bigquery":
                 dbcredentials = GcpCredentials(service_account_info=payload.credentials)
@@ -707,15 +716,26 @@ async def post_deployment(payload: DeploymentCreate) -> dict:
 
 
 async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
-    """create a deployment from a flow and a schedule"""
+    """
+    create a deployment from a flow and a schedule
+    can also optionally pass in the name of the work queue and work pool
+    the work pool must already exist
+    work queues are created on the fly
+    """
     if not isinstance(payload, DeploymentCreate2):
         raise TypeError("payload must be a DeploymentCreate")
     logger.info(payload)
 
+    work_queue_name = payload.work_queue_name if payload.work_queue_name else "ddp"
+    work_pool_name = (
+        payload.work_pool_name if payload.work_pool_name else "default-agent-pool"
+    )
+
     deployment = await Deployment.build_from_flow(
         flow=deployment_schedule_flow_v4.with_options(name=payload.flow_name),
         name=payload.deployment_name,
-        work_queue_name="ddp",
+        work_queue_name=work_queue_name,
+        work_pool_name=work_pool_name,
         tags=[payload.org_slug],
     )
     deployment.parameters = payload.deployment_params
@@ -756,18 +776,32 @@ def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:
 
 
 def put_deployment_v1(deployment_id: str, payload: DeploymentUpdate2) -> dict:
-    """create a deployment from a flow and a schedule"""
+    """
+    update a deployment's schedule / work queue / work pool / other paramters
+    the work pool must already exist
+    work queues are created on the fly
+    """
     if not isinstance(payload, DeploymentUpdate2):
         raise TypeError("payload must be a DeploymentUpdate2")
 
     logger.info(payload)
 
-    schedule = CronSchedule(cron=payload.cron).dict() if payload.cron else None
+    newpayload = {}
 
-    payload = {"schedule": schedule, "parameters": payload.deployment_params}
+    if payload.deployment_params:
+        newpayload["parameters"] = payload.deployment_params
+
+    if payload.cron:
+        newpayload["schedule"] = CronSchedule(cron=payload.cron).dict()
+
+    if payload.work_pool_name:
+        newpayload["work_pool_name"] = payload.work_pool_name
+
+    if payload.work_queue_name:
+        newpayload["work_queue_name"] = payload.work_queue_name
 
     # res will be any empty json if success since status code is 204
-    res = prefect_patch(f"deployments/{deployment_id}", payload)
+    res = prefect_patch(f"deployments/{deployment_id}", newpayload)
     logger.info("Update deployment with ID: %s", deployment_id)
     return res
 
@@ -1008,8 +1042,9 @@ def set_deployment_schedule(deployment_id: str, status: str) -> None:
 
     return None
 
+
 async def cancel_flow_run(flow_run_id: str) -> dict:
-    """"Cancel a flow run"""
+    """Cancel a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
     try:
