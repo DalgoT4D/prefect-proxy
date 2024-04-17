@@ -8,8 +8,10 @@ from fastapi import HTTPException
 
 from prefect.deployments import Deployment, run_deployment
 from prefect.server.schemas.schedules import CronSchedule
+from prefect.server.schemas.states import Cancelled
 from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
+from prefect.client import get_client
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 
 from prefect_gcp import GcpCredentials
@@ -18,9 +20,6 @@ from prefect_dbt.cli.configs import BigQueryTargetConfigs
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
 from dotenv import load_dotenv
-
-from prefect.client import get_client
-from prefect.server.schemas.states import Cancelled
 
 
 from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock
@@ -390,6 +389,22 @@ async def get_dbtcore_block_id(blockname: str) -> str | None:
         # pylint: disable=raise-missing-from
         raise HTTPException(
             status_code=404, detail=f"No dbt core operation block named {blockname}"
+        )
+
+
+async def get_dbt_cli_profile(cli_profile_block_name: str) -> dict:
+    """look up a dbt cli profile block by name and return block_id"""
+    if not isinstance(cli_profile_block_name, str):
+        raise TypeError("blockname must be a string")
+
+    try:
+        block = await DbtCliProfile.load(cli_profile_block_name)
+        return block.get_profile()
+    except ValueError:
+        # pylint: disable=raise-missing-from
+        raise HTTPException(
+            status_code=404,
+            detail=f"No dbt cli profile block named {cli_profile_block_name}",
         )
 
 

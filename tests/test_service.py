@@ -19,6 +19,7 @@ from proxy.schemas import (
 )
 from proxy.service import (
     _create_dbt_cli_profile,
+    get_dbt_cli_profile,
     create_airbyte_connection_block,
     create_airbyte_server_block,
     create_dbt_core_block,
@@ -839,6 +840,26 @@ async def test_create_dbt_cli_profile_exception(mock_save):
 
 
 @pytest.mark.asyncio
+@patch("proxy.service.DbtCliProfile.load", new_callable=AsyncMock)
+async def test_create_dbt_cli_profile_success(mock_load):
+    """tests create_dbt_cli_profile"""
+    mock_load.return_value = Mock()
+    mock_load.return_value.get_profile = Mock(return_value={"key": "value"})
+    result = await get_dbt_cli_profile("test_block_name")
+    assert result == {"key": "value"}
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.DbtCliProfile.load", new_callable=AsyncMock)
+async def test_create_dbt_cli_profile_raises(mock_load):
+    """tests create_dbt_cli_profile"""
+    mock_load.side_effect = ValueError("error")
+    with pytest.raises(HTTPException) as excinfo:
+        await get_dbt_cli_profile("test_block_name")
+    assert str(excinfo.value.detail) == "No dbt cli profile block named test_block_name"
+
+
+@pytest.mark.asyncio
 @patch("proxy.service.DbtCliProfile.save", new_callable=AsyncMock)
 @patch("proxy.service.DbtCoreOperation.__init__", return_value=None)
 @patch("proxy.service.DbtCoreOperation.save", new_callable=AsyncMock)
@@ -1500,6 +1521,7 @@ async def test_cancel_flow_runs_type_error():
     with pytest.raises(TypeError):
         await cancel_flow_run(123)
 
+
 async def test_cancel_flow_run_failure():
     with patch("proxy.service.get_client") as mock_cancel:
         mock_cancel.side_effect = Exception("exception")
@@ -1511,5 +1533,5 @@ async def test_cancel_flow_run_failure():
 async def test_cancel_flow_run_success():
     with patch("proxy.service.get_client"):
         flow_run_id = "valid_flow_run_id"
-        result  = await cancel_flow_run(flow_run_id)
+        result = await cancel_flow_run(flow_run_id)
         assert result is None

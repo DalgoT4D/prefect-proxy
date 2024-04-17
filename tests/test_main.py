@@ -16,6 +16,7 @@ from proxy.main import (
     get_airbyte_connection_by_blockname,
     get_airbyte_server,
     get_dbtcore,
+    get_dbtcli_profile,
     get_flow_run_logs_paginated,
     get_flow_runs,
     get_flowrun,
@@ -745,6 +746,37 @@ async def test_put_dbtcli_profile_raise(mock_update_dbt_cli_profile: AsyncMock):
     with pytest.raises(HTTPException) as excinfo:
         await put_dbtcli_profile(request, payload)
     assert excinfo.value.detail == "failed to update dbt cli profile block"
+
+
+@pytest.mark.asyncio
+async def test_get_dbt_cli_profile_failure_1():
+    """Tests get_dbt_cli_profile"""
+    request = Mock()
+    with pytest.raises(TypeError) as excinfo:
+        await get_dbtcli_profile(request, None)
+
+    assert str(excinfo.value) == "cli_profile_block_name is invalid"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.get_dbt_cli_profile")
+async def test_get_dbt_cli_profile_success(mock_get_dbt_cli_profile: AsyncMock):
+    """Tests get_dbt_cli_profile"""
+    request = Mock()
+    mock_get_dbt_cli_profile.return_value = {"key": "value"}
+    result = await get_dbtcli_profile(request, "block-name")
+    assert result["profile"]["key"] == "value"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.get_dbt_cli_profile")
+async def test_get_dbt_cli_profile_failure_2(mock_get_dbt_cli_profile: AsyncMock):
+    """Tests get_dbt_cli_profile"""
+    request = Mock()
+    mock_get_dbt_cli_profile.side_effect = Exception("exception")
+    with pytest.raises(HTTPException) as excinfo:
+        result = await get_dbtcli_profile(request, "block-name")
+    assert excinfo.value.detail == "failed to fetch dbt cli profile block"
 
 
 @pytest.mark.asyncio
