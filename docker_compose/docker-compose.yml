@@ -2,7 +2,7 @@ version: "3.9"
 services:
   ## Prefect Proxy
   prefect_proxy:
-    build: ..
+    image: prefect_proxy:latest #change this to point to dockerhub
     restart: always
     environment:
       - LOGDIR=${LOGDIR}
