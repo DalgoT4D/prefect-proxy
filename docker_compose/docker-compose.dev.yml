@@ -27,6 +27,8 @@ services:
   server:
     image: prefecthq/prefect:2-python3.10
     restart: always
+    depends_on:
+      - postgres_db
     volumes:
       - prefect:/root/.prefect
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
@@ -44,6 +46,9 @@ services:
   agent:
     image: prefecthq/prefect:2-python3.10
     restart: always
+    depends_on:
+      - server
+      - prefect_proxy
     entrypoint:
       [
         "/opt/prefect/entrypoint.sh",
