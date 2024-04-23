@@ -1,5 +1,19 @@
 version: "3.9"
 services:
+  ## Test DB
+  postgres_db:
+    container_name: postgres_container
+    image: postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepass}
+      PGDATA: /data/postgres
+    volumes:
+      - postgres:/data/postgres
+    ports:
+      - "5433:5432"
+    restart: unless-stopped
+
   ## Prefect Proxy
   prefect_proxy:
     image: prefect_proxy:latest #change this to point to dockerhub
