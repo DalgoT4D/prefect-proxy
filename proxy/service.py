@@ -244,6 +244,7 @@ def delete_airbyte_connection_block(blockid: str) -> dict:
 
 # ===============================================================================================
 
+
 def delete_shell_block(blockid: str) -> dict:
     """Delete a prefect shell block"""
     if not isinstance(blockid, str):
@@ -286,6 +287,7 @@ async def _create_dbt_cli_profile(
             type="postgres",
             schema=payload.profile.target_configs_schema,
             extras=extras,
+            allow_field_overrides=True,
         )
 
     elif payload.wtype == "bigquery":
