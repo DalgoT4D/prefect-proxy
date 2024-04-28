@@ -67,6 +67,7 @@ services:
 
 volumes:
   prefect:
+  postgres:
 networks:
   default:
     name: prefect-network
