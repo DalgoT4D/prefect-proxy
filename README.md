@@ -60,26 +60,33 @@ The proxy server needs to listen for requests coming from Django; pick an availa
 
 Make sure to add this port number into the `.env` for DDP_backend in the variable `PREFECT_PROXY_API_URL`.
 
-## Running using Docker
+## Running services using Docker
 
-The second option is to run all the three services as docker containers. This is the easiest as it's a 1-step process.
+The second option is to run all the three services as docker containers.
 Perform the following steps:
 
-- change directory into the docker_compose folder
-- create an `.env` file from `.env.template` in this repository
+- create an `.env` file from `.env.template` inside the `Docker` folder
 - populate all the variables in the `.env` file
-- from the terminal run the docker compose command below below to start the three services
+- Next we need to build the prefect proxy docker image(if were are using local docker image)
+
+To Build and use proxy docker image, run the below command from the root directory:
 
 ```
-docker compose up -d
+docker build -f Docker/Dockerfile --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg BUILD_VERSION=0.0.1  -t prefect_proxy:latest .
+```
+
+If we don't build the image locally, docker will try to pull the image from dockerhub when we run docker compose.
+
+To run all the services as docker container, run the docker compose command below. There are two docker files:
+
+- `docker-compose.dev.yml` - runs the prefect proxy as database in a container
+- `docker-compose.yml` - does not spin up a database but assumes the prefect database is external
+
+```
+docker-compose -f Docker/docker-compose.dev.yml compose up -d
 ```
 
 The docker compose pulls all the necessary docker images from Dockerhub. However, the prefect proxy has a Dockerfile that you can build an image locally.
-To Build and use this image, run the below command from the root directory:
-
-```
-docker build --no-cache=true --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg BUILD_VERSION=0.0.1  -t prefect_proxy:latest .
-```
 
 ## For developers
 

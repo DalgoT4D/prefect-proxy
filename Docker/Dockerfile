@@ -17,7 +17,7 @@ ADD https://astral.sh/uv/install.sh /install.sh
 
 WORKDIR /app
 
-COPY ./requirements.txt /app/
+COPY ../requirements.txt /app/
 
 #Install system dependencies
 RUN set -ex \
@@ -32,7 +32,7 @@ RUN set -ex \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the proxy directory contents into the container at /app/proxy
-COPY ./proxy /app/proxy
+COPY ../proxy /app/proxy
 
 RUN ls -la /app
 

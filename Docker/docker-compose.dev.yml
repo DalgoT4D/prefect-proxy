@@ -1,8 +1,8 @@
 version: "3.9"
 services:
   ## Test DB
-  postgres_db:
-    container_name: postgres_container
+  prefect_postgres_db:
+    container_name: prefect_db
     image: postgres
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -24,11 +24,11 @@ services:
       - 4300:4300
 
   ### Prefect Server API and UI
-  server:
+  prefect_server:
     image: prefecthq/prefect:2-python3.10
     restart: always
     depends_on:
-      - postgres_db
+      - prefect_postgres_db
     volumes:
       - prefect:/root/.prefect
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
@@ -43,11 +43,11 @@ services:
       - 4200:4200
 
   ## Prefect Agent
-  agent:
+  prefect_agent:
     image: prefecthq/prefect:2-python3.10
     restart: always
     depends_on:
-      - server
+      - prefect_server
       - prefect_proxy
     entrypoint:
       [
@@ -61,7 +61,7 @@ services:
         "${PREFECT_POOL_NAME}",
       ]
     environment:
-      - PREFECT_API_URL=http://server:4200/api
+      - PREFECT_API_URL=http://prefect_server:4200/api
       - HTTP_PROXY=http://prefect_proxy:${PREFECT_PROXY_API_PORT}
       - HTTPS_PROXY=https://prefect_proxy:${PREFECT_PROXY_API_PORT}
 
