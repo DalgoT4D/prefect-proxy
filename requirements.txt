@@ -104,7 +104,7 @@ pendulum==2.1.2
 platformdirs==3.2.0
 pluggy==1.0.0
 prefect==2.13.5
-prefect-airbyte==0.3.0
+git+https://github.com/Ishankoradia/prefect-airbyte.git@reset-connection
 prefect-dbt==0.3.1
 prefect-gcp==0.5.1
 prefect-shell==0.1.5

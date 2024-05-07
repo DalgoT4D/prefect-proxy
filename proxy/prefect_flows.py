@@ -8,7 +8,7 @@ import os
 from prefect import flow, task
 from prefect.blocks.system import Secret
 from prefect.states import State, StateType
-from prefect_airbyte.flows import run_connection_sync
+from prefect_airbyte.flows import run_connection_sync, reset_connection
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
@@ -46,6 +46,34 @@ def run_airbyte_connection_flow_v1(payload: dict):
         )
         result = run_connection_sync(connection_block)
         logger.info("airbyte connection sync result=")
+        logger.info(result)
+        return result
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job <num> failed."
+        raise
+
+
+# task config for a airbyte reset operation
+# {
+#     type AIRBYTECONNECTION,
+#     slug: str
+#     airbyte_server_block:  str
+#     connection_id: str
+#     timeout: int
+# }
+@flow
+def run_airbyte_conn_reset(payload: dict):
+    """reset an airbyte connection"""
+    try:
+        airbyte_server_block = payload["airbyte_server_block"]
+        serverblock = AirbyteServer.load(airbyte_server_block)
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=payload["connection_id"],
+            timeout=payload["timeout"] or 15,
+        )
+        result = reset_connection(connection_block)
+        logger.info("airbyte connection reset result=")
         logger.info(result)
         return result
     except Exception as error:  # skipcq PYL-W0703
@@ -192,7 +220,10 @@ def deployment_schedule_flow_v4(
                 shellopjob(task_config, task_config["slug"])
 
             elif task_config["type"] == AIRBYTECONNECTION:
-                run_airbyte_connection_flow_v1(task_config)
+                if task_config["slug"] == "airbyte-reset":
+                    run_airbyte_conn_reset(task_config)
+                elif task_config["slug"] == "airbyte-sync":
+                    run_airbyte_connection_flow_v1(task_config)
 
             else:
                 raise Exception(f"Unknown task type: {task_config['type']}")
