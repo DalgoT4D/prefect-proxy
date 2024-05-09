@@ -635,7 +635,7 @@ async def reset_airbyte_conn_flow(request: Request, payload: RunAirbyteResetConn
 
     logger.info("running reset airbyte connection flow %s", payload.slug)
     try:
-        result = run_airbyte_conn_reset(payload)
+        result = await run_airbyte_conn_reset(payload)
         logger.info(result)
         return {"status": "success", "result": result}
     except Exception as error:
