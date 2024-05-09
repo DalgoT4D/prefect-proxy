@@ -43,10 +43,15 @@ from proxy.schemas import (
     DbtCliProfileBlockCreate,
     DeploymentUpdate2,
     DbtCliProfileBlockUpdate,
+    RunAirbyteResetConnection,
 )
 from proxy.flows import run_airbyte_connection_flow
 
-from proxy.prefect_flows import run_shell_operation_flow, run_dbtcore_flow_v1
+from proxy.prefect_flows import (
+    run_shell_operation_flow,
+    run_dbtcore_flow_v1,
+    run_airbyte_conn_reset,
+)
 
 from logger import setup_logger
 
@@ -619,3 +624,20 @@ def post_deployment_set_schedule(request: Request, deployment_id, status):
         raise HTTPException(status_code=400, detail="failed to set schedule") from error
 
     return {"success": 1}
+
+
+@app.post("/proxy/flows/airbyte/reset/")
+async def reset_airbyte_conn_flow(request: Request, payload: RunAirbyteResetConnection):
+    """Prefect flow to run airbyte reset connection job"""
+    logger.info(payload)
+    if not isinstance(payload, RunAirbyteResetConnection):
+        raise TypeError("payload is invalid")
+
+    logger.info("running reset airbyte connection flow %s", payload.slug)
+    try:
+        result = await run_airbyte_conn_reset(payload)
+        logger.info(result)
+        return {"status": "success", "result": result}
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail=str(error)) from error

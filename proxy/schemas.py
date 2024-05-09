@@ -171,6 +171,21 @@ class RunShellOperation(BaseModel):
     flow_run_name: str
 
 
+class RunAirbyteResetConnection(BaseModel):
+    """config payload to reset an airbyte connection"""
+
+    type: str
+    slug: str
+    airbyte_server_block: str
+    connection_id: str
+    timeout: int
+    flow_name: str
+    flow_run_name: str
+    work_queue_name: str
+    work_pool_name: str
+    org_slug: str
+
+
 class FlowRunsResponse(BaseModel):
     """response from the flow runs block"""
 
