@@ -4,7 +4,6 @@ import os
 import re
 import requests
 from fastapi import FastAPI, HTTPException, Request
-from prefect.deployments import Deployment, run_deployment
 from prefect_airbyte import AirbyteConnection
 from proxy.helpers import CustomLogger
 
