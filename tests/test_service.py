@@ -20,24 +20,18 @@ from proxy.schemas import (
 from proxy.service import (
     _create_dbt_cli_profile,
     get_dbt_cli_profile,
-    create_airbyte_connection_block,
     create_airbyte_server_block,
     create_dbt_core_block,
-    create_shell_block,
     delete_airbyte_connection_block,
     delete_airbyte_server_block,
     delete_dbt_core_block,
     delete_shell_block,
-    get_airbyte_connection_block,
-    get_airbyte_connection_block_id,
     get_airbyte_server_block_id,
-    get_dbtcore_block_id,
     get_deployments_by_filter,
     get_flow_run,
     get_flow_run_logs,
     get_flow_runs_by_deployment_id,
     get_flow_runs_by_name,
-    get_shell_block_id,
     parse_log,
     prefect_delete,
     prefect_get,
@@ -45,13 +39,11 @@ from proxy.service import (
     prefect_patch,
     set_deployment_schedule,
     traverse_flow_run_graph,
-    post_filter_blocks,
     update_airbyte_server_block,
     update_airbyte_connection_block,
     update_postgres_credentials,
     update_bigquery_credentials,
     update_target_configs_schema,
-    post_deployment,
     put_deployment,
     get_deployment,
     CronSchedule,
@@ -268,31 +260,6 @@ def test_prefect_delete_success_204(mock_delete):
     assert response == {}
 
 
-@patch("proxy.service.prefect_post")
-def test_post_filter_blocks_failure(mock_prefect_post):
-    block_names = ["block_one", "block_two"]
-    mock_prefect_post.side_effect = PrefectException("failed to filter blocks")
-    with pytest.raises(PrefectException) as excinfo:
-        post_filter_blocks(block_names)
-
-    assert str(excinfo.value) == "failed to filter blocks"
-
-
-@patch("proxy.service.prefect_post")
-def test_post_filter_blocks_success(mock_prefect_post):
-    block_names = ["block_one", "block_two"]
-    post_filter_blocks(block_names)
-    mock_prefect_post.assert_called_once_with(
-        "block_documents/filter",
-        {
-            "block_documents": {
-                "operator": "and_",
-                "name": {"any_": block_names},
-            }
-        },
-    )
-
-
 class MockBlock:
     def dict(self):
         return {"_block_document_id": "expected_block_id"}
@@ -401,79 +368,6 @@ def test_update_airbyte_server_block_not_implemented():
         update_airbyte_server_block("blockname")
     assert str(excinfo.value) == "not implemented"
 
-
-# =================================================================================================
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.AirbyteConnection.load", new_callable=AsyncMock)
-async def test_get_airbyte_connection_block_id_valid_blockname(mock_load):
-    class MockBlock:
-        def dict(self):
-            return {"_block_document_id": "expected_block_id"}
-
-    mock_load.return_value = MockBlock()
-    blockname = "valid_blockname"
-    result = await get_airbyte_connection_block_id(blockname)
-    assert result == "expected_block_id"
-    mock_load.assert_called_once_with(blockname)
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.AirbyteConnection.load", new_callable=AsyncMock)
-async def test_get_airbyte_connection_block_id_invalid_blockname(mock_load):
-    mock_load.side_effect = ValueError(
-        "no airbyte connection block named invalid_blockname"
-    )
-    blockname = "invalid_blockname"
-    with pytest.raises(HTTPException) as excinfo:
-        await get_airbyte_connection_block_id(blockname)
-    assert excinfo.value.status_code == 404
-    assert excinfo.value.detail == f"No airbyte connection block named {blockname}"
-    mock_load.assert_called_once_with(blockname)
-
-
-@pytest.mark.asyncio
-async def test_get_airbyte_connection_block_id_non_string_blockname():
-    blockname = 1234
-    with pytest.raises(TypeError) as excinfo:
-        await get_airbyte_connection_block_id(blockname)
-    assert str(excinfo.value) == "blockname must be a string"
-
-
-# =================================================================================================
-
-
-@pytest.mark.asyncio
-async def test_get_airbyte_connection_block_id_non_string_blockid():
-    blockid = 1234
-    with pytest.raises(TypeError) as excinfo:
-        await get_airbyte_connection_block(blockid)
-    assert str(excinfo.value) == "blockid must be a string"
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.prefect_get")
-async def test_get_airbyte_connection_block_valid_blockid(mock_prefect_get):
-    mock_prefect_get.return_value = {"key": "value"}
-    blockid = "valid_blockid"
-    result = await get_airbyte_connection_block(blockid)
-    assert result == {"key": "value"}
-    mock_prefect_get.assert_called_once_with(f"block_documents/{blockid}")
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.prefect_get")
-async def test_get_airbyte_connection_block_invalid_blockid(mock_prefect_get):
-    mock_prefect_get.side_effect = requests.exceptions.HTTPError()
-    blockid = "invalid_blockid"
-    with pytest.raises(HTTPException) as excinfo:
-        await get_airbyte_connection_block(blockid)
-    assert excinfo.value.status_code == 404
-    assert excinfo.value.detail == f"No airbyte connection block having id {blockid}"
-    mock_prefect_get.assert_called_once_with(f"block_documents/{blockid}")
-
-
 # =================================================================================================
 
 
@@ -500,67 +394,6 @@ class MockAirbyteConnection:
 
     def dict(self):
         return {"_block_document_id": "expected_connection_block_id"}
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.AirbyteConnection", new=MockAirbyteConnection)
-@patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock)
-async def test_create_airbyte_connection_block(mock_load):
-    mock_load.return_value = MockAirbyteServer(None, None, None)
-    conninfo = AirbyteConnectionCreate(
-        serverBlockName="test_server_block",
-        connectionBlockName="test_connection_block",
-        connectionId="test_connection_id",
-    )
-    result = await create_airbyte_connection_block(conninfo)
-    assert result == "expected_connection_block_id"
-    mock_load.assert_called_once_with("test_server_block")
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.AirbyteConnection", new=MockAirbyteConnection)
-@patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock)
-async def test_create_airbyte_connection_block_save_error(mock_load):
-    mock_load.return_value = MockAirbyteServer(None, None, None)
-    conninfo = AirbyteConnectionCreate(
-        serverBlockName="test_server_block",
-        connectionBlockName="test_connection_block",
-        connectionId="test_error_connection_id",
-    )
-    with pytest.raises(PrefectException) as excinfo:
-        await create_airbyte_connection_block(conninfo)
-    assert (
-        str(excinfo.value)
-        == f"failed to create airbyte connection block for connection {conninfo.connectionId}"
-    )
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock)
-async def test_create_airbyte_connection_block_invalid_server_block(mock_load):
-    mock_load.side_effect = ValueError(
-        "no airbyte server block named invalid_server_block"
-    )
-    conninfo = AirbyteConnectionCreate(
-        serverBlockName="invalid_server_block",
-        connectionBlockName="test_connection_block",
-        connectionId="test_connection_id",
-    )
-    with pytest.raises(PrefectException) as excinfo:
-        await create_airbyte_connection_block(conninfo)
-    assert (
-        str(excinfo.value)
-        == "could not find Airbyte Server block named invalid_server_block"
-    )
-    mock_load.assert_called_once_with("invalid_server_block")
-
-
-@pytest.mark.asyncio
-async def test_create_airbyte_connection_block_invalid_conninfo():
-    conninfo = "invalid_conninfo"
-    with pytest.raises(TypeError) as excinfo:
-        await create_airbyte_connection_block(conninfo)
-    assert str(excinfo.value) == "conninfo must be an AirbyteConnectionCreate"
 
 
 # =================================================================================================
@@ -608,79 +441,6 @@ class MockShellOperation:
         return {"_block_document_id": "expected_block_id"}
 
 
-@pytest.mark.asyncio
-@patch("proxy.service.ShellOperation.load", new_callable=AsyncMock)
-async def test_get_shell_block_id_valid_blockname(mock_load):
-    mock_load.return_value = MockShellOperation(None, None, None)
-    blockname = "valid_blockname"
-    result = await get_shell_block_id(blockname)
-    assert result == "expected_block_id"
-    mock_load.assert_called_once_with(blockname)
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.ShellOperation.load", new_callable=AsyncMock)
-async def test_get_shell_block_id_invalid_blockname(mock_load):
-    mock_load.side_effect = ValueError(
-        "no shell operation block named invalid_blockname"
-    )
-    blockname = "invalid_blockname"
-    with pytest.raises(HTTPException) as excinfo:
-        await get_shell_block_id(blockname)
-    assert excinfo.value.status_code == 404
-    assert excinfo.value.detail == f"No shell operation block named {blockname}"
-    mock_load.assert_called_once_with(blockname)
-
-
-@pytest.mark.asyncio
-async def test_get_shell_block_id_invalid_blockname_type():
-    blockname = 123
-    with pytest.raises(TypeError) as excinfo:
-        await get_shell_block_id(blockname)
-    assert str(excinfo.value) == "blockname must be a string"
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.ShellOperation", new=MockShellOperation)
-@patch("proxy.service.ShellOperation.load", new_callable=AsyncMock)
-async def test_create_shell_block(mock_load):
-    mock_load.return_value = MockShellOperation(None, None, None)
-    shell = PrefectShellSetup(
-        blockName="test_block_name",
-        commands=["test_command"],
-        env={"test_key": "test_value"},
-        workingDir="test_working_dir",
-    )
-    result = await create_shell_block(shell)
-    assert result[0] == "expected_block_id"
-
-
-@pytest.mark.asyncio
-async def test_create_shell_block_invalid_shell():
-    shell = "invalid_shell"
-    with pytest.raises(TypeError) as excinfo:
-        await create_shell_block(shell)
-    assert str(excinfo.value) == "shell must be a PrefectShellSetup"
-
-
-@pytest.mark.asyncio
-# @patch("proxy.service.ShellOperation", new=MockShellOperation)
-@patch("proxy.service.ShellOperation.save", new_callable=AsyncMock)
-async def test_create_shell_block_failure(mock_save):
-    mock_save.side_effect = Exception("save failed")
-
-    shell = PrefectShellSetup(
-        blockName="test_block_name",
-        commands=["test_command"],
-        env={"test_key": "test_value"},
-        workingDir="/tmp",
-    )
-
-    with pytest.raises(PrefectException) as excinfo:
-        await create_shell_block(shell)
-    assert str(excinfo.value) == "failed to create shell block"
-
-
 @patch("proxy.service.prefect_delete")
 def test_delete_shell_block(mock_prefect_delete):
     blockid = "test_blockid"
@@ -701,36 +461,6 @@ def test_delete_shell_block_non_string_blockid():
 class MockBlock:
     def dict(self):
         return {"_block_document_id": "expected_block_id"}
-
-
-@pytest.mark.asyncio
-async def test_get_dbtcore_block_id_success():
-    mock_block = MockBlock()
-
-    with patch(
-        "proxy.service.DbtCoreOperation.load", new_callable=AsyncMock
-    ) as mock_load:
-        mock_load.return_value = mock_block
-        result = await get_dbtcore_block_id("test_block_name")
-        assert result == "expected_block_id"
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.DbtCoreOperation.load", new_callable=AsyncMock)
-async def test_get_dbtcore_block_id_failure(mock_load):
-    mock_load.side_effect = ValueError("load failed")
-
-    with pytest.raises(HTTPException) as excinfo:
-        await get_dbtcore_block_id("test_block_name")
-    assert excinfo.value.status_code == 404
-    assert excinfo.value.detail == "No dbt core operation block named test_block_name"
-
-
-@pytest.mark.asyncio
-async def test_get_dbtcore_block_id_invalid_blockname():
-    with pytest.raises(TypeError) as excinfo:
-        await get_dbtcore_block_id(123)
-    assert str(excinfo.value) == "blockname must be a string"
 
 
 # @pytest.mark.asyncio
@@ -1144,47 +874,6 @@ async def test_update_target_configs_schema(mock_load):
     assert dbt_coreop_block.dbt_cli_profile.target_configs.schema == "newtarget"
     assert dbt_coreop_block.dbt_cli_profile.target == "newtarget"
     assert dbt_coreop_block.commands[0] == "dbt run --target newtarget"
-
-
-@pytest.mark.asyncio
-async def test_post_deployment_bad_payload():
-    with pytest.raises(TypeError) as excinfo:
-        await post_deployment(123)
-    assert str(excinfo.value) == "payload must be a DeploymentCreate"
-
-
-@pytest.mark.asyncio
-@patch("proxy.service.Deployment.build_from_flow", new_callable=AsyncMock)
-@patch(
-    "proxy.service.deployment_schedule_flow_v3",
-    new_callable=Mock,
-)
-async def test_post_deployment(deployment_schedule_flow_v3, mock_build):
-    payload = DeploymentCreate(
-        flow_name="flow-name",
-        deployment_name="deployment-name",
-        org_slug="org-slug",
-        connection_blocks=[],
-        dbt_blocks=[],
-        cron=None,
-    )
-    deployment = Mock(
-        apply=AsyncMock(return_value="deployment-id"),
-    )
-    deployment.name = "deployment-name"
-
-    mock_build.return_value = deployment
-    deployment_schedule_flow_v3.with_options = Mock(return_value="dsf")
-
-    response = await post_deployment(payload)
-    assert response["id"] == "deployment-id"
-    assert response["name"] == "deployment-name"
-    mock_build.assert_called_once_with(
-        flow="dsf",
-        name=payload.deployment_name,
-        work_queue_name="ddp",
-        tags=[payload.org_slug],
-    )
 
 
 def test_put_deployment_bad_param():
