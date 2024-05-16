@@ -39,6 +39,8 @@ services:
       - PREFECT_API_DATABASE_CONNECTION_URL=${DB_CONNECTION_URL}
       - HTTP_PROXY=http://prefect_proxy:${PREFECT_PROXY_API_PORT}
       - HTTPS_PROXY=https://prefect_proxy:${PREFECT_PROXY_API_PORT}
+      - PREFECT_SERVER_CSRF_PROTECTION_ENABLED=True
+      - PREFECT_SERVER_TELEMETRY_ENABLED=True
     ports:
       - 4200:4200
 
@@ -61,9 +63,11 @@ services:
         "${PREFECT_POOL_NAME}",
       ]
     environment:
-      - PREFECT_API_URL=http://prefect_server:4200/api
+      - PREFECT_API_URL=http://localhost:4200/api
       - HTTP_PROXY=http://prefect_proxy:${PREFECT_PROXY_API_PORT}
       - HTTPS_PROXY=https://prefect_proxy:${PREFECT_PROXY_API_PORT}
+      - PREFECT_SERVER_CSRF_PROTECTION_ENABLED=True
+      - PREFECT_CLIENT_CSRF_SUPPORT_ENABLED=True
 
 volumes:
   prefect:

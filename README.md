@@ -83,7 +83,7 @@ To run all the services as docker container, run the docker compose command belo
 - `docker-compose.yml` - does not spin up a database but assumes the prefect database is external
 
 ```
-docker-compose -f Docker/docker-compose.dev.yml compose up -d
+docker-compose -f Docker/docker-compose.dev.yml up -d
 ```
 
 The docker compose pulls all the necessary docker images from Dockerhub. However, the prefect proxy has a Dockerfile that you can build an image locally.
