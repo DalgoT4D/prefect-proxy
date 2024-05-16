@@ -20,12 +20,13 @@ services:
     restart: always
     environment:
       - LOGDIR=${LOGDIR}
+      - PREFECT_API_URL=${PREFECT_API_URL}
     ports:
       - 4300:4300
 
   ### Prefect Server API and UI
   prefect_server:
-    image: prefecthq/prefect:2-python3.10
+    image: prefecthq/prefect:2.13.5-python3.10
     restart: always
     depends_on:
       - prefect_postgres_db
@@ -37,16 +38,13 @@ services:
       - PREFECT_API_URL=${PREFECT_API_URL}
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=${DB_CONNECTION_URL}
-      - HTTP_PROXY=http://prefect_proxy:${PREFECT_PROXY_API_PORT}
-      - HTTPS_PROXY=https://prefect_proxy:${PREFECT_PROXY_API_PORT}
-      - PREFECT_SERVER_CSRF_PROTECTION_ENABLED=True
-      - PREFECT_SERVER_TELEMETRY_ENABLED=True
+
     ports:
       - 4200:4200
 
   ## Prefect Agent
   prefect_agent:
-    image: prefecthq/prefect:2-python3.10
+    image: prefecthq/prefect:2.13.5-python3.10
     restart: always
     depends_on:
       - prefect_server
@@ -63,11 +61,7 @@ services:
         "${PREFECT_POOL_NAME}",
       ]
     environment:
-      - PREFECT_API_URL=http://localhost:4200/api
-      - HTTP_PROXY=http://prefect_proxy:${PREFECT_PROXY_API_PORT}
-      - HTTPS_PROXY=https://prefect_proxy:${PREFECT_PROXY_API_PORT}
-      - PREFECT_SERVER_CSRF_PROTECTION_ENABLED=True
-      - PREFECT_CLIENT_CSRF_SUPPORT_ENABLED=True
+      - PREFECT_API_URL=${PREFECT_API_URL}
 
 volumes:
   prefect:

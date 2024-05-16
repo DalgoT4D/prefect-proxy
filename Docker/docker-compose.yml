@@ -1,17 +1,19 @@
 version: "3.9"
 services:
+
   ## Prefect Proxy
   prefect_proxy:
     image: prefect_proxy:latest #change this to point to dockerhub
     restart: always
     environment:
       - LOGDIR=${LOGDIR}
+      - PREFECT_API_URL=${PREFECT_API_URL}
     ports:
       - 4300:4300
 
   ### Prefect Server API and UI
-  server:
-    image: prefecthq/prefect:2-python3.10
+  prefect_server:
+    image: prefecthq/prefect:2.14.21-python3.10
     restart: always
     volumes:
       - prefect:/root/.prefect
@@ -21,17 +23,16 @@ services:
       - PREFECT_API_URL=${PREFECT_API_URL}
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=${DB_CONNECTION_URL}
-      - HTTP_PROXY=http://prefect_proxy:${PREFECT_PROXY_API_PORT}
-      - HTTPS_PROXY=https://prefect_proxy:${PREFECT_PROXY_API_PORT}
+
     ports:
       - 4200:4200
 
   ## Prefect Agent
-  agent:
-    image: prefecthq/prefect:2-python3.10
+  prefect_agent:
+    image: prefecthq/prefect:2.14.21-python3.10
     restart: always
     depends_on:
-      - server
+      - prefect_server
       - prefect_proxy
     entrypoint:
       [
@@ -45,9 +46,7 @@ services:
         "${PREFECT_POOL_NAME}",
       ]
     environment:
-      - PREFECT_API_URL=http://server:4200/api
-      - HTTP_PROXY=http://prefect_proxy:${PREFECT_PROXY_API_PORT}
-      - HTTPS_PROXY=https://prefect_proxy:${PREFECT_PROXY_API_PORT}
+      - PREFECT_API_URL=${PREFECT_API_URL}
 
 volumes:
   prefect:
