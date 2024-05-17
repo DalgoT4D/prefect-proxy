@@ -22,7 +22,7 @@ services:
       - LOGDIR=${LOGDIR}
       - PREFECT_API_URL=${PREFECT_API_URL}
     ports:
-      - 4300:4300
+      - "4300:4300"
 
   ### Prefect Server API and UI
   prefect_server:
@@ -34,13 +34,13 @@ services:
       - prefect:/root/.prefect
     entrypoint: ["/opt/prefect/entrypoint.sh", "prefect", "server", "start"]
     environment:
-      - PREFECT_UI_URL=${PREFECT_API_URL}
-      - PREFECT_API_URL=${PREFECT_API_URL}
+      - PREFECT_UI_URL=http://34.121.170.54:4200/api
+      - PREFECT_API_URL=http://34.121.170.54:4200/api
       - PREFECT_SERVER_API_HOST=0.0.0.0
       - PREFECT_API_DATABASE_CONNECTION_URL=${DB_CONNECTION_URL}
 
     ports:
-      - 4200:4200
+      - "4200:4200"
 
   ## Prefect Agent
   prefect_agent:
