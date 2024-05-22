@@ -1,3 +1,4 @@
+#A multistage Dockerfile to create the prefect proxy image based on the Fast API code 
 FROM python:3.10 as build
 LABEL Stage="Build"
 
@@ -50,8 +51,8 @@ LABEL org.opencontainers.image.created=${BUILD_DATE}
 
 
 RUN useradd -m app_user \
- && mkdir /app \
- && chown -R app_user:app_user /app
+    && mkdir /app \
+    && chown -R app_user:app_user /app
 USER app_user
 WORKDIR /app
 
