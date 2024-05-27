@@ -62,9 +62,6 @@ COPY --from=build --chown=app_user:app_user /usr/local/lib/python3.10/site-packa
 COPY --from=build --chown=app_user /usr/local/ /usr/local/
 COPY --from=build --chown=app_user:app_user ${WORKDIR}/app ${WORKDIR}
 
-
-RUN ls -la && pwd
-
 WORKDIR /app
 
 # Expose port 4300 to allow external access

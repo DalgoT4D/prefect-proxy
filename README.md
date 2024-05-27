@@ -75,8 +75,6 @@ To Build and use proxy docker image, run the below command from the root directo
 docker build -f Docker/Dockerfile --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg BUILD_VERSION=0.0.1  -t prefect_proxy:latest .
 ```
 
-If we don't build the image locally, docker will try to pull the image from dockerhub when we run docker compose.
-
 To run all the services as docker container, run the docker compose command below. There are two docker files:
 
 - `docker-compose.dev.yml` - runs the prefect proxy as database in a container
