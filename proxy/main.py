@@ -64,10 +64,8 @@ from proxy.flows import run_airbyte_connection_flow, run_dbtcore_flow
 
 from proxy.prefect_flows import run_shell_operation_flow, run_dbtcore_flow_v1
 
-from logger import setup_logger
 
 app = FastAPI()
-setup_logger()
 
 logger = CustomLogger("prefect-proxy")
 

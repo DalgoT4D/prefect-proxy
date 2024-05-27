@@ -8,11 +8,22 @@ Since Prefect exposes an async Python interface and Django does not play well wi
 
 These endpoints will be called only from the Django server or from testing scripts. More project documentation can be found in [the wiki](https://github.com/DalgoT4D/prefect-proxy/wiki)
 
-## Installation instructions
+## Run instructions
+
+There are two options to setup and run prefect server, proxy and the agent:
+
+- Running all the three services manually and independently
+- Running using Docker
+
+Below are instructions on each the two options
+
+### Running services manually
+
+#### Instructions
 
 Clone the [Prefect Proxy](https://github.com/DalgoT4D/prefect-proxy) repository
 
-In the cloned repository, run the following commands:
+In the cloned repository, open the terminal and run the following commands:
 
 - `pyenv local 3.10`
 
@@ -27,7 +38,7 @@ In the cloned repository, run the following commands:
 - create `.env` from `.env.template`
 - set the value for the `LOGDIR` in the `.env` file with the name of the directory to hold the logs. The directory will be automatically created on running the prefect proxy
 
-## Run instructions
+#### Start Prefect Server
 
 Start Prefect on port 4200
 
@@ -35,15 +46,45 @@ Start Prefect on port 4200
 
 and set `PREFECT_API_URL` in `.env` to `http://localhost:4200/api`. Change the port in this URL if you are running Prefect on a different port.
 
-Next, start a Prefect agent
+#### Start Prefect Agent
+
+Next, on a different terminal start the Prefect agent
 
     prefect agent start -q ddp --pool default-agent-pool
+
+#### Start Prefect Proxy
 
 The proxy server needs to listen for requests coming from Django; pick an available port and run
 
     gunicorn proxy.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:<port number>
 
 Make sure to add this port number into the `.env` for DDP_backend in the variable `PREFECT_PROXY_API_URL`.
+
+## Running services using Docker
+
+The second option is to run all the three services as docker containers.
+Perform the following steps:
+
+- create an `.env` file from `.env.template` inside the `Docker` folder
+- populate all the variables in the `.env` file
+- Next we need to build the prefect proxy docker image(if were are using local docker image)
+
+To Build and use proxy docker image, run the below command from the root directory:
+
+```
+docker build -f Docker/Dockerfile --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg BUILD_VERSION=0.0.1  -t prefect_proxy:latest .
+```
+
+To run all the services as docker container, run the docker compose command below. There are two docker files:
+
+- `docker-compose.dev.yml` - runs the prefect proxy as database in a container
+- `docker-compose.yml` - does not spin up a database but assumes the prefect database is external
+
+```
+docker-compose -f Docker/docker-compose.dev.yml up -d
+```
+
+The docker compose pulls all the necessary docker images from Dockerhub. However, the prefect proxy has a Dockerfile that you can build an image locally.
 
 ## For developers
 
