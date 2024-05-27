@@ -368,6 +368,7 @@ def test_update_airbyte_server_block_not_implemented():
         update_airbyte_server_block("blockname")
     assert str(excinfo.value) == "not implemented"
 
+
 # =================================================================================================
 
 
@@ -1185,10 +1186,14 @@ def test_set_deployment_schedule_prefect_post():
 
 @patch("proxy.service.prefect_get")
 def test_get_flow_run_success(mock_get: Mock):
-    mock_get.return_value = "flow-run"
+    mock_get.return_value = {"id": "12345", "state": {"type": "COMPLETED"}}
     response = get_flow_run("flow-run-id")
     mock_get.assert_called_once_with("flow_runs/flow-run-id")
-    assert response == "flow-run"
+    assert response == {
+        "id": "12345",
+        "state": {"type": "COMPLETED"},
+        "status": "COMPLETED",
+    }
 
 
 @patch("proxy.service.prefect_get")

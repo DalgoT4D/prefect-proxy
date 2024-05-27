@@ -846,6 +846,8 @@ def get_flow_runs_by_name(flow_run_name: str) -> dict:
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to fetch flow-runs by name") from error
+    for flow_run in flow_runs:
+        flow_run["status"] = flow_run["state"]["type"]
     return flow_runs
 
 
@@ -853,6 +855,7 @@ def get_flow_run(flow_run_id: str) -> dict:
     """Get a flow run by its id"""
     try:
         flow_run = prefect_get(f"flow_runs/{flow_run_id}")
+        flow_run["status"] = flow_run["state"]["type"]
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to fetch a flow-run") from err

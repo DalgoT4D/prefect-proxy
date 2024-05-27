@@ -670,7 +670,6 @@ def test_put_dataflow_v1_success():
         assert result == {"success": 1}
 
 
-
 def test_get_flow_run_by_id_badparams():
     request = Mock()
     with pytest.raises(TypeError) as excinfo:
@@ -679,7 +678,7 @@ def test_get_flow_run_by_id_badparams():
 
 
 @patch("proxy.main.get_flow_run")
-def test_put_data_flow_failure(mock_get: Mock):
+def test_get_flow_run_by_id_failure(mock_get: Mock):
     request = Mock()
     mock_get.side_effect = Exception("exception")
     with pytest.raises(HTTPException) as excinfo:
@@ -688,20 +687,39 @@ def test_put_data_flow_failure(mock_get: Mock):
 
 
 @patch("proxy.main.get_flow_run")
-def test_put_data_flow_success(mock_get: Mock):
+def test_get_flow_run_by_id_success(mock_get: Mock):
     request = Mock()
-    mock_get.return_value = "flow-run"
+    mock_get.return_value = {
+        "id": "12345",
+        "state": {"type": "COMPLETED"},
+        "status": "COMPLETED",
+    }
     response = get_flow_run_by_id(request, "f-run")
-    assert response == "flow-run"
+    assert response == {
+        "id": "12345",
+        "state": {"type": "COMPLETED"},
+        "status": "COMPLETED",
+    }
 
 
 @pytest.mark.asyncio
 async def test_get_flowrun_success():
     payload = FlowRunRequest(name="test_flow_run")
     request = client.request("GET", "/")
-    with patch("proxy.main.get_flow_runs_by_name", return_value=[{"id": "12345"}]):
+    with patch(
+        "proxy.main.get_flow_runs_by_name",
+        return_value=[
+            {"id": "12345", "state": {"type": "COMPLETED"}, "status": "COMPLETED"}
+        ],
+    ):
         response = await get_flowrun(request, payload)
-        assert response == {"flow_run": {"id": "12345"}}
+        assert response == {
+            "flow_run": {
+                "id": "12345",
+                "state": {"type": "COMPLETED"},
+                "status": "COMPLETED",
+            }
+        }
 
 
 @pytest.mark.asyncio
@@ -727,10 +745,13 @@ async def test_get_flowrun_invalid_payload():
 def test_get_flow_runs_success():
     request = client.request("GET", "/")
     with patch(
-        "proxy.main.get_flow_runs_by_deployment_id", return_value=[{"id": "12345"}]
+        "proxy.main.get_flow_runs_by_deployment_id",
+        return_value=[{"id": "12345", "state": {"type": "COMPLETED"}}],
     ):
         response = get_flow_runs(request, "67890")
-        assert response == {"flow_runs": [{"id": "12345"}]}
+        assert response == {
+            "flow_runs": [{"id": "12345", "state": {"type": "COMPLETED"}}]
+        }
 
 
 def test_get_flow_runs_failure():
