@@ -8,7 +8,7 @@ on:
     types: [published]
 
 jobs:
-  push_to_registry:
+  push_image_to_registry:
     name: Push Docker image to docker hub
     runs-on: ubuntu-latest
     steps:
@@ -26,4 +26,4 @@ jobs:
         with:
           context: Docker/
           push: true
-          tags: tech4dev/prefect-proxy:{{ github.event.release.tag_name }}
+          tags: tech4dev/prefect-proxy: ${{ github.event.release.tag_name }}
