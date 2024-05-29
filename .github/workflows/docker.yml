@@ -26,4 +26,6 @@ jobs:
         with:
           context: Docker/
           push: true
-          tags: tech4dev/prefect-proxy: ${{ github.event.release.tag_name }}
+          tags: |
+            tech4dev/prefect-proxy:${{ github.event.release.tag_name }}
+            tech4dev/prefect-proxy:latest
