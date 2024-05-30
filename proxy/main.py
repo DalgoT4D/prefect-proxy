@@ -147,7 +147,7 @@ def shelloprun(task_config: RunShellOperation):
 
 # =============================================================================
 @app.get("/proxy/blocks/airbyte/server/{blockname}")
-async def get_airbyte_server_id(request: Request, blockname: str):
+async def get_airbyte_server(request: Request, blockname: str):
     """Look up an Airbyte server block by name and return block_id"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
@@ -168,7 +168,7 @@ async def get_airbyte_server_id(request: Request, blockname: str):
 
 
 @app.get("/proxy/blocks/airbyte/server/block/{blockname}")
-async def get_airbyte_server(request: Request, blockname: str):
+async def get_airbyte_server_block_config(request: Request, blockname: str):
     """Look up an Airbyte server block by name and return block"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
