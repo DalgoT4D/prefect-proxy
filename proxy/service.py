@@ -187,7 +187,7 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
 
 
 async def get_airbyte_server_block(blockname: str) -> dict | None:
-    """look up an airbyte server block by name and return block_id"""
+    """look up an airbyte server block by name and return block"""
     if not isinstance(blockname, str):
         raise TypeError("blockname must be a string")
     try:
@@ -319,7 +319,6 @@ async def _create_dbt_cli_profile(
         raise PrefectException("unknown wtype: " + payload.wtype)
 
     try:
-        print(payload, "my payload")
         dbt_cli_profile = DbtCliProfile(
             name=payload.profile.name,
             target=payload.profile.target_configs_schema,
