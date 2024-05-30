@@ -4,7 +4,6 @@ import os
 import re
 import base64
 import requests
-
 from fastapi import FastAPI, HTTPException, Request
 from prefect_airbyte import AirbyteConnection
 from proxy.helpers import CustomLogger
@@ -49,7 +48,6 @@ from proxy.schemas import (
     RunAirbyteResetConnection,
 )
 from proxy.flows import run_airbyte_connection_flow
-
 
 from proxy.prefect_flows import (
     run_shell_operation_flow,
