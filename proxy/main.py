@@ -183,15 +183,13 @@ async def get_airbyte_server(request: Request, blockname: str):
         raise HTTPException(status_code=500, detail="Internal server error") from error
 
     if block is None:
-        raise HTTPException(status_code=404, detail="block not found") from error
-    
+        raise HTTPException(status_code=404, detail="block not found") from error  
     logger.info("blockname => block : %s => %s", blockname, block)
 
     token_string = f"{block.username}:{block.password.get_secret_value()}"
     token_string_bytes = token_string.encode("ascii")
     base64_bytes = base64.b64encode(token_string_bytes)
     base64_string_token = base64_bytes.decode("ascii")
-    
     return {
         "host": block.server_host,
         "port": block.server_port,
