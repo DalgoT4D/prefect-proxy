@@ -44,7 +44,7 @@ jobs:
             BUILD_VERSION=${{ env.RELEASE_NUMBER }}"
           push: true
           tags: |
-            tech4dev/prefect-proxy:${{ env.RELEASE_NUMBER }}
-            tech4dev/prefect-proxy:latest
-          cache-from: type=registry,ref=tech4dev/prefect-proxy:latest
+            tech4dev/dalgo-prefect-proxy:${{ env.RELEASE_NUMBER }}
+            tech4dev/dalgo-prefect-proxy:latest
+          cache-from: type=registry,ref=tech4dev/dalgo-prefect-proxy:latest
           cache-to: type=inline
