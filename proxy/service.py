@@ -186,6 +186,22 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
         return None
 
 
+async def get_airbyte_server_block(blockname: str) -> dict | None:
+    """look up an airbyte server block by name and return block"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
+    try:
+        block = await AirbyteServer.load(blockname)
+        logger.info(
+            "found airbyte server block named %s",
+            blockname,
+        )
+        return block
+    except ValueError:
+        logger.error("no airbyte server block named %s", blockname)
+        return None
+
+
 async def create_airbyte_server_block(payload: AirbyteServerCreate):
     """Create airbyte server block in prefect"""
     if not isinstance(payload, AirbyteServerCreate):

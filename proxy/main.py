@@ -2,12 +2,14 @@
 
 import os
 import re
+import base64
 import requests
 from fastapi import FastAPI, HTTPException, Request
 from prefect_airbyte import AirbyteConnection
 from proxy.helpers import CustomLogger
 
 from proxy.service import (
+    get_airbyte_server_block,
     get_airbyte_server_block_id,
     create_airbyte_server_block,
     create_dbt_core_block,
@@ -163,6 +165,37 @@ async def get_airbyte_server(request: Request, blockname: str):
         return {"block_id": None}
     logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
+
+
+@app.get("/proxy/blocks/airbyte/server/block/{blockname}")
+async def get_airbyte_server_block_config(request: Request, blockname: str):
+    """Look up an Airbyte server block by name and return block"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
+    try:
+        block = await get_airbyte_server_block(blockname)
+    except Exception as error:
+        logger.error(
+            "Failed to get Airbyte server block for block name %s: %s",
+            blockname,
+            str(error),
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from error
+
+    if block is None:
+        raise HTTPException(status_code=404, detail="block not found") from error
+    logger.info("blockname => block : %s => %s", blockname, block)
+
+    token_string = f"{block.username}:{block.password.get_secret_value()}"
+    token_string_bytes = token_string.encode("ascii")
+    base64_bytes = base64.b64encode(token_string_bytes)
+    base64_string_token = base64_bytes.decode("ascii")
+    return {
+        "host": block.server_host,
+        "port": block.server_port,
+        "version": block.api_version,
+        "token": base64_string_token,
+    }
 
 
 @app.post("/proxy/blocks/airbyte/server/")
