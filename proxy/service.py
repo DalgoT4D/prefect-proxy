@@ -659,6 +659,32 @@ def get_deployment(deployment_id: str) -> dict:
     return res
 
 
+def get_final_state_for_flow_run(flow_run_id: str):
+    """fetch final state of subtasks"""
+    all_ids_to_look_at = traverse_flow_run_graph(flow_run_id, [])
+    query = {
+        "flow_runs": {
+            "operator": "and_",
+            "id": {"any_": all_ids_to_look_at},
+        },
+    }
+    result = prefect_post("task_runs/filter/", query)
+    priority = ["Completed", "DBT_TEST_FAILED", "Failed", "Running", "Unknown"]
+    as_numeric = list(
+        map(
+            lambda x: (
+                priority.index(x["state"]["name"])
+                if x["state"]["name"] in priority
+                else 4
+            ),
+            result,
+        )
+    )
+    if len(as_numeric) == 0:
+        return "RUNNING"
+    return priority[max(as_numeric)].upper()
+
+
 def get_flow_runs_by_deployment_id(
     deployment_id: str, limit: int, start_time_gt: str
 ) -> list:
@@ -871,7 +897,9 @@ def get_flow_run(flow_run_id: str) -> dict:
     """Get a flow run by its id"""
     try:
         flow_run = prefect_get(f"flow_runs/{flow_run_id}")
-        flow_run["status"] = flow_run["state"]["type"]
+        final_state = get_final_state_for_flow_run(flow_run_id)
+        if final_state != "UNKNOWN":
+            flow_run["status"] = final_state
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to fetch a flow-run") from err
