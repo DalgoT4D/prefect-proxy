@@ -5,6 +5,7 @@ everything under here is incremented by a version compared to flows.py
 """
 
 import os
+from datetime import datetime
 from prefect import flow, task
 from prefect.blocks.system import Secret
 from prefect.states import State, StateType
@@ -162,7 +163,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
     # pylint: disable=broad-exception-caught
     """loads and runs the shell operation"""
 
-    if task_config["slug"] == "git-pull":
+    if task_config["slug"] == "git-pull":  # DDP_backend:constants.TASK_GITPULL
         secret_block_name = task_config["env"]["secret-git-pull-url-block"]
         git_repo_endpoint = ""
         if secret_block_name and len(secret_block_name) > 0:
@@ -170,10 +171,33 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
             git_repo_endpoint = secret_blk.get()
 
         commands = task_config["commands"]
-        updated_cmds = []
-        for cmd in commands:
-            updated_cmds.append(f"{cmd} {git_repo_endpoint}")
+        updated_cmds = [f"{cmd} {git_repo_endpoint}" for cmd in commands]
         task_config["commands"] = updated_cmds
+
+    elif (
+        task_config["slug"] == "generate-edr"  # DDP_backend:constants.TASK_GENERATE_EDR
+    ):
+        # commands = ["edr send-report --bucket-file-path reports/{orgname}.TODAYS_DATE.html --profiles-dir elementary_profiles"]
+        # env = {"PATH": /path/to/dbt/venv}
+        venv_bin_dir: str = task_config["env"]["PATH"]
+        venv_bin_dir = (
+            venv_bin_dir + "/" if not venv_bin_dir.endswith("/") else venv_bin_dir
+        )
+        secret_block_aws_access_key = "edr-aws-access-key"
+        aws_access_key = Secret.load(secret_block_aws_access_key).get()
+        secret_block_aws_access_secret = "edr-aws-access-secret"
+        aws_access_secret = Secret.load(secret_block_aws_access_secret).get()
+        secret_block_s3_bucket = "edr-s3-bucket"
+        edr_s3_bucket = Secret.load(secret_block_s3_bucket).get()
+        # object key for the report
+        todays_date = datetime.today().strftime("%Y-%m-%d")
+        task_config["commands"][0] = venv_bin_dir + task_config["commands"][0]
+        task_config["commands"][0] = task_config["commands"][0].replace(
+            "TODAYS_DATE", todays_date
+        )
+        task_config["commands"][
+            0
+        ] += f" --aws-access-key-id {aws_access_key} --aws-secret-access-key {aws_access_secret} --s3-bucket-name {edr_s3_bucket}"
 
     shell_op = ShellOperation(
         commands=task_config["commands"],
