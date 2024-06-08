@@ -203,6 +203,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         commands=task_config["commands"],
         env=task_config["env"],
         working_dir=task_config["working_dir"],
+        shell="/usr/bin/bash",
     )
     return shell_op.run()
 
