@@ -179,10 +179,6 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
     ):
         # commands = ["edr send-report --bucket-file-path reports/{orgname}.TODAYS_DATE.html --profiles-dir elementary_profiles"]
         # env = {"PATH": /path/to/dbt/venv}
-        venv_bin_dir: str = task_config["env"]["PATH"]
-        venv_bin_dir = (
-            venv_bin_dir + "/" if not venv_bin_dir.endswith("/") else venv_bin_dir
-        )
         secret_block_aws_access_key = "edr-aws-access-key"
         aws_access_key = Secret.load(secret_block_aws_access_key).get()
         secret_block_aws_access_secret = "edr-aws-access-secret"
@@ -191,7 +187,6 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         edr_s3_bucket = Secret.load(secret_block_s3_bucket).get()
         # object key for the report
         todays_date = datetime.today().strftime("%Y-%m-%d")
-        task_config["commands"][0] = venv_bin_dir + task_config["commands"][0]
         task_config["commands"][0] = task_config["commands"][0].replace(
             "TODAYS_DATE", todays_date
         )
