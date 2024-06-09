@@ -899,7 +899,7 @@ def get_flow_run(flow_run_id: str) -> dict:
         flow_run = prefect_get(f"flow_runs/{flow_run_id}")
         final_state = get_final_state_for_flow_run(flow_run_id)
         if final_state != "UNKNOWN":
-            flow_run["status"] = final_state
+            flow_run["state_name"] = final_state
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to fetch a flow-run") from err
