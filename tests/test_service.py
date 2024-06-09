@@ -1194,7 +1194,7 @@ def test_get_flow_run_success(mock_get_final_state: Mock, mock_get: Mock):
     assert response == {
         "id": "12345",
         "state": {"type": "COMPLETED"},
-        "status": "COMPLETED",
+        "state_name": "COMPLETED",
     }
 
 
