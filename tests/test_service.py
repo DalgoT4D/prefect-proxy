@@ -1185,10 +1185,14 @@ def test_set_deployment_schedule_prefect_post():
 
 
 @patch("proxy.service.prefect_get")
-@patch("proxy.service.get_final_state_for_flow_run")
-def test_get_flow_run_success(mock_get_final_state: Mock, mock_get: Mock):
+@patch("proxy.service.update_flow_run_final_state")
+def test_get_flow_run_success(mock_update_flow_run_final_state: Mock, mock_get: Mock):
     mock_get.return_value = {"id": "12345", "state": {"type": "COMPLETED"}}
-    mock_get_final_state.return_value = "COMPLETED"
+    mock_update_flow_run_final_state.return_value = {
+        "id": "12345",
+        "state": {"type": "COMPLETED"},
+        "state_name": "COMPLETED",
+    }
     response = get_flow_run("flow-run-id")
     mock_get.assert_called_once_with("flow_runs/flow-run-id")
     assert response == {
