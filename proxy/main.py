@@ -21,6 +21,7 @@ from proxy.service import (
     get_flow_runs_by_deployment_id,
     get_deployments_by_filter,
     get_flow_run_logs,
+    get_flow_run_logs_v2,
     post_deployment_flow_run,
     get_flow_runs_by_name,
     set_deployment_schedule,
@@ -560,6 +561,22 @@ def get_flow_run_logs_paginated(request: Request, flow_run_id: str, offset: int 
     logger.info("flow_run_id=%s, offset=%s", flow_run_id, offset)
     try:
         return get_flow_run_logs(flow_run_id, offset)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch logs for flow_run"
+        ) from error
+
+
+@app.get("/proxy/flow_runs/v1/logs/{flow_run_id}")
+def get_flow_run_logs_grouped(request: Request, flow_run_id: str):
+    """paginate the logs from a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    logger.info("flow_run_id=%s, offset=%s", flow_run_id)
+    try:
+        return get_flow_run_logs_v2(flow_run_id)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
