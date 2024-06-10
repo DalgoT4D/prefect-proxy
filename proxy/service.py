@@ -1,6 +1,7 @@
 """interface with prefect's python client api"""
 
 import os
+import queue
 from time import sleep
 import requests
 from fastapi import HTTPException
@@ -850,6 +851,42 @@ def traverse_flow_run_graph(flow_run_id: str, flow_runs: list) -> list:
     return flow_runs
 
 
+def traverse_flow_run_graph_v2(flow_run_id: str):
+    """
+    Fetches the graph of a flow run using prefect's new api.
+    Returns the list of subflow runs & task runs in the order they were executed
+    """
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    # this data has all the nested subflows & task runs
+    flow_graph_data = prefect_get(f"flow_runs/{flow_run_id}/graph-v2")
+
+    if "root_node_ids" not in flow_graph_data:
+        return []
+
+    root_node_ids = flow_graph_data["root_node_ids"]
+    runs_queue = queue.Queue()
+    for node_id in root_node_ids:
+        runs_queue.put(node_id)
+
+    res = []
+    # start from the root_node_ids and keep pushing the subflows/task runs into the res
+    # if there are any child push them first before going to the next sibling subflows/task run
+    while not runs_queue.empty():
+        current_run_id = runs_queue.get()
+        for node in flow_graph_data["nodes"]:
+            run_id, node_data = node
+            if current_run_id == run_id:
+                res.append(node_data)
+                for child in node_data["children"]:
+                    runs_queue.put(child["id"])
+
+                break
+
+    return res
+
+
 def get_flow_run_logs(flow_run_id: str, offset: int) -> dict:
     """return logs from a flow run"""
     if not isinstance(flow_run_id, str):
@@ -873,6 +910,48 @@ def get_flow_run_logs(flow_run_id: str, offset: int) -> dict:
         "offset": offset,
         "logs": list(map(parse_log, logs)),
     }
+
+
+def get_flow_run_logs_v2(flow_run_id: str) -> dict:
+    """
+    return logs from a flow run grouped by the task
+    """
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    subflow_task_runs = traverse_flow_run_graph_v2(flow_run_id)
+
+    res = []
+
+    for run in subflow_task_runs:
+        query = {
+            "logs": {
+                "operator": "or_",
+                "flow_run_id": {"any_": []},
+                "task_run_id": {"any_": []},
+            },
+            "sort": "TIMESTAMP_ASC",
+        }
+        if run["kind"] == "flow-run":
+            query["logs"]["flow_run_id"]["any_"] = [run["id"]]
+        elif run["kind"] == "task-run":
+            query["logs"]["task_run_id"]["any_"] = [run["id"]]
+
+        logs = prefect_post("logs/filter", query)
+
+        res.append(
+            {
+                "id": run["id"],
+                "kind": run["kind"],
+                "label": run["label"],
+                "state_type": run["state_type"],
+                "start_time": run["start_time"],
+                "end_time": run["end_time"],
+                "logs": list(map(parse_log, logs)),
+            }
+        )
+
+    return res
 
 
 def get_flow_runs_by_name(flow_run_name: str) -> dict:
