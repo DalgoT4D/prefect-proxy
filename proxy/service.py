@@ -582,9 +582,17 @@ async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
         work_queue_name=work_queue_name,
         work_pool_name=work_pool_name,
         tags=[payload.org_slug],
+        is_schedule_active=True,
     )
     deployment.parameters = payload.deployment_params
     deployment.schedule = CronSchedule(cron=payload.cron) if payload.cron else None
+
+    # TODO 'schedule' in Deployment is going to be deprecated after Sep2024, need to move to 'schedules'
+    # Requires changes in the get deployment function & frontend also
+
+    # deployment.schedules = [
+    #     {"schedule": CronSchedule(cron=payload.cron), "active": True}
+    # ]
     try:
         deployment_id = await deployment.apply()
     except Exception as error:
