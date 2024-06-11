@@ -178,7 +178,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         task_config["slug"] == "generate-edr"  # DDP_backend:constants.TASK_GENERATE_EDR
     ):
         # commands = ["edr send-report --bucket-file-path reports/{orgname}.TODAYS_DATE.html --profiles-dir elementary_profiles"]
-        # env = {"PATH": /path/to/dbt/venv}
+        # env = {"PATH": /path/to/dbt/venv, "shell": "/bin/bash"}
         secret_block_aws_access_key = "edr-aws-access-key"
         aws_access_key = Secret.load(secret_block_aws_access_key).get()
         secret_block_aws_access_secret = "edr-aws-access-secret"
@@ -198,7 +198,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         commands=task_config["commands"],
         env=task_config["env"],
         working_dir=task_config["working_dir"],
-        shell="/usr/bin/bash",
+        shell=task_config["env"]["shell"] if "shell" in task_config["env"] else "/bin/bash",
     )
     return shell_op.run()
 
