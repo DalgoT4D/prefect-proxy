@@ -15,8 +15,6 @@ services:
   prefect_server:
     image: prefecthq/prefect:2.13.5-python3.10
     restart: always
-    depends_on:
-      - prefect_postgres_db
     entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_server.sh"]
     environment:
       - PREFECT_UI_URL=${PREFECT_API_URL}

@@ -5,8 +5,9 @@ services:
     container_name: prefect_db
     image: postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-securepass}
+      POSTGRES_DB: prefect_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: securepass
       PGDATA: /data/postgres
     volumes:
       - postgres:/data/postgres
@@ -17,7 +18,7 @@ services:
   ## Prefect Proxy
   prefect_proxy:
     image: prefect_proxy:latest #change this to point to dockerhub
-    restart: always
+    restart: unless-stopped
     environment:
       - LOGDIR=${LOGDIR}
       - PREFECT_API_URL=${PREFECT_API_URL}
@@ -27,7 +28,7 @@ services:
   ### Prefect Server API and UI
   prefect_server:
     image: prefecthq/prefect:2.13.5-python3.10
-    restart: always
+    restart: unless-stopped
     depends_on:
       - prefect_postgres_db
     entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_server.sh"]
@@ -35,7 +36,7 @@ services:
       - PREFECT_UI_URL=${PREFECT_API_URL}
       - PREFECT_API_URL=${PREFECT_API_URL}
       - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_API_DATABASE_CONNECTION_URL=${DB_CONNECTION_URL}
+      - PREFECT_API_DATABASE_CONNECTION_URL=postgresql+asyncpg://postgres:securepass@prefect_db:5432/postgres
       - WORK_POOL_NAME=${PREFECT_POOL_NAME}
       - WORK_POOL_TYPE=${PREFECT_WORK_POOL_TYPE}
       - PREFECT_WORK_QUEUE1=${PREFECT_WORK_QUEUE1_NAME}
@@ -51,6 +52,7 @@ services:
   ## Prefect Worker for ddp queue
   prefect-worker-ddp-queue-1:
     image: prefecthq/prefect:2.13.5-python3.10
+    restart: unless-stopped
     depends_on:
       - prefect_server
     entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
@@ -67,6 +69,7 @@ services:
    ## Prefect Worker for ddp queue
   prefect-worker-ddp-queue-2:
     image: prefecthq/prefect:2.13.5-python3.10
+    restart: unless-stopped
     depends_on:
       - prefect_server
     entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
@@ -83,6 +86,7 @@ services:
   ## Prefect Worker for manual-dbt queue
   prefect-worker-manual-dbt-queue-1:
     image: prefecthq/prefect:2.13.5-python3.10
+    restart: unless-stopped
     depends_on:
       - prefect_server
     entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
