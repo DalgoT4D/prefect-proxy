@@ -1,6 +1,7 @@
 """interface with prefect's python client api"""
 
 import os
+import queue
 from time import sleep
 import requests
 from fastapi import HTTPException
@@ -181,6 +182,22 @@ async def get_airbyte_server_block_id(blockname: str) -> str | None:
             blockname,
         )
         return _block_id(block)
+    except ValueError:
+        logger.error("no airbyte server block named %s", blockname)
+        return None
+
+
+async def get_airbyte_server_block(blockname: str) -> dict | None:
+    """look up an airbyte server block by name and return block"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
+    try:
+        block = await AirbyteServer.load(blockname)
+        logger.info(
+            "found airbyte server block named %s",
+            blockname,
+        )
+        return block
     except ValueError:
         logger.error("no airbyte server block named %s", blockname)
         return None
@@ -643,6 +660,32 @@ def get_deployment(deployment_id: str) -> dict:
     return res
 
 
+def get_final_state_for_flow_run(flow_run_id: str):
+    """fetch final state of subtasks"""
+    all_ids_to_look_at = traverse_flow_run_graph(flow_run_id, [])
+    query = {
+        "flow_runs": {
+            "operator": "and_",
+            "id": {"any_": all_ids_to_look_at},
+        },
+    }
+    result = prefect_post("task_runs/filter/", query)
+    priority = ["Completed", "DBT_TEST_FAILED", "Failed", "Running", "Unknown"]
+    as_numeric = list(
+        map(
+            lambda x: (
+                priority.index(x["state"]["name"])
+                if x["state"]["name"] in priority
+                else 4
+            ),
+            result,
+        )
+    )
+    if len(as_numeric) == 0:
+        return "RUNNING"
+    return priority[max(as_numeric)].upper()
+
+
 def get_flow_runs_by_deployment_id(
     deployment_id: str, limit: int, start_time_gt: str
 ) -> list:
@@ -808,6 +851,42 @@ def traverse_flow_run_graph(flow_run_id: str, flow_runs: list) -> list:
     return flow_runs
 
 
+def traverse_flow_run_graph_v2(flow_run_id: str):
+    """
+    Fetches the graph of a flow run using prefect's new api.
+    Returns the list of subflow runs & task runs in the order they were executed
+    """
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    # this data has all the nested subflows & task runs
+    flow_graph_data = prefect_get(f"flow_runs/{flow_run_id}/graph-v2")
+
+    if "root_node_ids" not in flow_graph_data:
+        return []
+
+    root_node_ids = flow_graph_data["root_node_ids"]
+    runs_queue = queue.Queue()
+    for node_id in root_node_ids:
+        runs_queue.put(node_id)
+
+    res = []
+    # start from the root_node_ids and keep pushing the subflows/task runs into the res
+    # if there are any child push them first before going to the next sibling subflows/task run
+    while not runs_queue.empty():
+        current_run_id = runs_queue.get()
+        for node in flow_graph_data["nodes"]:
+            run_id, node_data = node
+            if current_run_id == run_id:
+                res.append(node_data)
+                for child in node_data["children"]:
+                    runs_queue.put(child["id"])
+
+                break
+
+    return res
+
+
 def get_flow_run_logs(flow_run_id: str, offset: int) -> dict:
     """return logs from a flow run"""
     if not isinstance(flow_run_id, str):
@@ -833,6 +912,48 @@ def get_flow_run_logs(flow_run_id: str, offset: int) -> dict:
     }
 
 
+def get_flow_run_logs_v2(flow_run_id: str) -> dict:
+    """
+    return logs from a flow run grouped by the task
+    """
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    subflow_task_runs = traverse_flow_run_graph_v2(flow_run_id)
+
+    res = []
+
+    for run in subflow_task_runs:
+        query = {
+            "logs": {
+                "operator": "or_",
+                "flow_run_id": {"any_": []},
+                "task_run_id": {"any_": []},
+            },
+            "sort": "TIMESTAMP_ASC",
+        }
+        if run["kind"] == "flow-run":
+            query["logs"]["flow_run_id"]["any_"] = [run["id"]]
+        elif run["kind"] == "task-run":
+            query["logs"]["task_run_id"]["any_"] = [run["id"]]
+
+        logs = prefect_post("logs/filter", query)
+
+        res.append(
+            {
+                "id": run["id"],
+                "kind": run["kind"],
+                "label": run["label"],
+                "state_type": run["state_type"],
+                "start_time": run["start_time"],
+                "end_time": run["end_time"],
+                "logs": list(map(parse_log, logs)),
+            }
+        )
+
+    return res
+
+
 def get_flow_runs_by_name(flow_run_name: str) -> dict:
     """Query flow run from the name"""
     if not isinstance(flow_run_name, str):
@@ -855,7 +976,9 @@ def get_flow_run(flow_run_id: str) -> dict:
     """Get a flow run by its id"""
     try:
         flow_run = prefect_get(f"flow_runs/{flow_run_id}")
-        flow_run["status"] = flow_run["state"]["type"]
+        final_state = get_final_state_for_flow_run(flow_run_id)
+        if final_state != "UNKNOWN":
+            flow_run["state_name"] = final_state
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to fetch a flow-run") from err

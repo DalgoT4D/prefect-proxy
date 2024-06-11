@@ -2,12 +2,14 @@
 
 import os
 import re
+import base64
 import requests
 from fastapi import FastAPI, HTTPException, Request
 from prefect_airbyte import AirbyteConnection
 from proxy.helpers import CustomLogger
 
 from proxy.service import (
+    get_airbyte_server_block,
     get_airbyte_server_block_id,
     create_airbyte_server_block,
     create_dbt_core_block,
@@ -19,6 +21,7 @@ from proxy.service import (
     get_flow_runs_by_deployment_id,
     get_deployments_by_filter,
     get_flow_run_logs,
+    get_flow_run_logs_v2,
     post_deployment_flow_run,
     get_flow_runs_by_name,
     set_deployment_schedule,
@@ -161,6 +164,37 @@ async def get_airbyte_server(request: Request, blockname: str):
         return {"block_id": None}
     logger.info("blockname => blockid : %s => %s", blockname, block_id)
     return {"block_id": block_id}
+
+
+@app.get("/proxy/blocks/airbyte/server/block/{blockname}")
+async def get_airbyte_server_block_config(request: Request, blockname: str):
+    """Look up an Airbyte server block by name and return block"""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname must be a string")
+    try:
+        block = await get_airbyte_server_block(blockname)
+    except Exception as error:
+        logger.error(
+            "Failed to get Airbyte server block for block name %s: %s",
+            blockname,
+            str(error),
+        )
+        raise HTTPException(status_code=500, detail="Internal server error") from error
+
+    if block is None:
+        raise HTTPException(status_code=404, detail="block not found") from error
+    logger.info("blockname => block : %s => %s", blockname, block)
+
+    token_string = f"{block.username}:{block.password.get_secret_value()}"
+    token_string_bytes = token_string.encode("ascii")
+    base64_bytes = base64.b64encode(token_string_bytes)
+    base64_string_token = base64_bytes.decode("ascii")
+    return {
+        "host": block.server_host,
+        "port": block.server_port,
+        "version": block.api_version,
+        "token": base64_string_token,
+    }
 
 
 @app.post("/proxy/blocks/airbyte/server/")
@@ -525,6 +559,22 @@ def get_flow_run_logs_paginated(request: Request, flow_run_id: str, offset: int 
     logger.info("flow_run_id=%s, offset=%s", flow_run_id, offset)
     try:
         return get_flow_run_logs(flow_run_id, offset)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch logs for flow_run"
+        ) from error
+
+
+@app.get("/proxy/flow_runs/v1/logs/{flow_run_id}")
+def get_flow_run_logs_grouped(request: Request, flow_run_id: str):
+    """paginate the logs from a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    logger.info("flow_run_id=%s, offset=%s", flow_run_id)
+    try:
+        return get_flow_run_logs_v2(flow_run_id)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
