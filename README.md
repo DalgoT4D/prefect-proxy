@@ -35,7 +35,7 @@ Start Prefect on port 4200
 
 and set `PREFECT_API_URL` in `.env` to `http://localhost:4200/api`. Change the port in this URL if you are running Prefect on a different port.
 
-Next, start your Prefect worker(s). On Tech4Dev's production system, Dalgo runs 3 workers on two queues called `ddp` and `manual-dbt`:
+Next, start your Prefect worker(s). On Tech4Dev's production system, Dalgo runs three workers on two queues called `ddp` and `manual-dbt`:
 
     prefect worker start -q ddp --pool dalgo_work_pool
 
@@ -51,7 +51,7 @@ Make sure to add this URL with the port number into the `.env` for DDP_backend i
 
 ## Dalgo Webhook configuration
 
-All orchestration flow runs (scheduled or manual) are executed in Prefect by the workers. Dalgo needs to be notified when these flow runs reach a terminal state (success or failure) to clear up resources & notify users of failures. 
+All orchestration flow runs (scheduled or manual) are executed in Prefect by these workers. Dalgo needs to be notified when these flow runs reach a terminal state (success or failure) in order to clear up resources & notify users of failures.
 
 Steps to create a webhook in Prefect:
 1. Go to the Prefect UI & head over to `Notifications`
@@ -61,12 +61,12 @@ Steps to create a webhook in Prefect:
 5. Set the `Headers` as shown below. The notification key here should be the one set in Dalgo backend `.env` under `PREFECT_NOTIFICATIONS_WEBHOOK_KEY`
 
     ```
-    {"X-Notification-Key": "dev123"}
+    {"X-Notification-Key": "********"}
     ```
 6. Set the `JSON Data` to
 
     ```
-    {"body":"{{body}}"}
+    {"body": "{{body}}"}
     ```
 7. `Run states` that we are interested in are `Completed`, `Cancelled`, `Crashed`, `Failed`, `TimedOut`
 8. Hit Save
@@ -78,7 +78,7 @@ Steps to create a webhook in Prefect:
  10. If it does not, you should update it using `PATCH /api/flow_run_notification_policies/{id}`
 
 
-## Preface
+## Miscellaneous
 
 FastAPI endpoints are defined in `main.py`. These typically call functions in `service.py`.
 
