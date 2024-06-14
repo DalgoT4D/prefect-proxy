@@ -35,31 +35,33 @@ Start Prefect on port 4200
 
 and set `PREFECT_API_URL` in `.env` to `http://localhost:4200/api`. Change the port in this URL if you are running Prefect on a different port.
 
-Next, start Prefect worker(s). On production, Dalgo runs 3 workers on two queues `ddp` & `manual-db`. Make sure to setup the work pool from the prefect UI
+Next, start your Prefect worker(s). On Tech4Dev's production system, Dalgo runs 3 workers on two queues called `ddp` and `manual-dbt`:
 
     prefect worker start -q ddp --pool dalgo_work_pool
 
     prefect worker start -q manual-dbt --pool dalgo_work_pool
 
+(Make sure to set up the work pool from the prefect UI first).
+
 The proxy server needs to listen for requests coming from Django; pick an available port and run
 
     gunicorn proxy.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:<port number>
 
-Make sure to add this port number into the `.env` for DDP_backend in the variable `PREFECT_PROXY_API_URL`.
+Make sure to add this URL with the port number into the `.env` for DDP_backend in the variable `PREFECT_PROXY_API_URL`.
 
 ## Dalgo Webhook configuration
 
-All orchestration flow runs (scheduled or manual) are executed in prefect by the workers. Dalgo needs to be notified when these flow runs reach a terminal state (success or failure) to clear up resources & notify users of failures. 
+All orchestration flow runs (scheduled or manual) are executed in Prefect by the workers. Dalgo needs to be notified when these flow runs reach a terminal state (success or failure) to clear up resources & notify users of failures. 
 
-Steps to create a webhook in prefect
-1. Go to the prefect UI & head over to `Notifications`
+Steps to create a webhook in Prefect:
+1. Go to the Prefect UI & head over to `Notifications`
 2. Add a new notification of type `Custom Webhook`.
-3. Set `Webhook URL` to `http://localhost:8002/webhooks/v1/notification/`. Assuming Dalgo backend runs on `http://localhost:8002`
-4. Set `Method` to `POST`
-5. Set the `Headers` to . The notification key here should be the one set in Dalgo backend `.env` under `PREFECT_NOTIFICATIONS_WEBHOOK_KEY`
+3. Set `Webhook URL` to `http://localhost:8002/webhooks/v1/notification/` (assuming the Django server is listening on `http://localhost:8002`).
+4. Set the `Method` to `POST`
+5. Set the `Headers` as shown below. The notification key here should be the one set in Dalgo backend `.env` under `PREFECT_NOTIFICATIONS_WEBHOOK_KEY`
 
     ```
-    {"X-Notification-Key":"dev123"}
+    {"X-Notification-Key": "dev123"}
     ```
 6. Set the `JSON Data` to
 
@@ -68,11 +70,13 @@ Steps to create a webhook in prefect
     ```
 7. `Run states` that we are interested in are `Completed`, `Cancelled`, `Crashed`, `Failed`, `TimedOut`
 8. Hit Save
-9. Make sure this notification has the below specified message_template, if not update it. Use can use these two api of prefect `GET /api/flow_run_notification_policies/{id}` and `PATCH /api/flow_run_notification_policies/{id}`
-
+9. Use the API `GET /api/flow_run_notification_policies/{id}` to make sure that this notification has this message_template:
     ```
     Flow run {flow_run_name} with id {flow_run_id} entered state {flow_run_state_name}
     ```
+
+ 10. If it does not, you should update it using `PATCH /api/flow_run_notification_policies/{id}`
+
 
 ## Preface
 
