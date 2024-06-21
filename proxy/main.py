@@ -572,7 +572,7 @@ def get_flow_run_logs_grouped(request: Request, flow_run_id: str):
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
 
-    logger.info("flow_run_id=%s, offset=%s", flow_run_id)
+    logger.info("flow_run_id=%s", flow_run_id)
     try:
         return get_flow_run_logs_v2(flow_run_id)
     except Exception as error:
