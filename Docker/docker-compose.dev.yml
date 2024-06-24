@@ -24,6 +24,8 @@ services:
       - PREFECT_API_URL=${PREFECT_API_URL}
     ports:
       - "4300:4300"
+    volumes:
+      - flows_volume:/app/proxy
 
   ### Prefect Server API and UI
   prefect_server:
@@ -63,7 +65,7 @@ services:
       - WORKER_NAME=prefect-worker-ddp-1
       - FLOW_RUN_LIMIT=1
     volumes:
-      - ./flows:/opt/prefect/flows
+      - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
 
    ## Prefect Worker for ddp queue
@@ -80,7 +82,7 @@ services:
       - WORKER_NAME=prefect-worker-ddp-2
       - FLOW_RUN_LIMIT=1
     volumes:
-      - ./flows:/opt/prefect/flows
+      - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
 
   ## Prefect Worker for manual-dbt queue
@@ -97,14 +99,14 @@ services:
       - WORKER_NAME=prefect-worker-manual-dbt-1
       - FLOW_RUN_LIMIT=1
     volumes:
-      - ./flows:/opt/prefect/flows
+      - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
 
 
 volumes:
   prefect:
   postgres:
-  flows:
+  flows_volume:
 networks:
   default:
     name: prefect-network
