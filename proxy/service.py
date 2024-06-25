@@ -928,10 +928,13 @@ def get_flow_run_logs_v2(flow_run_id: str) -> dict:
             },
             "sort": "TIMESTAMP_ASC",
         }
+        run_obj = None
         if run["kind"] == "flow-run":
             query["logs"]["flow_run_id"]["any_"] = [run["id"]]
+            run_obj = prefect_get(f"flow_runs/{run['id']}")
         elif run["kind"] == "task-run":
             query["logs"]["task_run_id"]["any_"] = [run["id"]]
+            run_obj = prefect_get(f"task_runs/{run['id']}")
 
         logs = prefect_post("logs/filter", query)
 
@@ -940,7 +943,8 @@ def get_flow_run_logs_v2(flow_run_id: str) -> dict:
                 "id": run["id"],
                 "kind": run["kind"],
                 "label": run["label"],
-                "state_type": run["state_type"],
+                "state_type": run_obj["state_type"],
+                "state_name": run_obj["state_name"],
                 "start_time": run["start_time"],
                 "end_time": run["end_time"],
                 "logs": list(map(parse_log, logs)),
