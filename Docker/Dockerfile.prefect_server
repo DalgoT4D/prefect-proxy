@@ -1,4 +1,4 @@
-FROM prefecthq/prefect:2.13.5-python3.10 as build
+FROM prefecthq/prefect:2.18.3-python3.10 as build
 LABEL Stage="Build"
 
 
@@ -17,7 +17,7 @@ ADD https://astral.sh/uv/install.sh /install.sh
 
 WORKDIR /app
 
-COPY prefect_requirements.txt /app/requirements.txt
+COPY requirements.txt /app/requirements.txt
 
 #Install system dependencies
 RUN set -ex \
@@ -35,7 +35,7 @@ RUN set -ex \
 
 
 # Stage 2 - Runtime
-FROM prefecthq/prefect:2.13.5-python3.10 as runtime
+FROM prefecthq/prefect:2.18.3-python3.10 as runtime
 
 ARG BUILD_DATE
 ARG BUILD_VERSION

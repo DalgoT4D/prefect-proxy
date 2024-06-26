@@ -114,7 +114,7 @@ docker build -f Docker/Dockerfile --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H
 To Build and use prefect worker docker image, run the below command from the root directory:
 
 ```
-docker build -f Docker/Dockerfile.prefect_worker --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg BUILD_VERSION=0.0.1  -t prefect_worker:latest .
+docker build -f Docker/Dockerfile.prefect_server --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg BUILD_VERSION=0.0.1  -t prefect_server:latest .
 ```
 
 To run all the services as docker container, run the docker compose command below. There are two docker files:

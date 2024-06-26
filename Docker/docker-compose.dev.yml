@@ -28,7 +28,7 @@ services:
 
   ### Prefect Server API and UI
   prefect_server:
-    image: prefecthq/prefect:2.13.5-python3.10
+    image: prefect_server:latest
     restart: unless-stopped
     depends_on:
       - prefect_postgres_db
@@ -52,7 +52,7 @@ services:
 
   ## Prefect Worker for ddp queue
   prefect-worker-ddp-queue-1:
-    image: prefect_worker:latest #change this to point to dockerhub if image exists in dockerhub
+    image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
     restart: unless-stopped
     depends_on:
       - prefect_server
@@ -69,7 +69,7 @@ services:
 
    ## Prefect Worker for ddp queue
   prefect-worker-ddp-queue-2:
-    image: prefect_worker:latest #change this to point to dockerhub if image exists in dockerhub
+    image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
     restart: unless-stopped
     depends_on:
       - prefect_server
@@ -86,7 +86,7 @@ services:
 
   ## Prefect Worker for manual-dbt queue
   prefect-worker-manual-dbt-queue-1:
-    image: prefect_worker:latest #change this to point to dockerhub if image exists in dockerhub
+    image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
     restart: unless-stopped
     depends_on:
       - prefect_server
