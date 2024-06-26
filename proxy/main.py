@@ -56,10 +56,8 @@ from proxy.prefect_flows import (
     run_airbyte_conn_reset,
 )
 
-from logger import setup_logger
 
 app = FastAPI()
-setup_logger()
 
 logger = CustomLogger("prefect-proxy")
 
