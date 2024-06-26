@@ -69,29 +69,32 @@ Make sure to add this URL with the port number into the `.env` for DDP_backend i
 All orchestration flow runs (scheduled or manual) are executed in Prefect by these workers. Dalgo needs to be notified when these flow runs reach a terminal state (success or failure) in order to clear up resources & notify users of failures.
 
 Steps to create a webhook in Prefect:
+
 1. Go to the Prefect UI & head over to `Notifications`
 2. Add a new notification of type `Custom Webhook`.
 3. Set `Webhook URL` to `http://localhost:8002/webhooks/v1/notification/` (assuming the Django server is listening on `http://localhost:8002`).
 4. Set the `Method` to `POST`
 5. Set the `Headers` as shown below. The notification key here should be the one set in Dalgo backend `.env` under `PREFECT_NOTIFICATIONS_WEBHOOK_KEY`
 
-    ```
-    {"X-Notification-Key": "********"}
-    ```
+   ```
+   {"X-Notification-Key": "********"}
+   ```
+
 6. Set the `JSON Data` to
 
-    ```
-    {"body": "{{body}}"}
-    ```
+   ```
+   {"body": "{{body}}"}
+   ```
+
 7. `Run states` that we are interested in are `Completed`, `Cancelled`, `Crashed`, `Failed`, `TimedOut`
 8. Hit Save
 9. Use the API `GET /api/flow_run_notification_policies/{id}` to make sure that this notification has this message_template:
-    ```
-    Flow run {flow_run_name} with id {flow_run_id} entered state {flow_run_state_name}
-    ```
 
- 10. If it does not, you should update it using `PATCH /api/flow_run_notification_policies/{id}`
+   ```
+   Flow run {flow_run_name} with id {flow_run_id} entered state {flow_run_state_name}
+   ```
 
+10. If it does not, you should update it using `PATCH /api/flow_run_notification_policies/{id}`
 
 ## Running services using Docker
 
@@ -106,6 +109,12 @@ To Build and use proxy docker image, run the below command from the root directo
 
 ```
 docker build -f Docker/Dockerfile --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg BUILD_VERSION=0.0.1  -t prefect_proxy:latest .
+```
+
+To Build and use prefect worker docker image, run the below command from the root directory:
+
+```
+docker build -f Docker/Dockerfile.prefect_worker --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg BUILD_VERSION=0.0.1  -t prefect_worker:latest .
 ```
 
 To run all the services as docker container, run the docker compose command below. There are two docker files:

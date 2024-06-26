@@ -1,4 +1,3 @@
-version: "3.9"
 services:
   ## Test DB
   prefect_postgres_db:
@@ -17,7 +16,7 @@ services:
 
   ## Prefect Proxy
   prefect_proxy:
-    image: prefect_proxy:latest #change this to point to dockerhub
+    image: prefect_proxy:latest #change this to point to dockerhub if image exists in dockerhub
     restart: unless-stopped
     environment:
       - LOGDIR=${LOGDIR}
@@ -53,7 +52,7 @@ services:
 
   ## Prefect Worker for ddp queue
   prefect-worker-ddp-queue-1:
-    image: prefecthq/prefect:2.13.5-python3.10
+    image: prefect_worker:latest #change this to point to dockerhub if image exists in dockerhub
     restart: unless-stopped
     depends_on:
       - prefect_server
@@ -70,7 +69,7 @@ services:
 
    ## Prefect Worker for ddp queue
   prefect-worker-ddp-queue-2:
-    image: prefecthq/prefect:2.13.5-python3.10
+    image: prefect_worker:latest #change this to point to dockerhub if image exists in dockerhub
     restart: unless-stopped
     depends_on:
       - prefect_server
@@ -87,7 +86,7 @@ services:
 
   ## Prefect Worker for manual-dbt queue
   prefect-worker-manual-dbt-queue-1:
-    image: prefecthq/prefect:2.13.5-python3.10
+    image: prefect_worker:latest #change this to point to dockerhub if image exists in dockerhub
     restart: unless-stopped
     depends_on:
       - prefect_server
