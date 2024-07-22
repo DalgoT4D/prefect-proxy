@@ -77,6 +77,12 @@ setup_logger()
 logger = CustomLogger("prefect-proxy")
 
 
+# sentry test debug endpoint
+@app.get("/sentry-debug")
+async def trigger_error():
+    division_by_zero = 1 / 0
+
+
 # =============================================================================
 def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
     """Run an Airbyte Connection sync"""
