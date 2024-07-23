@@ -7,6 +7,8 @@ import requests
 from fastapi import FastAPI, HTTPException, Request
 from prefect_airbyte import AirbyteConnection
 from proxy.helpers import CustomLogger
+import sentry_sdk
+
 
 from proxy.service import (
     get_airbyte_server_block,
@@ -57,9 +59,27 @@ from proxy.prefect_flows import (
 )
 
 
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    # Set traces_sample_rate to 1.0 to capture 100%
+    # of transactions for performance monitoring.
+    traces_sample_rate=float(os.getenv("SENTRY_TSR", "1.0")),
+    # Set profiles_sample_rate to 1.0 to profile 100%
+    # of sampled transactions.
+    # We recommend adjusting this value in production.
+    profiles_sample_rate=float(os.getenv("SENTRY_PSR", "1.0")),
+)
+
 app = FastAPI()
 
 logger = CustomLogger("prefect-proxy")
+
+
+# sentry test debug endpoint
+@app.get("/sentry-debug")
+async def trigger_error():
+    """endpoint to test sentry"""
+    division_by_zero = 1 / 0  # pylint: disable=unused-variable
 
 
 # =============================================================================
@@ -497,7 +517,6 @@ def get_flow_runs(
         raise TypeError("limit must be an integer")
     if limit < 0:
         raise ValueError("limit must be positive")
-    logger.info("deployment_id=%s, limit=%s", deployment_id, limit)
     try:
         flow_runs = get_flow_runs_by_deployment_id(deployment_id, limit, start_time_gt)
     except Exception as error:
@@ -505,7 +524,6 @@ def get_flow_runs(
         raise HTTPException(
             status_code=400, detail="failed to fetch flow_runs for deployment"
         ) from error
-    logger.info("Found flow runs for deployment ID: %s", deployment_id)
     return {"flow_runs": flow_runs}
 
 
@@ -522,8 +540,6 @@ def get_flow_run_by_id(request: Request, flow_run_id):
         raise HTTPException(
             status_code=400, detail="failed to fetch flow_run " + flow_run_id
         ) from error
-
-    logger.info("Found flow run wth id - %s", flow_run_id)
 
     return flow_run
 
@@ -556,7 +572,6 @@ def get_flow_run_logs_paginated(request: Request, flow_run_id: str, offset: int 
         raise TypeError("offset must be an integer")
     if offset < 0:
         raise ValueError("offset must be positive")
-    logger.info("flow_run_id=%s, offset=%s", flow_run_id, offset)
     try:
         return get_flow_run_logs(flow_run_id, offset)
     except Exception as error:
@@ -572,7 +587,6 @@ def get_flow_run_logs_grouped(request: Request, flow_run_id: str):
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
 
-    logger.info("flow_run_id=%s", flow_run_id)
     try:
         return get_flow_run_logs_v2(flow_run_id)
     except Exception as error:
@@ -587,7 +601,6 @@ def get_read_deployment(request: Request, deployment_id):
     """Fetch deployment and all its details"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
-    logger.info("deployment_id=%s", deployment_id)
 
     try:
         deployment = get_deployment(deployment_id)
