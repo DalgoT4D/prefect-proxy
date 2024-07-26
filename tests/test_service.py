@@ -935,7 +935,9 @@ def test_get_flow_runs_by_deployment_id_prefect_post():
             "deployments": {"id": {"any_": [deployment_id]}},
             "flow_runs": {
                 "operator": "and_",
-                "state": {"type": {"any_": ["COMPLETED", "FAILED"]}},
+                "state": {
+                    "type": {"any_": ["COMPLETED", "FAILED", "CRASHED", "CANCELLED"]}
+                },
             },
             "limit": limit,
         }

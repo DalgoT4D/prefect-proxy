@@ -38,10 +38,14 @@ from proxy.prefect_flows import deployment_schedule_flow_v4
 
 load_dotenv()
 
+# terminal
 FLOW_RUN_FAILED = "FAILED"
 FLOW_RUN_COMPLETED = "COMPLETED"
-FLOW_RUN_SCHEDULED = "SCHEDULED"
+FLOW_RUN_CRASHED = "CRASHED"
+FLOW_RUN_CANCELLED = "CANCELLED"
 
+# non-terminal
+FLOW_RUN_SCHEDULED = "SCHEDULED"
 
 logger = CustomLogger("prefect-proxy")
 
@@ -711,7 +715,7 @@ def get_flow_runs_by_deployment_id(
         "deployments": {"id": {"any_": [deployment_id]}},
         "flow_runs": {
             "operator": "and_",
-            "state": {"type": {"any_": [FLOW_RUN_COMPLETED, FLOW_RUN_FAILED]}},
+            "state": {"type": {"any_": [FLOW_RUN_COMPLETED, FLOW_RUN_FAILED, FLOW_RUN_CRASHED, FLOW_RUN_CANCELLED]}},
         },
     }
     if start_time_gt:
