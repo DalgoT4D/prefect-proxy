@@ -1,5 +1,6 @@
 """script to download the logs for a flow run"""
 
+import json
 import argparse
 import requests
 
@@ -7,6 +8,7 @@ parser = argparse.ArgumentParser(
     usage="downloads logs for a flow run and prints them to stdout"
 )
 parser.add_argument("--flow_run_id", required=True)
+parser.add_argument("--json", action="store_true")
 args = parser.parse_args()
 
 offset: int = 0
@@ -28,5 +30,8 @@ while True:
     entries += logs
     offset += len(logs)
 
-for entry in entries:
-    print(f"{entry['timestamp']}  {entry['message']}\n")
+if args.json:
+    print(json.dumps(entries, indent=2))
+else:
+    for entry in entries:
+        print(f"{entry['timestamp']}  {entry['message']}\n")
