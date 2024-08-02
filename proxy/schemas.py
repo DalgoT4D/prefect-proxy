@@ -262,3 +262,9 @@ class PrefectSecretBlockCreate(BaseModel):
 
     secret: str
     blockName: str
+
+
+class RetryFlowRunRequest(BaseModel):
+    """Schema for retrying a flow run"""
+
+    minutes: int

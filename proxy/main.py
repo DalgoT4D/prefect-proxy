@@ -29,6 +29,7 @@ from proxy.service import (
     set_deployment_schedule,
     get_deployment,
     get_flow_run,
+    retry_flow_run,
     create_secret_block,
     _create_dbt_cli_profile,
     update_dbt_cli_profile,
@@ -44,6 +45,7 @@ from proxy.schemas import (
     DeploymentCreate2,
     DeploymentFetch,
     FlowRunRequest,
+    RetryFlowRunRequest,
     PrefectSecretBlockCreate,
     DbtCliProfileBlockCreate,
     DeploymentUpdate2,
@@ -544,6 +546,22 @@ def get_flow_run_by_id(request: Request, flow_run_id):
         ) from error
 
     return flow_run
+
+
+@app.post("/proxy/flow_runs/{flow_run_id}/retry")
+def post_retry_flow_run(
+    request: Request, flow_run_id: str, payload: RetryFlowRunRequest
+):
+    """Retry a flow run; after x mins"""
+    try:
+        retry_flow_run(flow_run_id=flow_run_id, minutes=payload.minutes)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch flow_run " + flow_run_id
+        ) from error
+
+    return {"success": 1}
 
 
 @app.post("/proxy/deployments/filter")
