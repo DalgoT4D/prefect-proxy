@@ -12,7 +12,6 @@ from prefect.server.schemas.states import Cancelled
 from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
 from prefect.client import get_client
-from prefect.states import Scheduled
 from prefect_airbyte import AirbyteServer
 import pendulum
 
