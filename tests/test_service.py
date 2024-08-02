@@ -1248,7 +1248,7 @@ async def test_retry_flow_run():
         mock_duration.return_value = "duration"
         retry_flow_run("flow-run-id")
         prefect_post_mock.assert_called_with(
-            "flow_runs/flow-run-id/retry",
+            "flow_runs/flow-run-id/set_state",
             {
                 "force": True,
                 "state": {
