@@ -60,7 +60,6 @@ from proxy.prefect_flows import (
     run_airbyte_conn_reset,
 )
 
-from logger import setup_logger
 
 sentry_sdk.init(
     dsn=os.getenv("SENTRY_DSN"),
@@ -74,7 +73,6 @@ sentry_sdk.init(
 )
 
 app = FastAPI()
-setup_logger()
 
 logger = CustomLogger("prefect-proxy")
 
