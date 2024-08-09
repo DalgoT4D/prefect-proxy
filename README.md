@@ -70,12 +70,15 @@ Steps to create a webhook in Prefect:
     ```
 7. `Run states` that we are interested in are `Completed`, `Cancelled`, `Crashed`, `Failed`, `TimedOut`
 8. Hit Save
-9. Use the API `GET /api/flow_run_notification_policies/{id}` to make sure that this notification has this message_template:
+9. Use the prefect API `GET http://localhost:4200/api/flow_run_notification_policies/{id}` to make sure that this notification has this message_template:
     ```
     Flow run {flow_run_name} with id {flow_run_id} entered state {flow_run_state_name}
     ```
 
- 10. If it does not, you should update it using `PATCH /api/flow_run_notification_policies/{id}`
+ 10. If it does not, you should update it using the prefect API `PATCH http://localhost:4200/api/flow_run_notification_policies/{id}`
+
+
+Prefect api docs will be available at `http://localhost:4200/api/docs`
 
 
 ## Miscellaneous
