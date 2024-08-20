@@ -290,6 +290,8 @@ def deployment_schedule_flow_v4(
                 elif task_config["slug"] == "airbyte-sync":
                     run_airbyte_connection_flow_v1(task_config)
 
+                elif task_config["slug"] == "refresh-schema":
+                    refresh_schema(task_config["catalogDiff"])
             else:
                 raise Exception(f"Unknown task type: {task_config['type']}")
 
