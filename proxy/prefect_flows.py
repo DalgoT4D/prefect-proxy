@@ -13,6 +13,7 @@ from prefect_airbyte.flows import (
     run_connection_sync,
     reset_connection,
     reset_connection_streams,
+    update_connection_schema,
 )
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_airbyte.connections import ResetStream
@@ -127,6 +128,25 @@ def run_shell_operation_flow(payload: dict):
     # pylint: disable=broad-exception-caught
     """Prefect flow to run shell operation"""
     return shellopjob(payload, payload["slug"])
+
+
+@flow
+def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
+    # pylint: disable=broad-exception-caught
+    # """Prefect flow to run refresh schema"""
+    try:
+        airbyte_server_block = payload["airbyte_server_block"]
+        serverblock = AirbyteServer.load(airbyte_server_block)
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=payload["connection_id"],
+            timeout=payload["timeout"] or 15,
+        )
+        update_connection_schema(connection_block, catalog_diff=catalog_diff)
+        return True
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job <num> failed."
+        raise
 
 
 # =============================================================================
@@ -291,7 +311,9 @@ def deployment_schedule_flow_v4(
                     run_airbyte_connection_flow_v1(task_config)
 
                 elif task_config["slug"] == "refresh-schema":
-                    refresh_schema(task_config["catalogDiff"])
+                    run_refresh_schema_flow(
+                        task_config, catalog_diff=task_config.get("catalog_diff", {})
+                    )
             else:
                 raise Exception(f"Unknown task type: {task_config['type']}")
 
