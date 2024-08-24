@@ -833,22 +833,39 @@ def test_get_flow_run_logs_paginated_failure():
 def test_get_flow_run_logs_paginated_invalid_flow_run_id():
     request = client.request("GET", "/")
     with pytest.raises(TypeError) as excinfo:
-        get_flow_run_logs_paginated(request, None, 0)
+        get_flow_run_logs_paginated(request, None)
     assert excinfo.value.args[0] == "flow_run_id must be a string"
+
+def test_get_flow_run_logs_paginated_invalid_task_run_id():
+    request = client.request("GET", "/")
+    with pytest.raises(TypeError) as excinfo:
+        get_flow_run_logs_paginated(request, '12345', None)
+    assert excinfo.value.args[0] == "task_run_id must be a string"
 
 
 def test_get_flow_run_logs_paginated_invalid_offset():
     request = client.request("GET", "/")
     with pytest.raises(TypeError) as excinfo:
-        get_flow_run_logs_paginated(request, "12345", None)
+        get_flow_run_logs_paginated(request, "12345", "12345", 0, None)
     assert excinfo.value.args[0] == "offset must be an integer"
 
+def test_get_flow_run_logs_paginated_invalid_limit():
+    request = client.request("GET", "/")
+    with pytest.raises(TypeError) as excinfo:
+        get_flow_run_logs_paginated(request, "12345", "12345", None)
+    assert excinfo.value.args[0] == "limit must be an integer"
 
 def test_get_flow_run_logs_paginated_offset_less_than_zero():
     request = client.request("GET", "/")
     with pytest.raises(ValueError) as excinfo:
-        get_flow_run_logs_paginated(request, "12345", -1)
+        get_flow_run_logs_paginated(request, "12345", "12345", 0, -1)
     assert excinfo.value.args[0] == "offset must be positive"
+
+def test_get_flow_run_logs_paginated_offset_less_than_zero():
+    request = client.request("GET", "/")
+    with pytest.raises(ValueError) as excinfo:
+        get_flow_run_logs_paginated(request, "12345", "12345", -1)
+    assert excinfo.value.args[0] == "limit must be positive"
 
 
 def test_get_read_deployment_success():
