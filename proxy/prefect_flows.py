@@ -310,7 +310,7 @@ def deployment_schedule_flow_v4(
                 elif task_config["slug"] == "airbyte-sync":
                     run_airbyte_connection_flow_v1(task_config)
 
-                elif task_config["slug"] == "refresh-schema":
+                elif task_config["slug"] == "update-schema":
                     run_refresh_schema_flow(
                         task_config, catalog_diff=task_config.get("catalog_diff", {})
                     )
