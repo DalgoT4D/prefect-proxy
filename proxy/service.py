@@ -921,6 +921,37 @@ def get_flow_run_logs(flow_run_id: str, task_run_id: str, limit: int, offset: in
         "logs": list(map(parse_log, logs)),
     }
 
+def get_flow_run_tasks(flow_run_id: str) -> dict:
+    """
+    return tasks from a flow run
+    """
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    subflow_task_runs = traverse_flow_run_graph_v2(flow_run_id)
+
+    res = []
+
+    for run in subflow_task_runs:
+        run_obj = None
+        if run["kind"] == "flow-run":
+            run_obj = prefect_get(f"flow_runs/{run['id']}")
+        elif run["kind"] == "task-run":
+            run_obj = prefect_get(f"task_runs/{run['id']}")
+
+        res.append(
+            {
+                "id": run["id"],
+                "kind": run["kind"],
+                "label": run["label"],
+                "state_type": run_obj["state_type"],
+                "state_name": run_obj["state_name"],
+                "start_time": run["start_time"],
+                "end_time": run["end_time"],
+            }
+        )
+
+    return res
 
 def get_flow_run_logs_v2(flow_run_id: str) -> dict:
     """

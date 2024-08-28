@@ -24,6 +24,7 @@ from proxy.service import (
     get_deployments_by_filter,
     get_flow_run_logs,
     get_flow_run_logs_v2,
+    get_flow_run_tasks,
     post_deployment_flow_run,
     get_flow_runs_by_name,
     set_deployment_schedule,
@@ -626,6 +627,20 @@ def get_flow_run_logs_grouped(request: Request, flow_run_id: str):
         logger.exception(error)
         raise HTTPException(
             status_code=400, detail="failed to fetch logs for flow_run"
+        ) from error
+    
+@app.get("/proxy/flow_runs/graph/{flow_run_id}")
+def get_flow_run_graph(request: Request, flow_run_id: str):
+    """fetch the graph for a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    try:
+        return get_flow_run_tasks(flow_run_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch graph for flow_run"
         ) from error
 
 
