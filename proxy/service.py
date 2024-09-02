@@ -395,14 +395,9 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
             else:
                 raise PrefectException("unknown wtype: " + payload.wtype)
 
-        block_name = (
-            cleaned_name_for_prefectblock(payload.new_block_name)
-            if payload.new_block_name
-            else payload.cli_profile_block_name
-        )
-
+        # block names are not editable in prefect
+        # using a different name while saving just creates a new block instead of editing the old one
         await dbtcli_block.save(
-            name=block_name,
             overwrite=True,
         )
 
