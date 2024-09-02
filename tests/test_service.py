@@ -50,6 +50,7 @@ from proxy.service import (
     post_deployment_flow_run,
     create_secret_block,
     cancel_flow_run,
+    retry_flow_run,
 )
 
 
@@ -935,7 +936,9 @@ def test_get_flow_runs_by_deployment_id_prefect_post():
             "deployments": {"id": {"any_": [deployment_id]}},
             "flow_runs": {
                 "operator": "and_",
-                "state": {"type": {"any_": ["COMPLETED", "FAILED"]}},
+                "state": {
+                    "type": {"any_": ["COMPLETED", "FAILED", "CRASHED", "CANCELLED"]}
+                },
             },
             "limit": limit,
         }
@@ -1235,3 +1238,24 @@ async def test_cancel_flow_run_success():
         flow_run_id = "valid_flow_run_id"
         result = await cancel_flow_run(flow_run_id)
         assert result is None
+
+
+async def test_retry_flow_run():
+    with patch("proxy.service.prefect_post") as prefect_post_mock, patch(
+        "proxy.service.pendulum.now"
+    ) as mock_now, patch("proxy.service.pendulum.duration") as mock_duration:
+        mock_now.return_value = "now"
+        mock_duration.return_value = "duration"
+        retry_flow_run("flow-run-id")
+        prefect_post_mock.assert_called_with(
+            "flow_runs/flow-run-id/set_state",
+            {
+                "force": True,
+                "state": {
+                    "name": "AwaitingRetry",
+                    "message": "Retry via prefect proxy",
+                    "type": "SCHEDULED",
+                    "state_details": {"scheduled_time": str("now" + "duration")},
+                },
+            },
+        )

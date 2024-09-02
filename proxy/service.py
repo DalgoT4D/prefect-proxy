@@ -13,6 +13,7 @@ from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
 from prefect.client import get_client
 from prefect_airbyte import AirbyteServer
+import pendulum
 
 from prefect_gcp import GcpCredentials
 from prefect_dbt.cli.configs import TargetConfigs
@@ -38,10 +39,14 @@ from proxy.prefect_flows import deployment_schedule_flow_v4
 
 load_dotenv()
 
+# terminal
 FLOW_RUN_FAILED = "FAILED"
 FLOW_RUN_COMPLETED = "COMPLETED"
-FLOW_RUN_SCHEDULED = "SCHEDULED"
+FLOW_RUN_CRASHED = "CRASHED"
+FLOW_RUN_CANCELLED = "CANCELLED"
 
+# non-terminal
+FLOW_RUN_SCHEDULED = "SCHEDULED"
 
 logger = CustomLogger("prefect-proxy")
 
@@ -711,7 +716,16 @@ def get_flow_runs_by_deployment_id(
         "deployments": {"id": {"any_": [deployment_id]}},
         "flow_runs": {
             "operator": "and_",
-            "state": {"type": {"any_": [FLOW_RUN_COMPLETED, FLOW_RUN_FAILED]}},
+            "state": {
+                "type": {
+                    "any_": [
+                        FLOW_RUN_COMPLETED,
+                        FLOW_RUN_FAILED,
+                        FLOW_RUN_CRASHED,
+                        FLOW_RUN_CANCELLED,
+                    ]
+                }
+            },
         },
     }
     if start_time_gt:
@@ -1001,6 +1015,33 @@ async def cancel_flow_run(flow_run_id: str) -> dict:
         async with get_client() as client:
             # set the state of the provided flow-run to cancelled
             await client.set_flow_run_state(flow_run_id=flow_run_id, state=Cancelled())
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException("failed to cancel flow-run") from err
+    return None
+
+
+def retry_flow_run(flow_run_id: str, minutes: int = 5) -> dict:
+    """Retry a flow run; by default it retries after 5 minutes"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+    try:
+        prefect_post(
+            f"flow_runs/{flow_run_id}/set_state",
+            {
+                "force": True,
+                "state": {
+                    "name": "AwaitingRetry",
+                    "message": "Retry via prefect proxy",
+                    "type": "SCHEDULED",
+                    "state_details": {
+                        "scheduled_time": str(
+                            pendulum.now("UTC") + pendulum.duration(minutes=minutes)
+                        )
+                    },  # using pendulum because prefect also uses it
+                },
+            },
+        )
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to cancel flow-run") from err
