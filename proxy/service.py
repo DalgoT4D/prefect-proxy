@@ -890,23 +890,25 @@ def traverse_flow_run_graph_v2(flow_run_id: str):
     return res
 
 
-def get_flow_run_logs(flow_run_id: str, offset: int) -> dict:
+def get_flow_run_logs(flow_run_id: str, task_run_id: str, limit: int, offset: int) -> dict:
     """return logs from a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
     if not isinstance(offset, int):
         raise TypeError("offset must be an integer")
-    flow_run_ids = traverse_flow_run_graph(flow_run_id, [])
+    # flow_run_ids = traverse_flow_run_graph(flow_run_id, [])
 
     logs = prefect_post(
         "logs/filter",
         {
             "logs": {
                 "operator": "and_",
-                "flow_run_id": {"any_": flow_run_ids},
+                "flow_run_id": {"any_": [flow_run_id]},
+                **({"task_run_id": {"any_": [task_run_id]}} if task_run_id != "" else {})
             },
             "sort": "TIMESTAMP_ASC",
             "offset": offset,
+            **({"limit": limit} if limit > 0 else {}),
         },
     )
     return {
@@ -914,6 +916,37 @@ def get_flow_run_logs(flow_run_id: str, offset: int) -> dict:
         "logs": list(map(parse_log, logs)),
     }
 
+def get_flow_run_tasks(flow_run_id: str) -> dict:
+    """
+    return tasks from a flow run
+    """
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    subflow_task_runs = traverse_flow_run_graph_v2(flow_run_id)
+
+    res = []
+
+    for run in subflow_task_runs:
+        run_obj = None
+        if run["kind"] == "flow-run":
+            run_obj = prefect_get(f"flow_runs/{run['id']}")
+        elif run["kind"] == "task-run":
+            run_obj = prefect_get(f"task_runs/{run['id']}")
+
+        res.append(
+            {
+                "id": run["id"],
+                "kind": run["kind"],
+                "label": run["label"],
+                "state_type": run_obj["state_type"],
+                "state_name": run_obj["state_name"],
+                "start_time": run["start_time"],
+                "end_time": run["end_time"],
+            }
+        )
+
+    return res
 
 def get_flow_run_logs_v2(flow_run_id: str) -> dict:
     """

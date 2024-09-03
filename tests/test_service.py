@@ -50,7 +50,6 @@ from proxy.service import (
     post_deployment_flow_run,
     create_secret_block,
     cancel_flow_run,
-    retry_flow_run,
 )
 
 
@@ -936,9 +935,7 @@ def test_get_flow_runs_by_deployment_id_prefect_post():
             "deployments": {"id": {"any_": [deployment_id]}},
             "flow_runs": {
                 "operator": "and_",
-                "state": {
-                    "type": {"any_": ["COMPLETED", "FAILED", "CRASHED", "CANCELLED"]}
-                },
+                "state": {"type": {"any_": ["COMPLETED", "FAILED"]}},
             },
             "limit": limit,
         }
@@ -1123,15 +1120,19 @@ def test_get_flow_run_logs_prefect_post():
         ) as traverse_flow_run_graph_mock:
             traverse_flow_run_graph_mock.return_value = ["flow_run_id"]
             flow_run_id = "flow_run_id"
+            taks_run_id = "task_run_id"
+            limit = 10
             offset = 10
-            get_flow_run_logs(flow_run_id, offset)
+            get_flow_run_logs(flow_run_id, taks_run_id, limit, offset)
             query = {
                 "logs": {
                     "operator": "and_",
                     "flow_run_id": {"any_": ["flow_run_id"]},
+                    "task_run_id": {"any_": ["task_run_id"]},
                 },
                 "sort": "TIMESTAMP_ASC",
                 "offset": offset,
+                "limit": limit,
             }
             prefect_post_mock.assert_called_with("logs/filter", query)
 
@@ -1188,14 +1189,10 @@ def test_set_deployment_schedule_prefect_post():
 
 
 @patch("proxy.service.prefect_get")
-@patch("proxy.service.update_flow_run_final_state")
-def test_get_flow_run_success(mock_update_flow_run_final_state: Mock, mock_get: Mock):
+@patch("proxy.service.get_final_state_for_flow_run")
+def test_get_flow_run_success(mock_get_final_state: Mock, mock_get: Mock):
     mock_get.return_value = {"id": "12345", "state": {"type": "COMPLETED"}}
-    mock_update_flow_run_final_state.return_value = {
-        "id": "12345",
-        "state": {"type": "COMPLETED"},
-        "state_name": "COMPLETED",
-    }
+    mock_get_final_state.return_value = "COMPLETED"
     response = get_flow_run("flow-run-id")
     mock_get.assert_called_once_with("flow_runs/flow-run-id")
     assert response == {
@@ -1238,24 +1235,3 @@ async def test_cancel_flow_run_success():
         flow_run_id = "valid_flow_run_id"
         result = await cancel_flow_run(flow_run_id)
         assert result is None
-
-
-async def test_retry_flow_run():
-    with patch("proxy.service.prefect_post") as prefect_post_mock, patch(
-        "proxy.service.pendulum.now"
-    ) as mock_now, patch("proxy.service.pendulum.duration") as mock_duration:
-        mock_now.return_value = "now"
-        mock_duration.return_value = "duration"
-        retry_flow_run("flow-run-id")
-        prefect_post_mock.assert_called_with(
-            "flow_runs/flow-run-id/set_state",
-            {
-                "force": True,
-                "state": {
-                    "name": "AwaitingRetry",
-                    "message": "Retry via prefect proxy",
-                    "type": "SCHEDULED",
-                    "state_details": {"scheduled_time": str("now" + "duration")},
-                },
-            },
-        )

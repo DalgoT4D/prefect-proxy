@@ -24,6 +24,7 @@ from proxy.service import (
     get_deployments_by_filter,
     get_flow_run_logs,
     get_flow_run_logs_v2,
+    get_flow_run_tasks,
     post_deployment_flow_run,
     get_flow_runs_by_name,
     set_deployment_schedule,
@@ -584,16 +585,29 @@ def post_deployments(request: Request, payload: DeploymentFetch):
 
 
 @app.get("/proxy/flow_runs/logs/{flow_run_id}")
-def get_flow_run_logs_paginated(request: Request, flow_run_id: str, offset: int = 0):
+def get_flow_run_logs_paginated(
+    request: Request,
+    flow_run_id: str,
+    task_run_id: str = "",
+    limit: int = 0,
+    offset: int = 0,
+):
     """paginate the logs from a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
+    if not isinstance(task_run_id, str):
+        raise TypeError("task_run_id must be a string")
     if not isinstance(offset, int):
         raise TypeError("offset must be an integer")
+    if not isinstance(limit, int):
+        raise TypeError("limit must be an integer")
     if offset < 0:
         raise ValueError("offset must be positive")
+    if limit < 0:
+        raise ValueError("limit must be positive")
+    logger.info("flow_run_id=%s, task_run_id=%s, limit=%s, offset=%s", flow_run_id, task_run_id, limit, offset)
     try:
-        return get_flow_run_logs(flow_run_id, offset)
+        return get_flow_run_logs(flow_run_id, task_run_id, limit, offset)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
@@ -613,6 +627,20 @@ def get_flow_run_logs_grouped(request: Request, flow_run_id: str):
         logger.exception(error)
         raise HTTPException(
             status_code=400, detail="failed to fetch logs for flow_run"
+        ) from error
+    
+@app.get("/proxy/flow_runs/graph/{flow_run_id}")
+def get_flow_run_graph(request: Request, flow_run_id: str):
+    """fetch the graph for a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    try:
+        return get_flow_run_tasks(flow_run_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch graph for flow_run"
         ) from error
 
 
