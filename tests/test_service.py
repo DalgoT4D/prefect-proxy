@@ -13,6 +13,7 @@ from proxy.schemas import (
     DbtProfileCreate,
     DbtProfileUpdate,
     DbtCliProfileBlockUpdate,
+    DeploymentCreate2,
     DeploymentUpdate,
     PrefectSecretBlockCreate,
 )
@@ -45,6 +46,7 @@ from proxy.service import (
     update_postgres_credentials,
     update_bigquery_credentials,
     update_target_configs_schema,
+    post_deployment_v1,
     put_deployment,
     get_deployment,
     CronSchedule,
@@ -1003,6 +1005,53 @@ async def test_update_target_configs_schema(mock_load):
     assert dbt_coreop_block.dbt_cli_profile.target_configs.schema == "newtarget"
     assert dbt_coreop_block.dbt_cli_profile.target == "newtarget"
     assert dbt_coreop_block.commands[0] == "dbt run --target newtarget"
+
+
+async def test_post_deployment_bad_param():
+    with pytest.raises(TypeError) as excinfo:
+        await post_deployment_v1("deployment-id")
+    assert str(excinfo.value) == "payload must be a DeploymentCreate"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.deployment_schedule_flow_v4", new_callable=Mock)
+@patch("proxy.service.Deployment.build_from_flow", new_callable=AsyncMock)
+async def test_post_deployment_1(
+    mock_build_from_flow, mock_deployment_schedule_flow_v4
+):
+    payload = DeploymentCreate2(
+        work_queue_name="queue-name",
+        work_pool_name="pool-name",
+        flow_name="flow-name",
+        flow_id="flow-id",
+        deployment_name="deployment-name",
+        org_slug="org-slug",
+        deployment_params={"param1": "value1"},
+        cron="* * * * *",
+    )
+    mock_deployment_schedule_flow_v4.with_options = Mock(return_value="flow")
+    mock_deployment = Mock(
+        name="deployment-name",
+        parameters={"param1": "value1"},
+        schedule=None,
+        apply=AsyncMock(return_value="deployment-id"),
+    )
+    mock_build_from_flow.return_value = mock_deployment
+    deployment = await post_deployment_v1(payload)
+    mock_build_from_flow.assert_called_once_with(
+        flow="flow",
+        name=payload.deployment_name,
+        work_queue_name="queue-name",
+        work_pool_name="pool-name",
+        tags=[payload.org_slug],
+        is_schedule_active=True,
+    )
+    mock_deployment_schedule_flow_v4.with_options.assert_called_with(
+        name=payload.flow_name
+    )
+    assert deployment["id"] == "deployment-id"
+    # assert retval["name"] == "deployment-name"
+    assert deployment["params"] == mock_deployment.parameters
 
 
 def test_put_deployment_bad_param():
