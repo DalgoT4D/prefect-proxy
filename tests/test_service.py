@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch, Mock
 import pytest
 import requests
 from fastapi import HTTPException
+import pendulum
 
 from proxy.exception import PrefectException
 from proxy.schemas import (
@@ -56,6 +57,7 @@ from proxy.service import (
     create_secret_block,
     cancel_flow_run,
     get_flow_run_logs_v2,
+    retry_flow_run,
 )
 
 
@@ -1533,3 +1535,33 @@ async def test_cancel_flow_run_success():
         flow_run_id = "valid_flow_run_id"
         result = await cancel_flow_run(flow_run_id)
         assert result is None
+
+
+def test_retry_flow_run_bad_param():
+    with pytest.raises(TypeError) as excinfo:
+        retry_flow_run(123)
+    assert str(excinfo.value) == "flow_run_id must be a string"
+
+
+@patch("proxy.service.prefect_post")
+@patch("proxy.service.pendulum")
+def test_retry_flow_run(mock_pendulum: Mock, mock_prefect_post: Mock):
+    mock_pendulum.now.return_value = pendulum.time(0, 0, 0)
+    mock_pendulum.duration.return_value = pendulum.duration(minutes=5)
+    retry_flow_run("flow-run-id")
+    mock_prefect_post.assert_called_once_with(
+        "flow_runs/flow-run-id/set_state",
+        {
+            "force": True,
+            "state": {
+                "name": "AwaitingRetry",
+                "message": "Retry via prefect proxy",
+                "type": "SCHEDULED",
+                "state_details": {
+                    "scheduled_time": str(
+                        pendulum.time(0, 0, 0) + pendulum.duration(minutes=5)
+                    )
+                },  # using pendulum because prefect also uses it
+            },
+        },
+    )
