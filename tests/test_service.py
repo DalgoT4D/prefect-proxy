@@ -8,18 +8,19 @@ from fastapi import HTTPException
 
 from proxy.exception import PrefectException
 from proxy.schemas import (
-    AirbyteConnectionCreate,
     AirbyteServerCreate,
     DbtCoreCreate,
     DbtProfileCreate,
-    PrefectShellSetup,
-    DeploymentCreate,
+    DbtProfileUpdate,
+    DbtCliProfileBlockUpdate,
     DeploymentUpdate,
     PrefectSecretBlockCreate,
 )
 from proxy.service import (
     _create_dbt_cli_profile,
     get_dbt_cli_profile,
+    update_dbt_cli_profile,
+    get_airbyte_server_block,
     create_airbyte_server_block,
     create_dbt_core_block,
     delete_airbyte_connection_block,
@@ -302,6 +303,23 @@ class MockAirbyteServer:
 
     def dict(self):
         return {"_block_document_id": "expected_block_id"}
+
+
+@pytest.mark.asyncio
+async def test_get_airbyte_server_block_paramcheck():
+    blockname = "test_blockname"
+    with pytest.raises(TypeError) as excinfo:
+        await get_airbyte_server_block(1)
+    assert excinfo.value == "blockname must be a string"
+
+
+@pytest.mark.asyncio
+async def test_get_airbyte_server_block():
+    blockname = "test_blockname"
+    with patch("proxy.service.AirbyteServer.load", new=AsyncMock) as mock_load:
+        mock_load.return_value = "expected_block_id"
+        result = await get_airbyte_server_block(blockname)
+        assert result == "expected_block_id"
 
 
 @pytest.mark.asyncio
@@ -588,6 +606,116 @@ async def test_create_dbt_cli_profile_raises(mock_load):
     with pytest.raises(HTTPException) as excinfo:
         await get_dbt_cli_profile("test_block_name")
     assert str(excinfo.value.detail) == "No dbt cli profile block named test_block_name"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.DbtCliProfile.load", new_callable=AsyncMock)
+async def test_update_dbt_cli_profile(mock_load):
+    """tests update_dbt_cli_profile"""
+    mock_load.side_effect = ValueError("error")
+    with pytest.raises(PrefectException) as excinfo:
+        payload = DbtCliProfileBlockUpdate(
+            cli_profile_block_name="dne", wtype=None, profile=None, credentials=None
+        )
+        await update_dbt_cli_profile(payload)
+    assert str(excinfo.value) == "no dbt cli profile block named dne"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.DbtCliProfile.load", new_callable=AsyncMock)
+async def test_update_dbt_cli_profile_postgres(mock_load: AsyncMock):
+    """tests update_dbt_cli_profile"""
+    payload = DbtCliProfileBlockUpdate(
+        cli_profile_block_name="block-name",
+        profile=DbtProfileUpdate(
+            target_configs_schema="new_schema", name="profile-name"
+        ),
+        credentials={
+            "host": "new_host",
+            "port": "new_port",
+            "database": "new_database",
+            "username": "new_username",
+            "password": "new_password",
+        },
+        wtype="postgres",
+    )
+    mock_load.return_value = Mock(
+        target_configs=Mock(schema="old-schema"),
+        save=AsyncMock(),
+        dict=Mock(return_value={"_block_document_id": "_block_document_id"}),
+    )
+    block, block_id, block_name = await update_dbt_cli_profile(payload)
+    assert block_name == "block-name"
+    assert block_id == "_block_document_id"
+    assert block.target_configs.schema == "new_schema"
+    assert block.target == "new_schema"
+    assert block.name == "profile-name"
+    assert block.target_configs.extras["host"] == "new_host"
+    assert block.target_configs.extras["port"] == "new_port"
+    assert block.target_configs.extras["database"] == "new_database"
+    assert block.target_configs.extras["username"] == "new_username"
+    assert block.target_configs.extras["password"] == "new_password"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.DbtCliProfile.load", new_callable=AsyncMock)
+async def test_update_dbt_cli_profile_postgres_override_target(mock_load: AsyncMock):
+    """tests update_dbt_cli_profile"""
+    payload = DbtCliProfileBlockUpdate(
+        cli_profile_block_name="block-name",
+        profile=DbtProfileUpdate(
+            target_configs_schema="new_schema", name="profile-name", target="override"
+        ),
+        credentials={
+            "host": "new_host",
+            "port": "new_port",
+            "database": "new_database",
+            "username": "new_username",
+            "password": "new_password",
+        },
+        wtype="postgres",
+    )
+    mock_load.return_value = Mock(
+        target_configs=Mock(schema="old-schema"),
+        save=AsyncMock(),
+        dict=Mock(return_value={"_block_document_id": "_block_document_id"}),
+    )
+    block, block_id, block_name = await update_dbt_cli_profile(payload)
+    assert block_name == "block-name"
+    assert block_id == "_block_document_id"
+    assert block.target == "override"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.DbtCliProfile.load", new_callable=AsyncMock)
+@patch("proxy.service.GcpCredentials", Mock(return_value={}))
+async def test_update_dbt_cli_profile_bigquery(mock_load: AsyncMock):
+    """tests update_dbt_cli_profile"""
+    service_account_info = {
+        "token_uri": "token_uri",
+        "client_email": "client_email",
+        "private_key": "private key",
+    }
+    payload = DbtCliProfileBlockUpdate(
+        cli_profile_block_name="block-name",
+        profile=DbtProfileUpdate(
+            target_configs_schema="new_schema", name="profile-name"
+        ),
+        credentials=service_account_info,
+        wtype="bigquery",
+        bqlocation="bq-location",
+    )
+    mock_load.return_value = Mock(
+        target_configs=Mock(schema="old-schema"),
+        save=AsyncMock(),
+        dict=Mock(return_value={"_block_document_id": "_block_document_id"}),
+    )
+    block, block_id, block_name = await update_dbt_cli_profile(payload)
+    assert block_name == "block-name"
+    assert block_id == "_block_document_id"
+    assert block.target_configs.extras == {"location": "bq-location"}
+    assert block.target == "new_schema"
+    assert block.name == "profile-name"
 
 
 @pytest.mark.asyncio
