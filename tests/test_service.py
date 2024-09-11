@@ -15,6 +15,7 @@ from proxy.schemas import (
     DbtCliProfileBlockUpdate,
     DeploymentCreate2,
     DeploymentUpdate,
+    DeploymentUpdate2,
     PrefectSecretBlockCreate,
 )
 from proxy.service import (
@@ -48,6 +49,7 @@ from proxy.service import (
     update_target_configs_schema,
     post_deployment_v1,
     put_deployment,
+    put_deployment_v1,
     get_deployment,
     CronSchedule,
     post_deployment_flow_run,
@@ -1052,6 +1054,26 @@ async def test_post_deployment_1(
     assert deployment["id"] == "deployment-id"
     # assert retval["name"] == "deployment-name"
     assert deployment["params"] == mock_deployment.parameters
+
+
+@patch("proxy.service.prefect_patch")
+def test_put_deployment_v1(mock_prefect_patch):
+    payload = DeploymentUpdate2(
+        deployment_params={"param1": "value1"},
+        cron="* * * * *",
+        work_pool_name="pool-name",
+        work_queue_name="queue-name",
+    )
+    put_deployment_v1("deployment-id", payload)
+    mock_prefect_patch.assert_called_once_with(
+        "deployments/deployment-id",
+        {
+            "schedule": CronSchedule(cron="* * * * *").dict(),
+            "parameters": {"param1": "value1"},
+            "work_pool_name": "pool-name",
+            "work_queue_name": "queue-name",
+        },
+    )
 
 
 def test_put_deployment_bad_param():
