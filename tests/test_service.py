@@ -317,13 +317,13 @@ async def test_get_airbyte_server_block_paramcheck():
     blockname = "test_blockname"
     with pytest.raises(TypeError) as excinfo:
         await get_airbyte_server_block(1)
-    assert excinfo.value == "blockname must be a string"
+    assert str(excinfo.value) == "blockname must be a string"
 
 
 @pytest.mark.asyncio
 async def test_get_airbyte_server_block():
     blockname = "test_blockname"
-    with patch("proxy.service.AirbyteServer.load", new=AsyncMock) as mock_load:
+    with patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock) as mock_load:
         mock_load.return_value = "expected_block_id"
         result = await get_airbyte_server_block(blockname)
         assert result == "expected_block_id"
@@ -1137,7 +1137,9 @@ def test_get_flow_runs_by_deployment_id_prefect_post():
             "deployments": {"id": {"any_": [deployment_id]}},
             "flow_runs": {
                 "operator": "and_",
-                "state": {"type": {"any_": ["COMPLETED", "FAILED"]}},
+                "state": {
+                    "type": {"any_": ["COMPLETED", "FAILED", "CRASHED", "CANCELLED"]}
+                },
             },
             "limit": limit,
         }
@@ -1489,14 +1491,15 @@ def test_set_deployment_schedule_prefect_post():
 
 
 @patch("proxy.service.prefect_get")
-@patch("proxy.service.get_final_state_for_flow_run")
-def test_get_flow_run_success(mock_get_final_state: Mock, mock_get: Mock):
-    mock_get.return_value = {"id": "12345", "state": {"type": "COMPLETED"}}
-    mock_get_final_state.return_value = "COMPLETED"
+@patch("proxy.service.update_flow_run_final_state")
+def test_get_flow_run_success(mock_update_flow_run_final_state: Mock, mock_get: Mock):
+    mock_get.return_value = {"id": "flow-run-id", "state": {"type": "COMPLETED"}}
+    mock_update_flow_run_final_state.return_value = {"id": "flow-run-id", "state": {"type": "COMPLETED"},  "state_name": "COMPLETED",}
     response = get_flow_run("flow-run-id")
     mock_get.assert_called_once_with("flow_runs/flow-run-id")
+    mock_update_flow_run_final_state.assert_called_once_with({"id": "flow-run-id", "state": {"type": "COMPLETED"}})
     assert response == {
-        "id": "12345",
+        "id": "flow-run-id",
         "state": {"type": "COMPLETED"},
         "state_name": "COMPLETED",
     }
