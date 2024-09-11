@@ -55,6 +55,7 @@ from proxy.service import (
     post_deployment_flow_run,
     create_secret_block,
     cancel_flow_run,
+    get_flow_run_logs_v2,
 )
 
 
@@ -1334,6 +1335,104 @@ def test_get_flow_run_logs_prefect_post():
                 "limit": limit,
             }
             prefect_post_mock.assert_called_with("logs/filter", query)
+
+
+@patch("proxy.service.prefect_get")
+@patch("proxy.service.prefect_post")
+@patch("proxy.service.traverse_flow_run_graph_v2")
+def test_get_flow_run_logs_v2_flow_run(
+    mock_traverse_flow_run_graph_v2: Mock,
+    mock_prefect_post: Mock,
+    mock_prefect_get: Mock,
+):
+    mock_traverse_flow_run_graph_v2.return_value = [
+        {
+            "kind": "flow-run",
+            "id": "run-id",
+            "label": "run-label",
+            "start_time": "start-time",
+            "end_time": "end-time",
+        }
+    ]
+    mock_prefect_get.return_value = {
+        "state_name": "state-name",
+        "state_type": "state-type",
+    }
+    mock_prefect_post.return_value = []
+    retval = get_flow_run_logs_v2("flow_run_id")
+    mock_prefect_get.assert_called_once_with("flow_runs/run-id")
+    mock_prefect_post.assert_called_once_with(
+        "logs/filter",
+        {
+            "logs": {
+                "operator": "or_",
+                "flow_run_id": {"any_": ["run-id"]},
+                "task_run_id": {"any_": []},
+            },
+            "sort": "TIMESTAMP_ASC",
+        },
+    )
+    assert retval == [
+        {
+            "id": "run-id",
+            "kind": "flow-run",
+            "label": "run-label",
+            "state_type": "state-type",
+            "state_name": "state-name",
+            "start_time": "start-time",
+            "end_time": "end-time",
+            "logs": [],
+        }
+    ]
+
+
+@patch("proxy.service.prefect_get")
+@patch("proxy.service.prefect_post")
+@patch("proxy.service.traverse_flow_run_graph_v2")
+def test_get_flow_run_logs_v2_task_run(
+    mock_traverse_flow_run_graph_v2: Mock,
+    mock_prefect_post: Mock,
+    mock_prefect_get: Mock,
+):
+    mock_traverse_flow_run_graph_v2.return_value = [
+        {
+            "kind": "task-run",
+            "id": "run-id",
+            "label": "run-label",
+            "start_time": "start-time",
+            "end_time": "end-time",
+        }
+    ]
+    mock_prefect_get.return_value = {
+        "state_name": "state-name",
+        "state_type": "state-type",
+    }
+    mock_prefect_post.return_value = []
+    retval = get_flow_run_logs_v2("flow_run_id")
+    mock_prefect_get.assert_called_once_with("task_runs/run-id")
+    mock_prefect_post.assert_called_once_with(
+        "logs/filter",
+        {
+            "logs": {
+                "operator": "or_",
+                "flow_run_id": {"any_": []},
+                "task_run_id": {"any_": ["run-id"]},
+            },
+            "sort": "TIMESTAMP_ASC",
+        },
+    )
+    assert retval == [
+        {
+            "id": "run-id",
+            "kind": "task-run",
+            "label": "run-label",
+            "state_type": "state-type",
+            "state_name": "state-name",
+            "start_time": "start-time",
+            "end_time": "end-time",
+            "logs": [],
+        }
+    ]
 
 
 def test_get_flow_runs_by_name_type_error():
