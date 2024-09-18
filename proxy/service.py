@@ -1090,3 +1090,15 @@ def retry_flow_run(flow_run_id: str, minutes: int = 5) -> dict:
         logger.exception(err)
         raise PrefectException("failed to cancel flow-run") from err
     return None
+
+
+def delete_flow_run(flow_run_id: str) -> dict:
+    """Retry a flow run; by default it retries after 5 minutes"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+    try:
+        prefect_delete(f"flow_runs/{flow_run_id}")
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException("failed to cancel flow-run") from err
+    return None

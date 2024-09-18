@@ -35,6 +35,7 @@ from proxy.service import (
     _create_dbt_cli_profile,
     update_dbt_cli_profile,
     get_dbt_cli_profile,
+    delete_flow_run,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -53,6 +54,7 @@ from proxy.schemas import (
     DbtCliProfileBlockUpdate,
     RunAirbyteResetConnection,
     ScheduleFlowRunRequest,
+    DeleteFlowRunRequest,
 )
 from proxy.flows import run_airbyte_connection_flow
 
@@ -548,6 +550,23 @@ def get_flow_run_by_id(request: Request, flow_run_id):
         ) from error
 
     return flow_run
+
+
+@app.delete("/proxy/flow_runs/{flow_run_id}")
+def delete_deployment_flow_run(request: Request, flow_run_id):
+    """Get a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("Flow run id must be a string")
+
+    try:
+        delete_flow_run(flow_run_id=flow_run_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch flow_run " + flow_run_id
+        ) from error
+
+    return {"success": 1}
 
 
 @app.post("/proxy/flow_runs/{flow_run_id}/retry")

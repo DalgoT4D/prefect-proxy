@@ -275,3 +275,10 @@ class ScheduleFlowRunRequest(BaseModel):
 
     runParams: dict
     scheduledTime: datetime = None  # by default it will be scheduled to run now
+
+
+class DeleteFlowRunRequest(BaseModel):
+    """Schema for scheduling a flow run at a later stage"""
+
+    runParams: dict
+    scheduledTime: datetime = None  # by default it will be scheduled to run now
