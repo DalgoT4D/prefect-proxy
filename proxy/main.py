@@ -52,6 +52,7 @@ from proxy.schemas import (
     DeploymentUpdate2,
     DbtCliProfileBlockUpdate,
     RunAirbyteResetConnection,
+    ScheduleFlowRunRequest,
 )
 from proxy.flows import run_airbyte_connection_flow
 
@@ -605,7 +606,13 @@ def get_flow_run_logs_paginated(
         raise ValueError("offset must be positive")
     if limit < 0:
         raise ValueError("limit must be positive")
-    logger.info("flow_run_id=%s, task_run_id=%s, limit=%s, offset=%s", flow_run_id, task_run_id, limit, offset)
+    logger.info(
+        "flow_run_id=%s, task_run_id=%s, limit=%s, offset=%s",
+        flow_run_id,
+        task_run_id,
+        limit,
+        offset,
+    )
     try:
         return get_flow_run_logs(flow_run_id, task_run_id, limit, offset)
     except Exception as error:
@@ -628,7 +635,8 @@ def get_flow_run_logs_grouped(request: Request, flow_run_id: str):
         raise HTTPException(
             status_code=400, detail="failed to fetch logs for flow_run"
         ) from error
-    
+
+
 @app.get("/proxy/flow_runs/graph/{flow_run_id}")
 def get_flow_run_graph(request: Request, flow_run_id: str):
     """fetch the graph for a flow run"""
@@ -702,6 +710,27 @@ async def post_create_deployment_flow_run(
     logger.info("deployment_id=%s", deployment_id)
     try:
         res = await post_deployment_flow_run(deployment_id, payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create flow_run for deployment"
+        ) from error
+
+    return res
+
+
+@app.post("/proxy/deployments/{deployment_id}/flow_run/schedule")
+async def post_schedule_deployment_flow_run(
+    request: Request, deployment_id, payload: ScheduleFlowRunRequest
+):
+    """Create a flow run from deployment"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    logger.info("deployment_id=%s", deployment_id)
+    try:
+        res = await post_deployment_flow_run(
+            deployment_id, payload.runParams, payload.scheduledTime
+        )
     except Exception as error:
         logger.exception(error)
         raise HTTPException(

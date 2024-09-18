@@ -14,6 +14,7 @@ from prefect.blocks.core import Block
 from prefect.client import get_client
 from prefect_airbyte import AirbyteServer
 import pendulum
+from datetime import datetime
 
 from prefect_gcp import GcpCredentials
 from prefect_dbt.cli.configs import TargetConfigs
@@ -799,13 +800,20 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
     return deployments
 
 
-async def post_deployment_flow_run(deployment_id: str, run_params: dict = None):
+async def post_deployment_flow_run(
+    deployment_id: str, run_params: dict = None, scheduled_time: datetime = None
+) -> dict:
     # pylint: disable=broad-exception-caught
     """Create deployment flow run"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     try:
-        flow_run = await run_deployment(deployment_id, timeout=0, parameters=run_params)
+        flow_run = await run_deployment(
+            deployment_id,
+            timeout=0,
+            parameters=run_params,
+            scheduled_time=scheduled_time,
+        )
         return {"flow_run_id": flow_run.id}
     except Exception as exc:
         logger.exception(exc)
@@ -890,7 +898,9 @@ def traverse_flow_run_graph_v2(flow_run_id: str):
     return res
 
 
-def get_flow_run_logs(flow_run_id: str, task_run_id: str, limit: int, offset: int) -> dict:
+def get_flow_run_logs(
+    flow_run_id: str, task_run_id: str, limit: int, offset: int
+) -> dict:
     """return logs from a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
@@ -904,7 +914,11 @@ def get_flow_run_logs(flow_run_id: str, task_run_id: str, limit: int, offset: in
             "logs": {
                 "operator": "and_",
                 "flow_run_id": {"any_": [flow_run_id]},
-                **({"task_run_id": {"any_": [task_run_id]}} if task_run_id != "" else {})
+                **(
+                    {"task_run_id": {"any_": [task_run_id]}}
+                    if task_run_id != ""
+                    else {}
+                ),
             },
             "sort": "TIMESTAMP_ASC",
             "offset": offset,
@@ -915,6 +929,7 @@ def get_flow_run_logs(flow_run_id: str, task_run_id: str, limit: int, offset: in
         "offset": offset,
         "logs": list(map(parse_log, logs)),
     }
+
 
 def get_flow_run_tasks(flow_run_id: str) -> dict:
     """
@@ -947,6 +962,7 @@ def get_flow_run_tasks(flow_run_id: str) -> dict:
         )
 
     return res
+
 
 def get_flow_run_logs_v2(flow_run_id: str) -> dict:
     """

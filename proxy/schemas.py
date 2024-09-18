@@ -2,6 +2,7 @@
 
 from uuid import UUID
 from pydantic import BaseModel, Extra
+from datetime import datetime
 
 
 class AirbyteServerCreate(BaseModel):
@@ -267,3 +268,10 @@ class RetryFlowRunRequest(BaseModel):
     """Schema for retrying a flow run"""
 
     minutes: int
+
+
+class ScheduleFlowRunRequest(BaseModel):
+    """Schema for scheduling a flow run at a later stage"""
+
+    runParams: dict
+    scheduledTime: datetime = None  # by default it will be scheduled to run now
