@@ -54,7 +54,6 @@ from proxy.schemas import (
     DbtCliProfileBlockUpdate,
     RunAirbyteResetConnection,
     ScheduleFlowRunRequest,
-    DeleteFlowRunRequest,
 )
 from proxy.flows import run_airbyte_connection_flow
 
