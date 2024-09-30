@@ -17,7 +17,7 @@ disable = [
 
 [tool.coverage.run]
 omit = [
-  */__init__.py",
+  "*/__init__.py",
   "proxy/schemas.py",
   "proxy/exception.py"
 ]
