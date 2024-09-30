@@ -40,8 +40,8 @@ jobs:
         run: |
           mkdir -p $LOGDIR
           coverage run -m pytest --asyncio-mode=auto
-          coverage report --fail-under=70
           coverage xml
+          coverage report --fail-under=70
       - name: Check coverage percentage
         run: |
           coverage_percentage=$(coverage report --show-missing | tail -n 1 | awk '{print $4}')

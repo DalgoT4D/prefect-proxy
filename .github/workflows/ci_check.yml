@@ -40,9 +40,9 @@ jobs:
           LOGDIR: ${{ github.workspace }}/logs
         run: |
           mkdir -p $LOGDIR
-          coverage run -m pytest --asyncio-mode=auto
-          coverage report --fail-under=70
+          coverage run -m pytest --durations=20 --asyncio-mode=auto
           coverage xml
+          coverage report --fail-under=70
       - name: Check coverage percentage
         run: |
           coverage_percentage=$(coverage report --show-missing | tail -n 1 | awk '{print $4}')

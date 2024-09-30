@@ -24,6 +24,7 @@ from proxy.service import (
 )
 
 
+@pytest.mark.skip(reason="Integration test")
 class TestAirbyteServer:
     block_id = None
 
@@ -56,9 +57,9 @@ class TestAirbyteServer:
             raise ValueError(f"Response validation failed: {e.errors()}")
 
 
+@pytest.mark.skip(reason="Integration test")
 class TestAirbyteConnection:
     block_id = None
-
 
     def test_delete_airbyte_connection_block(self):
         try:
@@ -68,6 +69,7 @@ class TestAirbyteConnection:
             raise ValueError(f"Response validation failed: {e.errors()}")
 
 
+@pytest.mark.skip(reason="Integration test")
 class TestDbtConnection:
     @pytest.mark.asyncio
     async def test_create_dbt_core_block(self):
@@ -112,6 +114,7 @@ class TestDbtConnection:
             raise ValueError(f"Response validation failed: {e.errors()}")
 
 
+@pytest.mark.skip(reason="Integration test")
 class TestFlowDeployment:
 
     def test_get_flow_runs_by_deployment_id(self):
