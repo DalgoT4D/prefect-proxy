@@ -297,10 +297,7 @@ async def _create_dbt_cli_profile(
     payload: DbtCliProfileBlockCreate | DbtCoreCreate,
 ) -> DbtCliProfile:
     """credentials are decrypted by now"""
-    if not (
-        isinstance(payload, DbtCliProfileBlockCreate)
-        or isinstance(payload, DbtCoreCreate)
-    ):
+    if not (isinstance(payload, DbtCliProfileBlockCreate) or isinstance(payload, DbtCoreCreate)):
         raise TypeError("payload is of wrong type")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
@@ -331,9 +328,7 @@ async def _create_dbt_cli_profile(
             target=payload.profile.target_configs_schema,
             target_configs=target_configs,
         )
-        cleaned_blockname = cleaned_name_for_prefectblock(
-            payload.cli_profile_block_name
-        )
+        cleaned_blockname = cleaned_name_for_prefectblock(payload.cli_profile_block_name)
         await dbt_cli_profile.save(
             cleaned_blockname,
             overwrite=True,
@@ -350,9 +345,7 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
     Update the schema, warehouse credentials or profile in cli profile block
     """
     try:
-        dbtcli_block: DbtCliProfile = await DbtCliProfile.load(
-            payload.cli_profile_block_name
-        )
+        dbtcli_block: DbtCliProfile = await DbtCliProfile.load(payload.cli_profile_block_name)
     except Exception as error:
         raise PrefectException(
             "no dbt cli profile block named " + payload.cli_profile_block_name
@@ -383,9 +376,9 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
                 raise TypeError("wtype is required")
             if payload.wtype == "postgres":
                 dbtcli_block.target_configs.extras = payload.credentials
-                dbtcli_block.target_configs.extras["user"] = (
-                    dbtcli_block.target_configs.extras["username"]
-                )
+                dbtcli_block.target_configs.extras["user"] = dbtcli_block.target_configs.extras[
+                    "username"
+                ]
 
             elif payload.wtype == "bigquery":
                 dbcredentials = GcpCredentials(service_account_info=payload.credentials)
@@ -555,8 +548,7 @@ async def update_target_configs_schema(dbt_blockname: str, target_configs_schema
     except Exception as error:
         logger.exception(error)
         raise PrefectException(
-            "failed to update dbt cli profile target_configs schema for "
-            + dbt_blockname
+            "failed to update dbt cli profile target_configs schema for " + dbt_blockname
         ) from error
 
 
@@ -573,9 +565,7 @@ async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     logger.info(payload)
 
     work_queue_name = payload.work_queue_name if payload.work_queue_name else "ddp"
-    work_pool_name = (
-        payload.work_pool_name if payload.work_pool_name else "default-agent-pool"
-    )
+    work_pool_name = payload.work_pool_name if payload.work_pool_name else "default-agent-pool"
 
     deployment = await Deployment.build_from_flow(
         flow=deployment_schedule_flow_v4.with_options(name=payload.flow_name),
@@ -693,9 +683,7 @@ def update_flow_run_final_state(flow_run: dict) -> dict:
     return flow_run
 
 
-def get_flow_runs_by_deployment_id(
-    deployment_id: str, limit: int, start_time_gt: str
-) -> list:
+def get_flow_runs_by_deployment_id(deployment_id: str, limit: int, start_time_gt: str) -> list:
     """
     Fetch flow runs of a deployment that are FAILED/COMPLETED,
     sorted by descending start time of each run
@@ -790,9 +778,7 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
                 "name": deployment["name"],
                 "deploymentId": deployment["id"],
                 "tags": deployment["tags"],
-                "cron": (
-                    deployment["schedule"]["cron"] if deployment["schedule"] else None
-                ),
+                "cron": (deployment["schedule"]["cron"] if deployment["schedule"] else None),
                 "isScheduleActive": deployment["is_schedule_active"],
             }
         )
@@ -855,9 +841,7 @@ def traverse_flow_run_graph(flow_run_id: str, flow_runs: list) -> list:
             and "state_details" in flow["state"]
             and flow["state"]["state_details"]["child_flow_run_id"]
         ):
-            traverse_flow_run_graph(
-                flow["state"]["state_details"]["child_flow_run_id"], flow_runs
-            )
+            traverse_flow_run_graph(flow["state"]["state_details"]["child_flow_run_id"], flow_runs)
 
     return flow_runs
 
@@ -898,9 +882,7 @@ def traverse_flow_run_graph_v2(flow_run_id: str):
     return res
 
 
-def get_flow_run_logs(
-    flow_run_id: str, task_run_id: str, limit: int, offset: int
-) -> dict:
+def get_flow_run_logs(flow_run_id: str, task_run_id: str, limit: int, offset: int) -> dict:
     """return logs from a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
@@ -914,11 +896,7 @@ def get_flow_run_logs(
             "logs": {
                 "operator": "and_",
                 "flow_run_id": {"any_": [flow_run_id]},
-                **(
-                    {"task_run_id": {"any_": [task_run_id]}}
-                    if task_run_id != ""
-                    else {}
-                ),
+                **({"task_run_id": {"any_": [task_run_id]}} if task_run_id != "" else {}),
             },
             "sort": "TIMESTAMP_ASC",
             "offset": offset,

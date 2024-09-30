@@ -116,7 +116,6 @@ class TestDbtConnection:
 
 @pytest.mark.skip(reason="Integration test")
 class TestFlowDeployment:
-
     def test_get_flow_runs_by_deployment_id(self):
         deployment_id = TestFlowDeployment.deployment_id
         limit = 10

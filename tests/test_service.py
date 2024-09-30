@@ -87,9 +87,7 @@ def test_prefect_post_success(mock_getenv, mock_post):
     response = prefect_post(endpoint, payload)
 
     assert response == {"key": "value"}
-    mock_post.assert_called_once_with(
-        "http://localhost/test_endpoint", timeout=30, json=payload
-    )
+    mock_post.assert_called_once_with("http://localhost/test_endpoint", timeout=30, json=payload)
 
 
 @patch("requests.post")
@@ -137,9 +135,7 @@ def test_prefect_patch_success(mock_getenv, mock_patch):
     response = prefect_patch(endpoint, payload)
 
     assert response == {"key": "value"}
-    mock_patch.assert_called_once_with(
-        "http://localhost/test_endpoint", timeout=30, json=payload
-    )
+    mock_patch.assert_called_once_with("http://localhost/test_endpoint", timeout=30, json=payload)
 
 
 @patch("requests.patch")
@@ -155,9 +151,7 @@ def test_prefect_patch_success_204(mock_getenv, mock_patch):
     response = prefect_patch(endpoint, payload)
 
     assert response == {}
-    mock_patch.assert_called_once_with(
-        "http://localhost/test_endpoint", timeout=30, json=payload
-    )
+    mock_patch.assert_called_once_with("http://localhost/test_endpoint", timeout=30, json=payload)
 
 
 @patch("requests.patch")
@@ -286,9 +280,7 @@ async def test_get_airbyte_server_block_id_valid_blockname(mock_load):
 @pytest.mark.asyncio
 @patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock)
 async def test_get_airbyte_server_block_id_invalid_blockname(mock_load):
-    mock_load.side_effect = ValueError(
-        "no airbyte server block named invalid_blockname"
-    )
+    mock_load.side_effect = ValueError("no airbyte server block named invalid_blockname")
     blockname = "invalid_blockname"
     result = await get_airbyte_server_block_id(blockname)
     assert result is None
@@ -634,9 +626,7 @@ async def test_update_dbt_cli_profile_postgres(mock_load: AsyncMock):
     """tests update_dbt_cli_profile"""
     payload = DbtCliProfileBlockUpdate(
         cli_profile_block_name="block-name",
-        profile=DbtProfileUpdate(
-            target_configs_schema="new_schema", name="profile-name"
-        ),
+        profile=DbtProfileUpdate(target_configs_schema="new_schema", name="profile-name"),
         credentials={
             "host": "new_host",
             "port": "new_port",
@@ -705,9 +695,7 @@ async def test_update_dbt_cli_profile_bigquery(mock_load: AsyncMock):
     }
     payload = DbtCliProfileBlockUpdate(
         cli_profile_block_name="block-name",
-        profile=DbtProfileUpdate(
-            target_configs_schema="new_schema", name="profile-name"
-        ),
+        profile=DbtProfileUpdate(target_configs_schema="new_schema", name="profile-name"),
         credentials=service_account_info,
         wtype="bigquery",
         bqlocation="bq-location",
@@ -729,9 +717,7 @@ async def test_update_dbt_cli_profile_bigquery(mock_load: AsyncMock):
 @patch("proxy.service.DbtCliProfile.save", new_callable=AsyncMock)
 @patch("proxy.service.DbtCoreOperation.__init__", return_value=None)
 @patch("proxy.service.DbtCoreOperation.save", new_callable=AsyncMock)
-@patch(
-    "proxy.service._block_id", return_value=("test_block_id", "test_cleaned_blockname")
-)
+@patch("proxy.service._block_id", return_value=("test_block_id", "test_cleaned_blockname"))
 async def test_create_dbt_core_block_success(
     mock_block_id, mock_dbtcoreoperation_save, mock_dbtcoreoperation_init, mock_save
 ):
@@ -777,9 +763,7 @@ async def test_create_dbt_core_block_failure():
 @patch("proxy.service.DbtCliProfile.save", new_callable=AsyncMock)
 @patch("proxy.service.DbtCoreOperation.__init__", return_value=None)
 @patch("proxy.service.DbtCoreOperation.save", side_effect=Exception("Test error"))
-@patch(
-    "proxy.service._block_id", return_value=("test_block_id", "test_cleaned_blockname")
-)
+@patch("proxy.service._block_id", return_value=("test_block_id", "test_cleaned_blockname"))
 async def test_create_dbt_core_block_exception(
     mock_block_id, mock_dbtcoreoperation_save, mock_dbtcoreoperation_init, mock_save
 ):
@@ -861,11 +845,7 @@ async def test_update_postgres_credentials_wrong_name():
 @pytest.mark.asyncio
 @patch(
     "proxy.service.DbtCoreOperation.load",
-    AsyncMock(
-        return_value=Mock(
-            dbt_cli_profile=Mock(target_configs=Mock(type="not-postgres"))
-        )
-    ),
+    AsyncMock(return_value=Mock(dbt_cli_profile=Mock(target_configs=Mock(type="not-postgres")))),
 )
 async def test_update_postgres_credentials_wrong_blocktype():
     with pytest.raises(TypeError) as excinfo:
@@ -899,13 +879,9 @@ async def test_update_postgres_credentials_success(mock_load):
     dbt_coreop_block.dbt_cli_profile.name = "block-name"
     mock_load.return_value = dbt_coreop_block
 
-    await update_postgres_credentials(
-        "block-name", {"host": "new_host", "dbname": "new_database"}
-    )
+    await update_postgres_credentials("block-name", {"host": "new_host", "dbname": "new_database"})
 
-    dbt_coreop_block.dbt_cli_profile.save.assert_called_once_with(
-        name="block-name", overwrite=True
-    )
+    dbt_coreop_block.dbt_cli_profile.save.assert_called_once_with(name="block-name", overwrite=True)
     dbt_coreop_block.save.assert_called_once_with("block-name", overwrite=True)
 
     assert dbt_coreop_block.dbt_cli_profile.target_configs.type == "postgres"
@@ -931,11 +907,7 @@ async def test_update_bigquery_credentials_wrong_name():
 @pytest.mark.asyncio
 @patch(
     "proxy.service.DbtCoreOperation.load",
-    AsyncMock(
-        return_value=Mock(
-            dbt_cli_profile=Mock(target_configs=Mock(type="not-bigquery"))
-        )
-    ),
+    AsyncMock(return_value=Mock(dbt_cli_profile=Mock(target_configs=Mock(type="not-bigquery")))),
 )
 async def test_update_bigquery_credentials_wrong_blocktype():
     with pytest.raises(TypeError) as excinfo:
@@ -968,9 +940,7 @@ async def test_update_bigquery_credentials_success(mock_load):
 
     await update_bigquery_credentials("block-name", {})
 
-    dbt_coreop_block.dbt_cli_profile.save.assert_called_once_with(
-        name="block-name", overwrite=True
-    )
+    dbt_coreop_block.dbt_cli_profile.save.assert_called_once_with(name="block-name", overwrite=True)
     dbt_coreop_block.save.assert_called_once_with("block-name", overwrite=True)
 
 
@@ -1002,9 +972,7 @@ async def test_update_target_configs_schema(mock_load):
 
     await update_target_configs_schema("block-name", "newtarget")
 
-    dbt_coreop_block.dbt_cli_profile.save.assert_called_once_with(
-        name="block-name", overwrite=True
-    )
+    dbt_coreop_block.dbt_cli_profile.save.assert_called_once_with(name="block-name", overwrite=True)
     dbt_coreop_block.save.assert_called_once_with("block-name", overwrite=True)
 
     assert dbt_coreop_block.dbt_cli_profile.target_configs.schema == "newtarget"
@@ -1021,9 +989,7 @@ async def test_post_deployment_bad_param():
 @pytest.mark.asyncio
 @patch("proxy.service.deployment_schedule_flow_v4", new_callable=Mock)
 @patch("proxy.service.Deployment.build_from_flow", new_callable=AsyncMock)
-async def test_post_deployment_1(
-    mock_build_from_flow, mock_deployment_schedule_flow_v4
-):
+async def test_post_deployment_1(mock_build_from_flow, mock_deployment_schedule_flow_v4):
     payload = DeploymentCreate2(
         work_queue_name="queue-name",
         work_pool_name="pool-name",
@@ -1051,9 +1017,7 @@ async def test_post_deployment_1(
         tags=[payload.org_slug],
         is_schedule_active=True,
     )
-    mock_deployment_schedule_flow_v4.with_options.assert_called_with(
-        name=payload.flow_name
-    )
+    mock_deployment_schedule_flow_v4.with_options.assert_called_with(name=payload.flow_name)
     assert deployment["id"] == "deployment-id"
     # assert retval["name"] == "deployment-name"
     assert deployment["params"] == mock_deployment.parameters
@@ -1137,9 +1101,7 @@ def test_get_flow_runs_by_deployment_id_prefect_post():
             "deployments": {"id": {"any_": [deployment_id]}},
             "flow_runs": {
                 "operator": "and_",
-                "state": {
-                    "type": {"any_": ["COMPLETED", "FAILED", "CRASHED", "CANCELLED"]}
-                },
+                "state": {"type": {"any_": ["COMPLETED", "FAILED", "CRASHED", "CANCELLED"]}},
             },
             "limit": limit,
         }
@@ -1319,9 +1281,7 @@ def test_get_flow_run_logs_type_error():
 
 def test_get_flow_run_logs_prefect_post():
     with patch("proxy.service.prefect_post") as prefect_post_mock:
-        with patch(
-            "proxy.service.traverse_flow_run_graph"
-        ) as traverse_flow_run_graph_mock:
+        with patch("proxy.service.traverse_flow_run_graph") as traverse_flow_run_graph_mock:
             traverse_flow_run_graph_mock.return_value = ["flow_run_id"]
             flow_run_id = "flow_run_id"
             taks_run_id = "task_run_id"
@@ -1481,9 +1441,7 @@ def test_set_deployment_schedule_prefect_post():
     with patch("proxy.service.prefect_post") as prefect_post_mock:
         deployment_id = "deployment_id"
         set_deployment_schedule(deployment_id, "active")
-        prefect_post_mock.assert_called_with(
-            f"deployments/{deployment_id}/set_schedule_active", {}
-        )
+        prefect_post_mock.assert_called_with(f"deployments/{deployment_id}/set_schedule_active", {})
         set_deployment_schedule(deployment_id, "inactive")
         prefect_post_mock.assert_called_with(
             f"deployments/{deployment_id}/set_schedule_inactive", {}
@@ -1494,10 +1452,16 @@ def test_set_deployment_schedule_prefect_post():
 @patch("proxy.service.update_flow_run_final_state")
 def test_get_flow_run_success(mock_update_flow_run_final_state: Mock, mock_get: Mock):
     mock_get.return_value = {"id": "flow-run-id", "state": {"type": "COMPLETED"}}
-    mock_update_flow_run_final_state.return_value = {"id": "flow-run-id", "state": {"type": "COMPLETED"},  "state_name": "COMPLETED",}
+    mock_update_flow_run_final_state.return_value = {
+        "id": "flow-run-id",
+        "state": {"type": "COMPLETED"},
+        "state_name": "COMPLETED",
+    }
     response = get_flow_run("flow-run-id")
     mock_get.assert_called_once_with("flow_runs/flow-run-id")
-    mock_update_flow_run_final_state.assert_called_once_with({"id": "flow-run-id", "state": {"type": "COMPLETED"}})
+    mock_update_flow_run_final_state.assert_called_once_with(
+        {"id": "flow-run-id", "state": {"type": "COMPLETED"}}
+    )
     assert response == {
         "id": "flow-run-id",
         "state": {"type": "COMPLETED"},
@@ -1561,9 +1525,7 @@ def test_retry_flow_run(mock_pendulum: Mock, mock_prefect_post: Mock):
                 "message": "Retry via prefect proxy",
                 "type": "SCHEDULED",
                 "state_details": {
-                    "scheduled_time": str(
-                        pendulum.time(0, 0, 0) + pendulum.duration(minutes=5)
-                    )
+                    "scheduled_time": str(pendulum.time(0, 0, 0) + pendulum.duration(minutes=5))
                 },  # using pendulum because prefect also uses it
             },
         },

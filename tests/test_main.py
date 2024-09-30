@@ -70,9 +70,7 @@ def test_airbytesync_success():
     inner_result = {"status": "success", "result": "example_result"}
     expected_result = {"status": "success", "result": inner_result}
 
-    with patch(
-        "proxy.main.run_airbyte_connection_flow"
-    ) as mock_run_airbyte_connection_flow:
+    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
         with patch.object(
             mock_run_airbyte_connection_flow.with_options.return_value, "with_options"
         ) as mock_with_options:
@@ -88,9 +86,7 @@ def test_airbytesync_failure():
     inner_result = {"status": "failed", "result": "example_failure_result"}
     expected_result = {"status": "success", "result": inner_result}
 
-    with patch(
-        "proxy.main.run_airbyte_connection_flow"
-    ) as mock_run_airbyte_connection_flow:
+    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
         with patch.object(
             mock_run_airbyte_connection_flow.with_options.return_value, "with_options"
         ) as mock_with_options:
@@ -104,9 +100,7 @@ def test_airbytesync_http_exception():
     flow_name = ""
     flow_run_name = ""
 
-    with patch(
-        "proxy.main.run_airbyte_connection_flow"
-    ) as mock_run_airbyte_connection_flow:
+    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
         mock_run_airbyte_connection_flow.side_effect = HTTPException(
             status_code=400, detail="Job 12345 failed."
         )
@@ -247,9 +241,7 @@ async def test_post_airbyte_server_success():
         apiVersion="v1",
     )
     request = client.request("POST", "/")
-    with patch(
-        "proxy.main.create_airbyte_server_block", return_value=("12345", "testserver")
-    ):
+    with patch("proxy.main.create_airbyte_server_block", return_value=("12345", "testserver")):
         response = await post_airbyte_server(request, payload)
         assert response == {"block_id": "12345", "cleaned_block_name": "testserver"}
 
@@ -263,9 +255,7 @@ async def test_post_airbyte_server_failure():
         apiVersion="v1",
     )
     request = client.request("POST", "/")
-    with patch(
-        "proxy.main.create_airbyte_server_block", side_effect=Exception("test error")
-    ):
+    with patch("proxy.main.create_airbyte_server_block", side_effect=Exception("test error")):
         with pytest.raises(HTTPException) as excinfo:
             await post_airbyte_server(request, payload)
         assert excinfo.value.status_code == 400
@@ -300,9 +290,7 @@ async def test_post_dbtcore_success():
         profiles_dir="test_profiles_dir",
         project_dir="test_project_dir",
     )
-    with patch(
-        "proxy.main.create_dbt_core_block", return_value=("12345", "test_dbt_cleaned")
-    ):
+    with patch("proxy.main.create_dbt_core_block", return_value=("12345", "test_dbt_cleaned")):
         response = await post_dbtcore(request, payload)
         assert response == {"block_id": "12345", "block_name": "test_dbt_cleaned"}
 
@@ -354,15 +342,11 @@ async def test_put_dbtcore_postgres_badparams():
 @patch("proxy.main.update_postgres_credentials")
 async def test_put_dbtcore_postgres_failure(mock_update: AsyncMock):
     request = Mock()
-    payload = DbtCoreCredentialUpdate(
-        blockName="block-name", credentials={"cred-key": "cred-val"}
-    )
+    payload = DbtCoreCredentialUpdate(blockName="block-name", credentials={"cred-key": "cred-val"})
     mock_update.side_effect = Exception("exception")
     with pytest.raises(HTTPException) as excinfo:
         await put_dbtcore_postgres(request, payload)
-    assert (
-        excinfo.value.detail == "failed to update dbt core block credentials [postgres]"
-    )
+    assert excinfo.value.detail == "failed to update dbt core block credentials [postgres]"
 
 
 @pytest.mark.asyncio
@@ -468,9 +452,7 @@ async def test_get_dbt_cli_profile_failure_2(mock_get_dbt_cli_profile: AsyncMock
 @patch("proxy.main.update_postgres_credentials")
 async def test_put_dbtcore_postgres_success(mock_update: AsyncMock):
     request = Mock()
-    payload = DbtCoreCredentialUpdate(
-        blockName="block-name", credentials={"cred-key": "cred-val"}
-    )
+    payload = DbtCoreCredentialUpdate(blockName="block-name", credentials={"cred-key": "cred-val"})
     response = await put_dbtcore_postgres(request, payload)
     assert response == {"success": 1}
 
@@ -487,24 +469,18 @@ async def test_put_dbtcore_bigquery_badparams():
 @patch("proxy.main.update_bigquery_credentials")
 async def test_put_dbtcore_bigquery_failure(mock_update: AsyncMock):
     request = Mock()
-    payload = DbtCoreCredentialUpdate(
-        blockName="block-name", credentials={"cred-key": "cred-val"}
-    )
+    payload = DbtCoreCredentialUpdate(blockName="block-name", credentials={"cred-key": "cred-val"})
     mock_update.side_effect = Exception("exception")
     with pytest.raises(HTTPException) as excinfo:
         await put_dbtcore_bigquery(request, payload)
-    assert (
-        excinfo.value.detail == "failed to update dbt core block credentials [bigquery]"
-    )
+    assert excinfo.value.detail == "failed to update dbt core block credentials [bigquery]"
 
 
 @pytest.mark.asyncio
 @patch("proxy.main.update_bigquery_credentials")
 async def test_put_dbtcore_bigquery_success(mock_update: AsyncMock):
     request = Mock()
-    payload = DbtCoreCredentialUpdate(
-        blockName="block-name", credentials={"cred-key": "cred-val"}
-    )
+    payload = DbtCoreCredentialUpdate(blockName="block-name", credentials={"cred-key": "cred-val"})
     response = await put_dbtcore_bigquery(request, payload)
     assert response == {"success": 1}
 
@@ -521,24 +497,18 @@ async def test_put_dbtcore_schema_badparams():
 @patch("proxy.main.update_target_configs_schema")
 async def test_put_dbtcore_schema_failure(mock_update: AsyncMock):
     request = Mock()
-    payload = DbtCoreSchemaUpdate(
-        blockName="block-name", target_configs_schema="target"
-    )
+    payload = DbtCoreSchemaUpdate(blockName="block-name", target_configs_schema="target")
     mock_update.side_effect = Exception("exception")
     with pytest.raises(HTTPException) as excinfo:
         await put_dbtcore_schema(request, payload)
-    assert (
-        excinfo.value.detail == "failed to update dbt core block target_configs_schema"
-    )
+    assert excinfo.value.detail == "failed to update dbt core block target_configs_schema"
 
 
 @pytest.mark.asyncio
 @patch("proxy.main.update_target_configs_schema")
 async def test_put_dbtcore_schema_success(mock_update: AsyncMock):
     request = Mock()
-    payload = DbtCoreSchemaUpdate(
-        blockName="block-name", target_configs_schema="target"
-    )
+    payload = DbtCoreSchemaUpdate(blockName="block-name", target_configs_schema="target")
     response = await put_dbtcore_schema(request, payload)
     assert response == {"success": 1}
 
@@ -708,9 +678,7 @@ async def test_get_flowrun_success():
     request = client.request("GET", "/")
     with patch(
         "proxy.main.get_flow_runs_by_name",
-        return_value=[
-            {"id": "12345", "state": {"type": "COMPLETED"}, "status": "COMPLETED"}
-        ],
+        return_value=[{"id": "12345", "state": {"type": "COMPLETED"}, "status": "COMPLETED"}],
     ):
         response = await get_flowrun(request, payload)
         assert response == {
@@ -749,16 +717,12 @@ def test_get_flow_runs_success():
         return_value=[{"id": "12345", "state": {"type": "COMPLETED"}}],
     ):
         response = get_flow_runs(request, "67890")
-        assert response == {
-            "flow_runs": [{"id": "12345", "state": {"type": "COMPLETED"}}]
-        }
+        assert response == {"flow_runs": [{"id": "12345", "state": {"type": "COMPLETED"}}]}
 
 
 def test_get_flow_runs_failure():
     request = client.request("GET", "/")
-    with patch(
-        "proxy.main.get_flow_runs_by_deployment_id", side_effect=Exception("test error")
-    ):
+    with patch("proxy.main.get_flow_runs_by_deployment_id", side_effect=Exception("test error")):
         with pytest.raises(HTTPException) as excinfo:
             get_flow_runs(request, "67890")
         assert excinfo.value.status_code == 400
@@ -797,9 +761,7 @@ def test_post_deployments_success():
 def test_post_deployments_failure():
     payload = DeploymentFetch(org_slug="test_org", deployment_ids=["12345"])
     request = client.request("POST", "/")
-    with patch(
-        "proxy.main.get_deployments_by_filter", side_effect=Exception("test error")
-    ):
+    with patch("proxy.main.get_deployments_by_filter", side_effect=Exception("test error")):
         with pytest.raises(HTTPException) as excinfo:
             post_deployments(request, payload)
         assert excinfo.value.status_code == 400
@@ -836,10 +798,11 @@ def test_get_flow_run_logs_paginated_invalid_flow_run_id():
         get_flow_run_logs_paginated(request, None)
     assert excinfo.value.args[0] == "flow_run_id must be a string"
 
+
 def test_get_flow_run_logs_paginated_invalid_task_run_id():
     request = client.request("GET", "/")
     with pytest.raises(TypeError) as excinfo:
-        get_flow_run_logs_paginated(request, '12345', None)
+        get_flow_run_logs_paginated(request, "12345", None)
     assert excinfo.value.args[0] == "task_run_id must be a string"
 
 
@@ -849,17 +812,20 @@ def test_get_flow_run_logs_paginated_invalid_offset():
         get_flow_run_logs_paginated(request, "12345", "12345", 0, None)
     assert excinfo.value.args[0] == "offset must be an integer"
 
+
 def test_get_flow_run_logs_paginated_invalid_limit():
     request = client.request("GET", "/")
     with pytest.raises(TypeError) as excinfo:
         get_flow_run_logs_paginated(request, "12345", "12345", None)
     assert excinfo.value.args[0] == "limit must be an integer"
 
+
 def test_get_flow_run_logs_paginated_offset_less_than_zero():
     request = client.request("GET", "/")
     with pytest.raises(ValueError) as excinfo:
         get_flow_run_logs_paginated(request, "12345", "12345", 0, -1)
     assert excinfo.value.args[0] == "offset must be positive"
+
 
 def test_get_flow_run_logs_paginated_offset_less_than_zero():
     request = client.request("GET", "/")
@@ -939,9 +905,7 @@ async def test_post_create_deployment_flow_run_success():
 @pytest.mark.asyncio
 async def test_post_create_deployment_flow_run_failure():
     request = client.request("POST", "/")
-    with patch(
-        "proxy.main.post_deployment_flow_run", side_effect=Exception("test error")
-    ):
+    with patch("proxy.main.post_deployment_flow_run", side_effect=Exception("test error")):
         with pytest.raises(HTTPException) as excinfo:
             await post_create_deployment_flow_run(request, "12345")
         assert excinfo.value.status_code == 400

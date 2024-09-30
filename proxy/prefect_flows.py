@@ -227,9 +227,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         updated_cmds = [f"{cmd} {git_repo_endpoint}" for cmd in commands]
         task_config["commands"] = updated_cmds
 
-    elif (
-        task_config["slug"] == "generate-edr"  # DDP_backend:constants.TASK_GENERATE_EDR
-    ):
+    elif task_config["slug"] == "generate-edr":  # DDP_backend:constants.TASK_GENERATE_EDR
         # commands = ["edr send-report --bucket-file-path reports/{orgname}.TODAYS_DATE.html --profiles-dir elementary_profiles"]
         # env = {"PATH": /path/to/dbt/venv, "shell": "/bin/bash"}
         secret_block_aws_access_key = "edr-aws-access-key"
@@ -240,9 +238,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         edr_s3_bucket = Secret.load(secret_block_s3_bucket).get()
         # object key for the report
         todays_date = datetime.today().strftime("%Y-%m-%d")
-        task_config["commands"][0] = task_config["commands"][0].replace(
-            "TODAYS_DATE", todays_date
-        )
+        task_config["commands"][0] = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
         task_config["commands"][
             0
         ] += f" --aws-access-key-id {aws_access_key} --aws-secret-access-key {aws_access_secret} --s3-bucket-name {edr_s3_bucket}"
@@ -251,11 +247,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         commands=task_config["commands"],
         env=task_config["env"],
         working_dir=task_config["working_dir"],
-        shell=(
-            task_config["env"]["shell"]
-            if "shell" in task_config["env"]
-            else "/bin/bash"
-        ),
+        shell=(task_config["env"]["shell"] if "shell" in task_config["env"] else "/bin/bash"),
     )
     return shell_op.run()
 
@@ -281,9 +273,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 #     }
 # }
 @flow
-def deployment_schedule_flow_v4(
-    config: dict, dbt_blocks: list = [], airbyte_blocks: list = []
-):
+def deployment_schedule_flow_v4(config: dict, dbt_blocks: list = [], airbyte_blocks: list = []):
     # pylint: disable=broad-exception-caught
     """modification so dbt test failures are not propagated as flow failures"""
     config["tasks"].sort(key=lambda blk: blk["seq"])
@@ -300,9 +290,7 @@ def deployment_schedule_flow_v4(
                 if task_config["slug"] == "airbyte-reset":
                     if task_config.get("streams") and len(task_config["streams"]) > 0:
                         # run reset for streams
-                        streams = [
-                            ResetStream(**stream) for stream in task_config["streams"]
-                        ]
+                        streams = [ResetStream(**stream) for stream in task_config["streams"]]
                         run_airbyte_reset_streams_for_conn(task_config, streams)
                     else:
                         # run full reset of all streams
