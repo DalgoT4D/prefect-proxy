@@ -1,5 +1,4 @@
-name: Python package
-
+name: Proxy CI 
 on:
   push:
     branches: [main]
@@ -7,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -57,8 +56,3 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
-      - name: Deploy to EC2
-        run: |
-          eval `ssh-agent -s`
-          ssh-add - <<< "${{ secrets.SSH_PRIVATE_KEY }}"
-          ssh ${{ secrets.SERVER }} "source ~/.nvm/nvm.sh; cd /home/ddp/prefect-proxy; git pull; /home/ddp/.yarn/bin/pm2 restart prefect-proxy"
