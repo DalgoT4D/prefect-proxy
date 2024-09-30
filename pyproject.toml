@@ -15,6 +15,11 @@ disable = [
   "logging-fstring-interpolation"
 ]
 
+[tool.pytest.ini_options]
+testpaths = [
+  "tests"
+]
+
 [tool.coverage.run]
 omit = [
   "*/__init__.py",
