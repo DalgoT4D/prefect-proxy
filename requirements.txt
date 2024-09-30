@@ -113,7 +113,7 @@ platformdirs==3.2.0
 pluggy==1.0.0
 pre-commit==3.8.0
 prefect==2.18.3
-prefect-airbyte @ git+https://github.com/Ishankoradia/prefect-airbyte.git@v0.1
+prefect-airbyte==0.1
 prefect-dbt==0.3.1
 prefect-gcp==0.5.1
 prefect-shell==0.1.5
@@ -176,7 +176,7 @@ urllib3==1.26.15
 uvicorn==0.21.1
 uvloop==0.17.0
 vine==5.0.0
-virtualenv==20.26.6
+virtualenv==20.23.0
 watchfiles==0.19.0
 wcwidth==0.2.6
 websocket-client==1.5.1
