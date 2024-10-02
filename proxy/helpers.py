@@ -41,7 +41,7 @@ class CustomLogger:
                 "caller_name": caller_name,
                 "orgname": orgname,
                 "file_name": file_name,
-            }
+            },
         )
 
     def error(self, *args):
@@ -56,7 +56,7 @@ class CustomLogger:
                 "caller_name": caller_name,
                 "orgname": orgname,
                 "file_name": file_name,
-            }
+            },
         )
 
     def exception(self, *args):
@@ -71,7 +71,7 @@ class CustomLogger:
                 "caller_name": caller_name,
                 "orgname": orgname,
                 "file_name": file_name,
-            }
+            },
         )
 
 
