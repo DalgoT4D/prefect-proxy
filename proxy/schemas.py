@@ -2,6 +2,7 @@
 
 from uuid import UUID
 from pydantic import BaseModel, Extra
+from datetime import datetime
 
 
 class AirbyteServerCreate(BaseModel):
@@ -80,15 +81,9 @@ class DbtCliProfileBlockCreate(BaseModel, extra=Extra.allow):
 class DbtProfileUpdate(BaseModel):
     """schema to update dbt profile"""
 
-    name: str = (
-        None  # profile name in profiles.yml that should be the same as in dbt_project.yml
-    )
-    target_configs_schema: str = (
-        None  # schema that dbt will write against in the warehouse
-    )
-    target: str = (
-        None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
-    )
+    name: str = None  # profile name in profiles.yml that should be the same as in dbt_project.yml
+    target_configs_schema: str = None  # schema that dbt will write against in the warehouse
+    target: str = None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
 
 
 class DbtCliProfileBlockUpdate(BaseModel, extra=Extra.allow):
@@ -99,7 +94,6 @@ class DbtCliProfileBlockUpdate(BaseModel, extra=Extra.allow):
     profile: DbtProfileUpdate = None
     credentials: dict = None
     bqlocation: str = None
-    new_block_name: str = None  # this should be passed if the profilename has changed
 
 
 class DbtCoreCredentialUpdate(BaseModel):
@@ -268,3 +262,10 @@ class RetryFlowRunRequest(BaseModel):
     """Schema for retrying a flow run"""
 
     minutes: int
+
+
+class ScheduleFlowRunRequest(BaseModel):
+    """Schema for scheduling a flow run at a later stage"""
+
+    runParams: dict
+    scheduledTime: datetime = None  # by default it will be scheduled to run now

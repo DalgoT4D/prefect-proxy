@@ -14,6 +14,7 @@ from prefect.blocks.core import Block
 from prefect.client import get_client
 from prefect_airbyte import AirbyteServer
 import pendulum
+from datetime import datetime
 
 from prefect_gcp import GcpCredentials
 from prefect_dbt.cli.configs import TargetConfigs
@@ -296,10 +297,7 @@ async def _create_dbt_cli_profile(
     payload: DbtCliProfileBlockCreate | DbtCoreCreate,
 ) -> DbtCliProfile:
     """credentials are decrypted by now"""
-    if not (
-        isinstance(payload, DbtCliProfileBlockCreate)
-        or isinstance(payload, DbtCoreCreate)
-    ):
+    if not (isinstance(payload, DbtCliProfileBlockCreate) or isinstance(payload, DbtCoreCreate)):
         raise TypeError("payload is of wrong type")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
@@ -330,9 +328,7 @@ async def _create_dbt_cli_profile(
             target=payload.profile.target_configs_schema,
             target_configs=target_configs,
         )
-        cleaned_blockname = cleaned_name_for_prefectblock(
-            payload.cli_profile_block_name
-        )
+        cleaned_blockname = cleaned_name_for_prefectblock(payload.cli_profile_block_name)
         await dbt_cli_profile.save(
             cleaned_blockname,
             overwrite=True,
@@ -349,9 +345,7 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
     Update the schema, warehouse credentials or profile in cli profile block
     """
     try:
-        dbtcli_block: DbtCliProfile = await DbtCliProfile.load(
-            payload.cli_profile_block_name
-        )
+        dbtcli_block: DbtCliProfile = await DbtCliProfile.load(payload.cli_profile_block_name)
     except Exception as error:
         raise PrefectException(
             "no dbt cli profile block named " + payload.cli_profile_block_name
@@ -382,9 +376,9 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
                 raise TypeError("wtype is required")
             if payload.wtype == "postgres":
                 dbtcli_block.target_configs.extras = payload.credentials
-                dbtcli_block.target_configs.extras["user"] = (
-                    dbtcli_block.target_configs.extras["username"]
-                )
+                dbtcli_block.target_configs.extras["user"] = dbtcli_block.target_configs.extras[
+                    "username"
+                ]
 
             elif payload.wtype == "bigquery":
                 dbcredentials = GcpCredentials(service_account_info=payload.credentials)
@@ -395,14 +389,9 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
             else:
                 raise PrefectException("unknown wtype: " + payload.wtype)
 
-        block_name = (
-            cleaned_name_for_prefectblock(payload.new_block_name)
-            if payload.new_block_name
-            else payload.cli_profile_block_name
-        )
-
+        # block names are not editable in prefect
+        # using a different name while saving just creates a new block instead of editing the old one
         await dbtcli_block.save(
-            name=block_name,
             overwrite=True,
         )
 
@@ -559,8 +548,7 @@ async def update_target_configs_schema(dbt_blockname: str, target_configs_schema
     except Exception as error:
         logger.exception(error)
         raise PrefectException(
-            "failed to update dbt cli profile target_configs schema for "
-            + dbt_blockname
+            "failed to update dbt cli profile target_configs schema for " + dbt_blockname
         ) from error
 
 
@@ -577,9 +565,7 @@ async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     logger.info(payload)
 
     work_queue_name = payload.work_queue_name if payload.work_queue_name else "ddp"
-    work_pool_name = (
-        payload.work_pool_name if payload.work_pool_name else "default-agent-pool"
-    )
+    work_pool_name = payload.work_pool_name if payload.work_pool_name else "default-agent-pool"
 
     deployment = await Deployment.build_from_flow(
         flow=deployment_schedule_flow_v4.with_options(name=payload.flow_name),
@@ -697,9 +683,7 @@ def update_flow_run_final_state(flow_run: dict) -> dict:
     return flow_run
 
 
-def get_flow_runs_by_deployment_id(
-    deployment_id: str, limit: int, start_time_gt: str
-) -> list:
+def get_flow_runs_by_deployment_id(deployment_id: str, limit: int, start_time_gt: str) -> list:
     """
     Fetch flow runs of a deployment that are FAILED/COMPLETED,
     sorted by descending start time of each run
@@ -794,9 +778,7 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
                 "name": deployment["name"],
                 "deploymentId": deployment["id"],
                 "tags": deployment["tags"],
-                "cron": (
-                    deployment["schedule"]["cron"] if deployment["schedule"] else None
-                ),
+                "cron": (deployment["schedule"]["cron"] if deployment["schedule"] else None),
                 "isScheduleActive": deployment["is_schedule_active"],
             }
         )
@@ -804,13 +786,20 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
     return deployments
 
 
-async def post_deployment_flow_run(deployment_id: str, run_params: dict = None):
+async def post_deployment_flow_run(
+    deployment_id: str, run_params: dict = None, scheduled_time: datetime = None
+) -> dict:
     # pylint: disable=broad-exception-caught
     """Create deployment flow run"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     try:
-        flow_run = await run_deployment(deployment_id, timeout=0, parameters=run_params)
+        flow_run = await run_deployment(
+            deployment_id,
+            timeout=0,
+            parameters=run_params,
+            scheduled_time=scheduled_time,
+        )
         return {"flow_run_id": flow_run.id}
     except Exception as exc:
         logger.exception(exc)
@@ -852,9 +841,7 @@ def traverse_flow_run_graph(flow_run_id: str, flow_runs: list) -> list:
             and "state_details" in flow["state"]
             and flow["state"]["state_details"]["child_flow_run_id"]
         ):
-            traverse_flow_run_graph(
-                flow["state"]["state_details"]["child_flow_run_id"], flow_runs
-            )
+            traverse_flow_run_graph(flow["state"]["state_details"]["child_flow_run_id"], flow_runs)
 
     return flow_runs
 
@@ -895,29 +882,64 @@ def traverse_flow_run_graph_v2(flow_run_id: str):
     return res
 
 
-def get_flow_run_logs(flow_run_id: str, offset: int) -> dict:
+def get_flow_run_logs(flow_run_id: str, task_run_id: str, limit: int, offset: int) -> dict:
     """return logs from a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
     if not isinstance(offset, int):
         raise TypeError("offset must be an integer")
-    flow_run_ids = traverse_flow_run_graph(flow_run_id, [])
+    # flow_run_ids = traverse_flow_run_graph(flow_run_id, [])
 
     logs = prefect_post(
         "logs/filter",
         {
             "logs": {
                 "operator": "and_",
-                "flow_run_id": {"any_": flow_run_ids},
+                "flow_run_id": {"any_": [flow_run_id]},
+                **({"task_run_id": {"any_": [task_run_id]}} if task_run_id != "" else {}),
             },
             "sort": "TIMESTAMP_ASC",
             "offset": offset,
+            **({"limit": limit} if limit > 0 else {}),
         },
     )
     return {
         "offset": offset,
         "logs": list(map(parse_log, logs)),
     }
+
+
+def get_flow_run_tasks(flow_run_id: str) -> dict:
+    """
+    return tasks from a flow run
+    """
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    subflow_task_runs = traverse_flow_run_graph_v2(flow_run_id)
+
+    res = []
+
+    for run in subflow_task_runs:
+        run_obj = None
+        if run["kind"] == "flow-run":
+            run_obj = prefect_get(f"flow_runs/{run['id']}")
+        elif run["kind"] == "task-run":
+            run_obj = prefect_get(f"task_runs/{run['id']}")
+
+        res.append(
+            {
+                "id": run["id"],
+                "kind": run["kind"],
+                "label": run["label"],
+                "state_type": run_obj["state_type"],
+                "state_name": run_obj["state_name"],
+                "start_time": run["start_time"],
+                "end_time": run["end_time"],
+            }
+        )
+
+    return res
 
 
 def get_flow_run_logs_v2(flow_run_id: str) -> dict:
@@ -1042,6 +1064,18 @@ def retry_flow_run(flow_run_id: str, minutes: int = 5) -> dict:
                 },
             },
         )
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException("failed to cancel flow-run") from err
+    return None
+
+
+def delete_flow_run(flow_run_id: str) -> dict:
+    """Retry a flow run; by default it retries after 5 minutes"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+    try:
+        prefect_delete(f"flow_runs/{flow_run_id}")
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to cancel flow-run") from err

@@ -24,6 +24,7 @@ from proxy.service import (
     get_deployments_by_filter,
     get_flow_run_logs,
     get_flow_run_logs_v2,
+    get_flow_run_tasks,
     post_deployment_flow_run,
     get_flow_runs_by_name,
     set_deployment_schedule,
@@ -34,6 +35,7 @@ from proxy.service import (
     _create_dbt_cli_profile,
     update_dbt_cli_profile,
     get_dbt_cli_profile,
+    delete_flow_run,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -51,6 +53,7 @@ from proxy.schemas import (
     DeploymentUpdate2,
     DbtCliProfileBlockUpdate,
     RunAirbyteResetConnection,
+    ScheduleFlowRunRequest,
 )
 from proxy.flows import run_airbyte_connection_flow
 
@@ -161,9 +164,7 @@ def shelloprun(task_config: RunShellOperation):
         return result
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to run shell operation flow"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to run shell operation flow") from error
 
 
 # =============================================================================
@@ -253,9 +254,7 @@ async def post_dbtcore(request: Request, payload: DbtCoreCreate):
         block_id, cleaned_blockname = await create_dbt_core_block(payload)
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to create dbt core block"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to create dbt core block") from error
     logger.info(
         "Created new dbt_core block with ID: %s and name: %s",
         block_id,
@@ -364,9 +363,7 @@ async def put_dbtcore_schema(request: Request, payload: DbtCoreSchemaUpdate):
     if not isinstance(payload, DbtCoreSchemaUpdate):
         raise TypeError("payload is invalid")
     try:
-        await update_target_configs_schema(
-            payload.blockName, payload.target_configs_schema
-        )
+        await update_target_configs_schema(payload.blockName, payload.target_configs_schema)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
@@ -388,9 +385,7 @@ async def post_secret_block(request: Request, payload: PrefectSecretBlockCreate)
         block_id, cleaned_blockname = await create_secret_block(payload)
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to prefect secret block"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to prefect secret block") from error
     logger.info(
         "Created new secret block with ID: %s and name: %s",
         block_id,
@@ -461,9 +456,7 @@ async def post_dataflow_v1(request: Request, payload: DeploymentCreate2):
         deployment = await post_deployment_v1(payload)
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to create deployment"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to create deployment") from error
     logger.info("Created new deployment: %s", deployment)
     return {"deployment": deployment}
 
@@ -479,9 +472,7 @@ def put_dataflow_v1(request: Request, deployment_id, payload: DeploymentUpdate2)
         put_deployment_v1(deployment_id, payload)
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to update the deployment"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to update the deployment") from error
     logger.info("Updated the deployment: %s", deployment_id)
     return {"success": 1}
 
@@ -497,9 +488,7 @@ async def get_flowrun(request: Request, payload: FlowRunRequest):
         flow_runs = get_flow_runs_by_name(payload.name)
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to fetch flow_runs by name"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to fetch flow_runs by name") from error
     if flow_runs:
         if len(flow_runs) > 1:
             logger.error("multiple flow names having name %s", payload.name)
@@ -509,9 +498,7 @@ async def get_flowrun(request: Request, payload: FlowRunRequest):
 
 
 @app.get("/proxy/flow_runs")
-def get_flow_runs(
-    request: Request, deployment_id: str, limit: int = 0, start_time_gt: str = ""
-):
+def get_flow_runs(request: Request, deployment_id: str, limit: int = 0, start_time_gt: str = ""):
     """Get Flow Runs for a deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
@@ -546,10 +533,25 @@ def get_flow_run_by_id(request: Request, flow_run_id):
     return flow_run
 
 
+@app.delete("/proxy/flow_runs/{flow_run_id}")
+def delete_deployment_flow_run(request: Request, flow_run_id):
+    """Get a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("Flow run id must be a string")
+
+    try:
+        delete_flow_run(flow_run_id=flow_run_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch flow_run " + flow_run_id
+        ) from error
+
+    return {"success": 1}
+
+
 @app.post("/proxy/flow_runs/{flow_run_id}/retry")
-def post_retry_flow_run(
-    request: Request, flow_run_id: str, payload: RetryFlowRunRequest
-):
+def post_retry_flow_run(request: Request, flow_run_id: str, payload: RetryFlowRunRequest):
     """Retry a flow run; after x mins"""
     try:
         retry_flow_run(flow_run_id=flow_run_id, minutes=payload.minutes)
@@ -574,29 +576,44 @@ def post_deployments(request: Request, payload: DeploymentFetch):
         )
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to filter deployments"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to filter deployments") from error
     logger.info("Found deployments with payload: %s", payload)
     return {"deployments": deployments}
 
 
 @app.get("/proxy/flow_runs/logs/{flow_run_id}")
-def get_flow_run_logs_paginated(request: Request, flow_run_id: str, offset: int = 0):
+def get_flow_run_logs_paginated(
+    request: Request,
+    flow_run_id: str,
+    task_run_id: str = "",
+    limit: int = 0,
+    offset: int = 0,
+):
     """paginate the logs from a flow run"""
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
+    if not isinstance(task_run_id, str):
+        raise TypeError("task_run_id must be a string")
     if not isinstance(offset, int):
         raise TypeError("offset must be an integer")
+    if not isinstance(limit, int):
+        raise TypeError("limit must be an integer")
     if offset < 0:
         raise ValueError("offset must be positive")
+    if limit < 0:
+        raise ValueError("limit must be positive")
+    logger.info(
+        "flow_run_id=%s, task_run_id=%s, limit=%s, offset=%s",
+        flow_run_id,
+        task_run_id,
+        limit,
+        offset,
+    )
     try:
-        return get_flow_run_logs(flow_run_id, offset)
+        return get_flow_run_logs(flow_run_id, task_run_id, limit, offset)
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to fetch logs for flow_run"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to fetch logs for flow_run") from error
 
 
 @app.get("/proxy/flow_runs/v1/logs/{flow_run_id}")
@@ -609,9 +626,20 @@ def get_flow_run_logs_grouped(request: Request, flow_run_id: str):
         return get_flow_run_logs_v2(flow_run_id)
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to fetch logs for flow_run"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to fetch logs for flow_run") from error
+
+
+@app.get("/proxy/flow_runs/graph/{flow_run_id}")
+def get_flow_run_graph(request: Request, flow_run_id: str):
+    """fetch the graph for a flow run"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+
+    try:
+        return get_flow_run_tasks(flow_run_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail="failed to fetch graph for flow_run") from error
 
 
 @app.get("/proxy/deployments/{deployment_id}")
@@ -663,15 +691,34 @@ def delete_deployment(request: Request, deployment_id):
 
 
 @app.post("/proxy/deployments/{deployment_id}/flow_run")
-async def post_create_deployment_flow_run(
-    request: Request, deployment_id, payload: dict = None
-):
+async def post_create_deployment_flow_run(request: Request, deployment_id, payload: dict = None):
     """Create a flow run from deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     logger.info("deployment_id=%s", deployment_id)
     try:
         res = await post_deployment_flow_run(deployment_id, payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create flow_run for deployment"
+        ) from error
+
+    return res
+
+
+@app.post("/proxy/deployments/{deployment_id}/flow_run/schedule")
+async def post_schedule_deployment_flow_run(
+    request: Request, deployment_id, payload: ScheduleFlowRunRequest
+):
+    """Create a flow run from deployment"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    logger.info("deployment_id=%s", deployment_id)
+    try:
+        res = await post_deployment_flow_run(
+            deployment_id, payload.runParams, payload.scheduledTime
+        )
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
