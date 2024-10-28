@@ -1,84 +1,167 @@
 version: "3.9"
 services:
 
-  ## Prefect Proxy
-  prefect_proxy:
-    image: prefect_proxy:latest #change this to point to dockerhub
-    restart: always
-    environment:
-      - LOGDIR=${LOGDIR}
-      - PREFECT_API_URL=${PREFECT_API_URL}
-    ports:
-      - 4300:4300
-    volumes:
-      - flows_volume:/app/proxy
-
   ### Prefect Server API and UI
   prefect_server:
     image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
     restart: always
     entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_server.sh"]
-    environment:
-      - PREFECT_UI_URL=${PREFECT_API_URL}
-      - PREFECT_API_URL=${PREFECT_API_URL}
-      - PREFECT_SERVER_API_HOST=0.0.0.0
-      - PREFECT_API_DATABASE_CONNECTION_URL=${DB_CONNECTION_URL}
-      - WORK_POOL_NAME=${PREFECT_POOL_NAME}
-      - WORK_POOL_TYPE=${PREFECT_WORK_POOL_TYPE}
-      - PREFECT_WORK_QUEUE1=${PREFECT_WORK_QUEUE1_NAME}
-      - QUEUE1_CONCURRENCY_LIMIT=${PREFECT_WORK_QUEUE1_CONCURRENCY_LIMIT}
-      - PREFECT_WORK_QUEUE2=${PREFECT_WORK_QUEUE2_NAME}
-      - QUEUE2_CONCURRENCY_LIMIT=${PREFECT_WORK_QUEUE2_CONCURRENCY_LIMIT}
+    env_file:
+      - .env.docker
     ports:
       - "4200:4200"
     volumes:
       - prefect:/root/.prefect
       - ./start_prefect_server.sh:/opt/prefect/start_prefect_server.sh:ro
 
+  ## Prefect Proxy
+  prefect_proxy:
+    image: prefect_proxy:latest #change this to point to dockerhub
+    depends_on:
+      - prefect_server
+    restart: always
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
+    env_file:
+      - .env.docker
+    ports:
+      - "${PREFECT_PROXY_PORT:-8080}:8080"
+    volumes:
+      - flows_volume:/app/proxy
+
   ## Prefect Worker for ddp queue
-  prefect-worker-ddp-queue-1:
+  prefect-worker-ddp-1:
     image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
     depends_on:
       - prefect_server
     entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
+    env_file:
+      - .env.docker
     environment:
-      - PREFECT_API_URL=${PREFECT_API_URL}
-      - WORK_POOL_NAME=${PREFECT_POOL_NAME}
-      - WORK_QUEUE_NAME=${PREFECT_WORK_QUEUE1_NAME}
+      - PREFECT_API_URL=http://prefect_server:4200/api
+      - WORK_QUEUE_NAME=ddp
       - WORKER_NAME=prefect-worker-ddp-1
       - FLOW_RUN_LIMIT=1
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
 
-   ## Prefect Worker for ddp queue
-  prefect-worker-ddp-queue-2:
+  # Prefect Worker for ddp queue
+  prefect-worker-ddp-2:
     image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
     depends_on:
       - prefect_server
     entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
     environment:
-      - PREFECT_API_URL=${PREFECT_API_URL}
-      - WORK_POOL_NAME=${PREFECT_POOL_NAME}
-      - WORK_QUEUE_NAME=${PREFECT_WORK_QUEUE1_NAME}
+      - PREFECT_API_URL=http://prefect_server:4200/api
+      - WORK_QUEUE_NAME=ddp
       - WORKER_NAME=prefect-worker-ddp-2
       - FLOW_RUN_LIMIT=1
+    env_file:
+      - .env.docker
+    volumes:
+      - flows_volume:/app/proxy
+      - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+
+  ## Prefect Worker for edr queue
+  prefect-worker-edr:
+    image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
+    depends_on:
+      - prefect_server
+    entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
+      - WORK_QUEUE_NAME=edr
+      - WORKER_NAME=prefect-worker-edr
+      - FLOW_RUN_LIMIT=1
+    env_file:
+      - .env.docker
+    volumes:
+      - flows_volume:/app/proxy
+      - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+
+
+  ## Prefect Worker for manual-dbt queue
+  prefect-worker-manual-dbt-1:
+    image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
+    depends_on:
+      - prefect_server
+    entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
+      - WORK_QUEUE_NAME=manual-dbt
+      - WORKER_NAME=prefect-worker-manual-dbt-1
+      - FLOW_RUN_LIMIT=1
+    env_file:
+      - .env.docker
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
 
   ## Prefect Worker for manual-dbt queue
-  prefect-worker-manual-dbt-queue-1:
+  prefect-worker-manual-dbt-2:
     image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
     depends_on:
       - prefect_server
     entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
     environment:
-      - PREFECT_API_URL=${PREFECT_API_URL}
-      - WORK_POOL_NAME=${PREFECT_POOL_NAME}
-      - WORK_QUEUE_NAME=${PREFECT_WORK_QUEUE1_NAME}
-      - WORKER_NAME=prefect-worker-manual-dbt-1
+      - PREFECT_API_URL=http://prefect_server:4200/api
+      - WORK_QUEUE_NAME=manual-dbt
+      - WORKER_NAME=prefect-worker-manual-dbt-2
       - FLOW_RUN_LIMIT=1
+    env_file:
+      - .env.docker
+    volumes:
+      - flows_volume:/app/proxy
+      - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+
+  ## Prefect Worker for manual-dbt queue
+  prefect-worker-manual-dbt-3:
+    image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
+    depends_on:
+      - prefect_server
+    entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
+      - WORK_QUEUE_NAME=manual-dbt
+      - WORKER_NAME=prefect-worker-manual-dbt-3
+      - FLOW_RUN_LIMIT=1
+    env_file:
+      - .env.docker
+    volumes:
+      - flows_volume:/app/proxy
+      - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+
+  ## Prefect Worker for manual-dbt queue
+  prefect-worker-manual-dbt-4:
+    image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
+    depends_on:
+      - prefect_server
+    entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
+      - WORK_QUEUE_NAME=manual-dbt
+      - WORKER_NAME=prefect-worker-manual-dbt-4
+      - FLOW_RUN_LIMIT=1
+    env_file:
+      - .env.docker
+    volumes:
+      - flows_volume:/app/proxy
+      - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+
+  ## Prefect Worker for manual-dbt queue
+  prefect-worker-manual-dbt-5:
+    image: prefect_server:latest #change this to point to dockerhub if image exists in dockerhub
+    depends_on:
+      - prefect_server
+    entrypoint: ["/bin/sh", "/opt/prefect/start_prefect_worker.sh"]
+    environment:
+      - PREFECT_API_URL=http://prefect_server:4200/api
+      - WORK_QUEUE_NAME=manual-dbt
+      - WORKER_NAME=prefect-worker-manual-dbt-5
+      - FLOW_RUN_LIMIT=1
+    env_file:
+      - .env.docker
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro

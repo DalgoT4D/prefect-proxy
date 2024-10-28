@@ -64,6 +64,6 @@ COPY --from=build --chown=app_user:app_user ${WORKDIR}/app ${WORKDIR}
 
 WORKDIR /app
 
-# Expose port 4300 to allow external access
-EXPOSE 4300
-CMD ["gunicorn", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "proxy.main:app", "--bind", "0.0.0.0:4300"]
+# Expose port 8080 to allow external access
+EXPOSE 8080
+CMD ["gunicorn", "--workers", "4", "--worker-class", "uvicorn.workers.UvicornWorker", "proxy.main:app", "--bind", "0.0.0.0:8080"]

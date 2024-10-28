@@ -101,8 +101,8 @@ Steps to create a webhook in Prefect:
 The second option is to run all the three services as docker containers.
 Perform the following steps:
 
-- create an `.env` file from `.env.template` inside the `Docker` folder
-- populate all the variables in the `.env` file
+- create an `.env.docker` file from `.env.template` inside the `Docker` folder
+- populate all the relevant variables in the `.env` file
 - Next we need to build the prefect proxy docker image(if were are using local docker image)
 
 To Build and use proxy docker image, run the below command from the root directory:
