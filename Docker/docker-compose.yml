@@ -45,6 +45,7 @@ services:
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+      - ${CLIENTS_DBT_MOUNT}:/data/clients_dbt
 
   # Prefect Worker for ddp queue
   prefect-worker-ddp-2:
@@ -62,6 +63,7 @@ services:
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+      - ${CLIENTS_DBT_MOUNT}:/data/clients_dbt
 
   ## Prefect Worker for edr queue
   prefect-worker-edr:
@@ -79,6 +81,7 @@ services:
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+      - ${CLIENTS_DBT_MOUNT}:/data/clients_dbt
 
 
   ## Prefect Worker for manual-dbt queue
@@ -97,6 +100,7 @@ services:
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+      - ${CLIENTS_DBT_MOUNT}:/data/clients_dbt
 
   ## Prefect Worker for manual-dbt queue
   prefect-worker-manual-dbt-2:
@@ -114,6 +118,7 @@ services:
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+      - ${CLIENTS_DBT_MOUNT}:/data/clients_dbt
 
   ## Prefect Worker for manual-dbt queue
   prefect-worker-manual-dbt-3:
@@ -131,6 +136,7 @@ services:
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+      - ${CLIENTS_DBT_MOUNT}:/data/clients_dbt
 
   ## Prefect Worker for manual-dbt queue
   prefect-worker-manual-dbt-4:
@@ -148,6 +154,7 @@ services:
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+      - ${CLIENTS_DBT_MOUNT}:/data/clients_dbt
 
   ## Prefect Worker for manual-dbt queue
   prefect-worker-manual-dbt-5:
@@ -165,6 +172,7 @@ services:
     volumes:
       - flows_volume:/app/proxy
       - ./start_prefect_worker.sh:/opt/prefect/start_prefect_worker.sh:ro
+      - ${CLIENTS_DBT_MOUNT}:/data/clients_dbt
 
 
 volumes:

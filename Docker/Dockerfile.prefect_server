@@ -8,7 +8,8 @@ ENV PIP_DEFAULT_TIMEOUT=100 \
     # disable a pip version check to reduce run-time & log-spam
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     # cache is useless in docker image, so disable to reduce image size
-    PIP_NO_CACHE_DIR=1
+    PIP_NO_CACHE_DIR=1 \
+    DATA_DIR=/data
 
 
 # install uv. This makes installation of packages faster compared to pip
@@ -18,6 +19,8 @@ ADD https://astral.sh/uv/install.sh /install.sh
 WORKDIR /app
 
 COPY requirements.txt /app/requirements.txt
+
+
 
 #Install system dependencies
 RUN set -ex \
@@ -32,7 +35,15 @@ RUN set -ex \
     && apt-get clean -y \
     && rm -rf /var/lib/apt/lists/*
 
+RUN mkdir -p ${DATA_DIR}
 
+# setup dbt environment
+RUN mkdir -p ${DATA_DIR}/dbt \
+    && mkdir -p ${DATA_DIR}/clients_dbt
+
+COPY requirements_dbt.txt ${DATA_DIR}/dbt/requirements.txt
+
+RUN python -m venv ${DATA_DIR}/dbt/venv && ${DATA_DIR}/dbt/venv/bin/python -m pip install -r ${DATA_DIR}/dbt/requirements.txt
 
 # Stage 2 - Runtime
 FROM prefecthq/prefect:2.18.3-python3.10 as runtime
@@ -49,3 +60,4 @@ LABEL org.opencontainers.image.created=${BUILD_DATE}
 
 
 COPY --from=build /usr/local/ /usr/local/
+COPY --from=build /data/ /data/
