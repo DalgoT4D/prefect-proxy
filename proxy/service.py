@@ -7,12 +7,14 @@ import requests
 from fastapi import HTTPException
 
 from prefect.deployments import Deployment, run_deployment
+from prefect import flow
 from prefect.server.schemas.schedules import CronSchedule
 from prefect.server.schemas.states import Cancelled
 from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
 from prefect.client import get_client
 from prefect_airbyte import AirbyteServer
+from prefect.runner.storage import GitRepository
 import pendulum
 from datetime import datetime
 
@@ -36,7 +38,7 @@ from proxy.schemas import (
     DbtCliProfileBlockUpdate,
     DeploymentUpdate2,
 )
-from proxy.prefect_flows import deployment_schedule_flow_v4
+
 
 load_dotenv()
 
@@ -553,7 +555,7 @@ async def update_target_configs_schema(dbt_blockname: str, target_configs_schema
 
 
 # ================================================================================================
-async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
+def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     """
     create a deployment from a flow and a schedule
     can also optionally pass in the name of the work queue and work pool
@@ -567,32 +569,32 @@ async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     work_queue_name = payload.work_queue_name if payload.work_queue_name else "ddp"
     work_pool_name = payload.work_pool_name if payload.work_pool_name else "default-agent-pool"
 
-    deployment = await Deployment.build_from_flow(
-        flow=deployment_schedule_flow_v4.with_options(name=payload.flow_name),
-        name=payload.deployment_name,
-        work_queue_name=work_queue_name,
-        work_pool_name=work_pool_name,
-        tags=[payload.org_slug],
-        is_schedule_active=True,
-    )
-    deployment.parameters = payload.deployment_params
-    deployment.schedule = CronSchedule(cron=payload.cron) if payload.cron else None
-
-    # TODO 'schedule' in Deployment is going to be deprecated after Sep2024, need to move to 'schedules'
-    # Requires changes in the get deployment function & frontend also
-
-    # deployment.schedules = [
-    #     {"schedule": CronSchedule(cron=payload.cron), "active": True}
-    # ]
     try:
-        deployment_id = await deployment.apply()
+        source = GitRepository(url="https://github.com/DalgoT4D/prefect-proxy.git", branch="main")
+        deployment_id = flow.from_source(
+            source=source, entrypoint="proxy/prefect_flows.py:deployment_schedule_flow_v4"
+        ).deploy(
+            name=payload.deployment_name,
+            work_queue_name=work_queue_name,
+            work_pool_name=work_pool_name,
+            tags=[payload.org_slug],
+            is_schedule_active=True,
+            parameters=payload.deployment_params,
+            schedules=(
+                [{"schedule": CronSchedule(cron=payload.cron), "active": True}]
+                if payload.cron
+                else None
+            ),
+        )
+
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create deployment") from error
+
     return {
         "id": deployment_id,
-        "name": deployment.name,
-        "params": deployment.parameters,
+        "name": payload.deployment_name,
+        "params": payload.deployment_params,
     }
 
 

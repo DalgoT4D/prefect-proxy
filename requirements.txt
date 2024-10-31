@@ -113,9 +113,10 @@ platformdirs==3.2.0
 pluggy==1.0.0
 pre-commit==3.8.0
 prefect==2.18.3
-prefect-airbyte @ git+https://github.com/Ishankoradia/prefect-airbyte.git
+prefect-airbyte==0.1
 prefect-dbt==0.3.1
 prefect-gcp==0.5.1
+prefect-github==0.2.5
 prefect-shell==0.1.5
 prefect-sqlalchemy==0.2.4
 prompt-toolkit==3.0.38
