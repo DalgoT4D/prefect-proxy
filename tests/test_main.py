@@ -960,7 +960,7 @@ async def test_post_dataflow_v1_success(mock_post_deployment_v1: AsyncMock):
 
     mock_post_deployment_v1.return_value = {"id": "12345"}
 
-    result = await post_dataflow_v1(request, payload)
+    result = post_dataflow_v1(request, payload)
     assert result == {"deployment": {"id": "12345"}}
 
 
