@@ -127,6 +127,11 @@ docker-compose -f Docker/docker-compose.dev.yml --env-file Docker/.env.docker -p
 docker-compose -f Docker/docker-compose.dev.yml --env-file Docker/.env.docker -p prefect_proxy down
 ```
 
+If you just want to bring the service up without the workers; you can run
+```
+docker-compose -f Docker/docker-compose.yml --env-file Docker/.env.docker -p prefect_proxy up prefect_proxy prefect_server -d
+```
+
 The docker compose pulls all the necessary docker images from Dockerhub. However, the prefect proxy has a Dockerfile that you can build an image locally.
 
 ## For developers
