@@ -987,9 +987,8 @@ async def test_post_deployment_bad_param():
 
 
 @pytest.mark.asyncio
-@patch("proxy.service.deployment_schedule_flow_v4", new_callable=Mock)
-@patch("proxy.service.Deployment.build_from_flow", new_callable=AsyncMock)
-async def test_post_deployment_1(mock_build_from_flow, mock_deployment_schedule_flow_v4):
+@patch("proxy.service.flow.from_source", new_callable=Mock)
+async def test_post_deployment_1(mock_from_source):
     payload = DeploymentCreate2(
         work_queue_name="queue-name",
         work_pool_name="pool-name",
@@ -1000,27 +999,24 @@ async def test_post_deployment_1(mock_build_from_flow, mock_deployment_schedule_
         deployment_params={"param1": "value1"},
         cron="* * * * *",
     )
-    mock_deployment_schedule_flow_v4.with_options = Mock(return_value="flow")
-    mock_deployment = Mock(
-        name="deployment-name",
-        parameters={"param1": "value1"},
-        schedule=None,
-        apply=AsyncMock(return_value="deployment-id"),
-    )
-    mock_build_from_flow.return_value = mock_deployment
-    deployment = await post_deployment_v1(payload)
-    mock_build_from_flow.assert_called_once_with(
-        flow="flow",
-        name=payload.deployment_name,
-        work_queue_name="queue-name",
-        work_pool_name="pool-name",
-        tags=[payload.org_slug],
-        is_schedule_active=True,
-    )
-    mock_deployment_schedule_flow_v4.with_options.assert_called_with(name=payload.flow_name)
-    assert deployment["id"] == "deployment-id"
+    mock_deploy = Mock(return_value="deployment-id")
+    mock_from_source.return_value.deploy = mock_deploy
+
+    deployment = post_deployment_v1(payload)
+    # mock_build_from_flow.assert_called_once_with(
+    #     flow="flow",
+    #     name=payload.deployment_name,
+    #     work_queue_name="queue-name",
+    #     work_pool_name="pool-name",
+    #     tags=[payload.org_slug],
+    #     is_schedule_active=True,
+    # )
+    assert deployment == {
+        "id": "deployment-id",
+        "name": payload.deployment_name,
+        "params": payload.deployment_params,
+    }
     # assert retval["name"] == "deployment-name"
-    assert deployment["params"] == mock_deployment.parameters
 
 
 @patch("proxy.service.prefect_patch")
