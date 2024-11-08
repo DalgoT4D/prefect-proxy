@@ -538,7 +538,7 @@ async def test_post_secret_block_success(mock_create: AsyncMock):
 
 
 @pytest.mark.asyncio
-@patch("proxy.main.edit_secret_block")
+@patch("proxy.main.upsert_secret_block")
 async def test_put_secret_block_failure(mock_edit: AsyncMock):
     request = Mock()
     payload = PrefectSecretBlockEdit(blockName="block-name", secret="secret")
@@ -549,7 +549,7 @@ async def test_put_secret_block_failure(mock_edit: AsyncMock):
 
 
 @pytest.mark.asyncio
-@patch("proxy.main.edit_secret_block")
+@patch("proxy.main.upsert_secret_block")
 async def test_put_secret_block_success(mock_edit: AsyncMock):
     request = Mock()
     payload = PrefectSecretBlockEdit(blockName="block-name", secret="secret")
