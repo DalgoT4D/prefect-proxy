@@ -34,6 +34,7 @@ from proxy.schemas import (
     DeploymentCreate2,
     DeploymentUpdate,
     PrefectSecretBlockCreate,
+    PrefectSecretBlockEdit,
     DbtCliProfileBlockCreate,
     DbtCliProfileBlockUpdate,
     DeploymentUpdate2,
@@ -448,6 +449,19 @@ async def create_secret_block(payload: PrefectSecretBlockCreate):
         await secret_block.save(cleaned_blockname, overwrite=True)
     except Exception as error:
         raise PrefectException("Could not create a secret block") from error
+
+    return _block_id(secret_block), cleaned_blockname
+
+
+async def edit_secret_block(payload: PrefectSecretBlockEdit):
+    """Create a prefect block of type secret"""
+    try:
+        cleaned_blockname = cleaned_name_for_prefectblock(payload.blockName)
+        secret_block: Secret = await Secret.load(cleaned_blockname)
+        secret_block.value = payload.secret
+        await secret_block.save(cleaned_blockname, overwrite=True)
+    except Exception as error:
+        raise PrefectException("Could not edit the secret block") from error
 
     return _block_id(secret_block), cleaned_blockname
 

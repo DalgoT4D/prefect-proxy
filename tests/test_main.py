@@ -27,6 +27,7 @@ from proxy.main import (
     put_dbtcore_schema,
     get_flow_run_by_id,
     post_secret_block,
+    put_secret_block,
     post_deployment_set_schedule,
     post_deployments,
     sync_shellop_flow,
@@ -36,8 +37,6 @@ from proxy.main import (
 )
 
 from proxy.schemas import (
-    AirbyteConnectionBlocksFetch,
-    AirbyteConnectionCreate,
     AirbyteServerCreate,
     DbtCoreCreate,
     DbtCoreCredentialUpdate,
@@ -45,15 +44,11 @@ from proxy.schemas import (
     DbtCoreSchemaUpdate,
     RunDbtCoreOperation,
     PrefectSecretBlockCreate,
+    PrefectSecretBlockEdit,
     DbtCliProfileBlockCreate,
     DbtCliProfileBlockUpdate,
-    DeploymentCreate,
-    DeploymentUpdate,
     DeploymentFetch,
     FlowRunRequest,
-    PrefectBlocksDelete,
-    PrefectShellSetup,
-    RunFlow,
     RunShellOperation,
     DeploymentCreate2,
     DeploymentUpdate2,
@@ -539,6 +534,27 @@ async def test_post_secret_block_success(mock_create: AsyncMock):
     payload = PrefectSecretBlockCreate(blockName="block-name", secret="secret")
     mock_create.return_value = ("block_id", "cleaned_blockname")
     response = await post_secret_block(request, payload)
+    assert response == {"block_id": "block_id", "block_name": "cleaned_blockname"}
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.edit_secret_block")
+async def test_put_secret_block_failure(mock_edit: AsyncMock):
+    request = Mock()
+    payload = PrefectSecretBlockEdit(blockName="block-name", secret="secret")
+    mock_edit.side_effect = Exception("exception")
+    with pytest.raises(HTTPException) as excinfo:
+        await put_secret_block(request, payload)
+    assert excinfo.value.detail == "failed to prefect secret block"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.edit_secret_block")
+async def test_put_secret_block_success(mock_edit: AsyncMock):
+    request = Mock()
+    payload = PrefectSecretBlockEdit(blockName="block-name", secret="secret")
+    mock_edit.return_value = ("block_id", "cleaned_blockname")
+    response = await put_secret_block(request, payload)
     assert response == {"block_id": "block_id", "block_name": "cleaned_blockname"}
 
 
