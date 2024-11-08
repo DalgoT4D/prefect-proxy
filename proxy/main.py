@@ -32,7 +32,7 @@ from proxy.service import (
     get_flow_run,
     retry_flow_run,
     create_secret_block,
-    edit_secret_block,
+    upsert_secret_block,
     _create_dbt_cli_profile,
     update_dbt_cli_profile,
     get_dbt_cli_profile,
@@ -403,7 +403,7 @@ async def put_secret_block(request: Request, payload: PrefectSecretBlockEdit):
     if not isinstance(payload, PrefectSecretBlockEdit):
         raise TypeError("payload is invalid")
     try:
-        block_id, cleaned_blockname = await edit_secret_block(payload)
+        block_id, cleaned_blockname = await upsert_secret_block(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail="failed to prefect secret block") from error

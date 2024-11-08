@@ -453,11 +453,18 @@ async def create_secret_block(payload: PrefectSecretBlockCreate):
     return _block_id(secret_block), cleaned_blockname
 
 
-async def edit_secret_block(payload: PrefectSecretBlockEdit):
+async def upsert_secret_block(payload: PrefectSecretBlockEdit):
     """Create a prefect block of type secret"""
     try:
         cleaned_blockname = cleaned_name_for_prefectblock(payload.blockName)
         secret_block: Secret = await Secret.load(cleaned_blockname)
+    except ValueError:
+        # the block doest not exist; create it
+        return await create_secret_block(
+            PrefectSecretBlockCreate(blockName=cleaned_blockname, secret=payload.secret)
+        )
+
+    try:
         secret_block.value = payload.secret
         await secret_block.save(cleaned_blockname, overwrite=True)
     except Exception as error:
