@@ -839,7 +839,7 @@ async def test_edit_secret_block(mock_save: AsyncMock):
     payload = PrefectSecretBlockCreate(secret="my-secret", blockName="my-blockname")
     with pytest.raises(PrefectException) as excinfo:
         await edit_secret_block(payload)
-    assert str(excinfo.value) == "Could not create a secret block"
+    assert str(excinfo.value) == "Could not edit the secret block"
 
 
 @pytest.mark.asyncio
