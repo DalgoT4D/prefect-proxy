@@ -8,11 +8,22 @@ Since Prefect exposes an async Python interface and Django does not play well wi
 
 These endpoints will be called only from the Django server or from testing scripts. More project documentation can be found in [the wiki](https://github.com/DalgoT4D/prefect-proxy/wiki)
 
-## Installation instructions
+## Run instructions
+
+There are two options to setup and run prefect server, proxy and the agent:
+
+- Running all the three services manually and independently
+- Running using Docker
+
+Below are instructions on each the two options
+
+### Running services manually
+
+#### Instructions
 
 Clone the [Prefect Proxy](https://github.com/DalgoT4D/prefect-proxy) repository
 
-In the cloned repository, run the following commands:
+In the cloned repository, open the terminal and run the following commands:
 
 - `pyenv local 3.10`
 
@@ -27,13 +38,15 @@ In the cloned repository, run the following commands:
 - create `.env` from `.env.template`
 - set the value for the `LOGDIR` in the `.env` file with the name of the directory to hold the logs. The directory will be automatically created on running the prefect proxy
 
-## Run instructions
+#### Start Prefect Server
 
 Start Prefect on port 4200
 
     prefect server start
 
 and set `PREFECT_API_URL` in `.env` to `http://localhost:4200/api`. Change the port in this URL if you are running Prefect on a different port.
+
+#### Start Prefect Worker
 
 Next, start your Prefect worker(s). On Tech4Dev's production system, Dalgo runs three workers on two queues called `ddp` and `manual-dbt`:
 
@@ -42,6 +55,8 @@ Next, start your Prefect worker(s). On Tech4Dev's production system, Dalgo runs 
     prefect worker start -q manual-dbt --pool dalgo_work_pool
 
 (Make sure to set up the work pool from the prefect UI first).
+
+#### Start Prefect Proxy
 
 The proxy server needs to listen for requests coming from Django; pick an available port and run
 
@@ -54,34 +69,72 @@ Make sure to add this URL with the port number into the `.env` for DDP_backend i
 All orchestration flow runs (scheduled or manual) are executed in Prefect by these workers. Dalgo needs to be notified when these flow runs reach a terminal state (success or failure) in order to clear up resources & notify users of failures.
 
 Steps to create a webhook in Prefect:
+
 1. Go to the Prefect UI & head over to `Notifications`
 2. Add a new notification of type `Custom Webhook`.
 3. Set `Webhook URL` to `http://localhost:8002/webhooks/v1/notification/` (assuming the Django server is listening on `http://localhost:8002`).
 4. Set the `Method` to `POST`
 5. Set the `Headers` as shown below. The notification key here should be the one set in Dalgo backend `.env` under `PREFECT_NOTIFICATIONS_WEBHOOK_KEY`
 
-    ```
-    {"X-Notification-Key": "********"}
-    ```
+   ```
+   {"X-Notification-Key": "********"}
+   ```
+
 6. Set the `JSON Data` to
 
-    ```
-    {"body": "{{body}}"}
-    ```
+   ```
+   {"body": "{{body}}"}
+   ```
+
 7. `Run states` that we are interested in are `Completed`, `Cancelled`, `Crashed`, `Failed`, `TimedOut`
 8. Hit Save
-9. Use the prefect API `GET http://localhost:4200/api/flow_run_notification_policies/{id}` to make sure that this notification has this message_template:
-    ```
-    Flow run {flow_run_name} with id {flow_run_id} entered state {flow_run_state_name}
-    ```
+9. Use the API `GET /api/flow_run_notification_policies/{id}` to make sure that this notification has this message_template:
 
- 10. If it does not, you should update it using the prefect API `PATCH http://localhost:4200/api/flow_run_notification_policies/{id}`
+   ```
+   Flow run {flow_run_name} with id {flow_run_id} entered state {flow_run_state_name}
+   ```
 
+10. If it does not, you should update it using `PATCH /api/flow_run_notification_policies/{id}`
 
-Prefect api docs will be available at `http://localhost:4200/api/docs`
+## Running services using Docker
 
+The second option is to run all the three services as docker containers.
+Perform the following steps:
 
-## Miscellaneous
+- create an `.env.docker` file from `.env.template` inside the `Docker` folder
+- populate all the relevant variables in the `.env` file
+- Next we need to build the prefect proxy docker image(if were are using local docker image)
+
+To Build and use proxy docker image, run the below command from the root directory:
+
+```
+docker build -f Docker/Dockerfile --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg BUILD_VERSION=0.0.1  -t prefect_proxy:latest .
+```
+
+To Build and use prefect worker docker image, run the below command from the root directory:
+
+```
+docker build -f Docker/Dockerfile.prefect_server --build-arg BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ') --build-arg BUILD_VERSION=0.0.1  -t prefect_server:latest .
+```
+
+To run all the services as docker container, run the docker compose command below. There are two docker files:
+
+- `docker-compose.dev.yml` - runs the prefect proxy as database in a container
+- `docker-compose.yml` - does not spin up a database but assumes the prefect database is external
+
+```
+docker-compose -f Docker/docker-compose.dev.yml --env-file Docker/.env.docker -p prefect_proxy up -d
+docker-compose -f Docker/docker-compose.dev.yml --env-file Docker/.env.docker -p prefect_proxy down
+```
+
+If you just want to bring the service up without the workers; you can run
+```
+docker-compose -f Docker/docker-compose.yml --env-file Docker/.env.docker -p prefect_proxy up prefect_proxy prefect_server -d
+```
+
+The docker compose pulls all the necessary docker images from Dockerhub. However, the prefect proxy has a Dockerfile that you can build an image locally.
+
+## For developers
 
 FastAPI endpoints are defined in `main.py`. These typically call functions in `service.py`.
 
