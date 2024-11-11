@@ -258,6 +258,13 @@ class PrefectSecretBlockCreate(BaseModel):
     blockName: str
 
 
+class PrefectSecretBlockEdit(BaseModel):
+    """Schema for editing a block to store a secret string in prefect"""
+
+    secret: str
+    blockName: str
+
+
 class RetryFlowRunRequest(BaseModel):
     """Schema for retrying a flow run"""
 

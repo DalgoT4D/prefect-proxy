@@ -55,6 +55,7 @@ from proxy.service import (
     CronSchedule,
     post_deployment_flow_run,
     create_secret_block,
+    upsert_secret_block,
     cancel_flow_run,
     get_flow_run_logs_v2,
     retry_flow_run,
@@ -828,6 +829,16 @@ async def test_create_secret_block(mock_save: AsyncMock):
     payload = PrefectSecretBlockCreate(secret="my-secret", blockName="my-blockname")
     with pytest.raises(PrefectException) as excinfo:
         await create_secret_block(payload)
+    assert str(excinfo.value) == "Could not create a secret block"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.Secret.save", new_callable=AsyncMock)
+async def test_edit_secret_block(mock_save: AsyncMock):
+    mock_save.side_effect = Exception("exception thrown")
+    payload = PrefectSecretBlockCreate(secret="my-secret", blockName="my-blockname")
+    with pytest.raises(PrefectException) as excinfo:
+        await upsert_secret_block(payload)
     assert str(excinfo.value) == "Could not create a secret block"
 
 

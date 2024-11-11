@@ -32,6 +32,7 @@ from proxy.service import (
     get_flow_run,
     retry_flow_run,
     create_secret_block,
+    upsert_secret_block,
     _create_dbt_cli_profile,
     update_dbt_cli_profile,
     get_dbt_cli_profile,
@@ -49,6 +50,7 @@ from proxy.schemas import (
     FlowRunRequest,
     RetryFlowRunRequest,
     PrefectSecretBlockCreate,
+    PrefectSecretBlockEdit,
     DbtCliProfileBlockCreate,
     DeploymentUpdate2,
     DbtCliProfileBlockUpdate,
@@ -388,6 +390,25 @@ async def post_secret_block(request: Request, payload: PrefectSecretBlockCreate)
         raise HTTPException(status_code=400, detail="failed to prefect secret block") from error
     logger.info(
         "Created new secret block with ID: %s and name: %s",
+        block_id,
+        cleaned_blockname,
+    )
+    return {"block_id": block_id, "block_name": cleaned_blockname}
+
+
+# =============================================================================
+@app.put("/proxy/blocks/secret/")
+async def put_secret_block(request: Request, payload: PrefectSecretBlockEdit):
+    """create a new prefect secret block with this block name to store a secret string"""
+    if not isinstance(payload, PrefectSecretBlockEdit):
+        raise TypeError("payload is invalid")
+    try:
+        block_id, cleaned_blockname = await upsert_secret_block(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail="failed to prefect secret block") from error
+    logger.info(
+        "Edited secret block with ID: %s and name: %s",
         block_id,
         cleaned_blockname,
     )
