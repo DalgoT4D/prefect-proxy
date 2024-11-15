@@ -792,7 +792,7 @@ async def reset_airbyte_conn_flow(request: Request, payload: RunAirbyteResetConn
 
 
 @app.get("/proxy/prefect/version")
-def get_flow_runs(request: Request):
+def get_prefect_version(request: Request):
     """Get Flow Runs for a deployment"""
     ver = None
     try:
