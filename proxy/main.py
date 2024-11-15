@@ -37,6 +37,7 @@ from proxy.service import (
     update_dbt_cli_profile,
     get_dbt_cli_profile,
     delete_flow_run,
+    get_current_prefect_version,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -788,3 +789,14 @@ async def reset_airbyte_conn_flow(request: Request, payload: RunAirbyteResetConn
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/proxy/prefect/version")
+def get_prefect_version(request: Request):
+    """Get Flow Runs for a deployment"""
+    ver = None
+    try:
+        ver = get_current_prefect_version()
+    except Exception as error:
+        logger.exception(error)
+    return ver

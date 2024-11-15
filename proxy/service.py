@@ -1103,3 +1103,8 @@ def delete_flow_run(flow_run_id: str) -> dict:
         logger.exception(err)
         raise PrefectException("failed to cancel flow-run") from err
     return None
+
+
+def get_current_prefect_version() -> str:
+    """Fetch deployment and its details"""
+    return prefect_get(f"admin/version")
