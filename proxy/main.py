@@ -3,6 +3,8 @@
 import os
 import re
 import base64
+from datetime import datetime, timedelta
+import pytz
 import requests
 from fastapi import FastAPI, HTTPException, Request
 from prefect_airbyte import AirbyteConnection
@@ -800,3 +802,26 @@ def get_prefect_version(request: Request):
     except Exception as error:
         logger.exception(error)
     return ver
+
+
+@app.get("/proxy/flow_runs/long-running/{nhours}")
+def get_long_running_flows(request: Request, nhours: int):
+    """Get long-running Flow Runs"""
+    nhoursago = datetime.now() - timedelta(seconds=nhours * 3600)
+    root = os.getenv("PREFECT_API_URL")
+    r = requests.post(
+        f"{root}/flow_runs/filter",
+        json={
+            "flow_runs": {
+                "operator": "and_",
+                "state": {
+                    "operator": "and_",
+                    "type": {"any_": ["RUNNING"]},
+                },
+                "start_time": {"before_": nhoursago.astimezone(pytz.utc).isoformat()},
+            }
+        },
+        timeout=10,
+    )
+    flow_runs = r.json()
+    return {"flow_runs": flow_runs}
