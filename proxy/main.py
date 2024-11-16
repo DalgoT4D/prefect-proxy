@@ -805,22 +805,28 @@ def get_prefect_version(request: Request):
 
 
 @app.get("/proxy/flow_runs/long-running/{nhours}")
-def get_long_running_flows(request: Request, nhours: int):
-    """Get long-running Flow Runs"""
-    nhoursago = datetime.now() - timedelta(seconds=nhours * 3600)
+def get_long_running_flows(request: Request, nhours: int, start_time_str: str = ""):
+    """Get long-running Flow Runs. the start_time, if provided, must be in ISO-8601 format"""
+    if start_time_str:
+        start_time = datetime.fromisoformat(start_time_str)
+    else:
+        start_time = datetime.now()
+    nhoursago = start_time - timedelta(seconds=nhours * 3600)
     root = os.getenv("PREFECT_API_URL")
+    request_parameters = {
+        "flow_runs": {
+            "operator": "and_",
+            "state": {
+                "operator": "and_",
+                "type": {"any_": ["RUNNING"]},
+            },
+            "start_time": {"before_": nhoursago.astimezone(pytz.utc).isoformat()},
+        }
+    }
+    logger.info(request_parameters)
     r = requests.post(
         f"{root}/flow_runs/filter",
-        json={
-            "flow_runs": {
-                "operator": "and_",
-                "state": {
-                    "operator": "and_",
-                    "type": {"any_": ["RUNNING"]},
-                },
-                "start_time": {"before_": nhoursago.astimezone(pytz.utc).isoformat()},
-            }
-        },
+        json=request_parameters,
         timeout=10,
     )
     flow_runs = r.json()

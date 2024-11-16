@@ -1,3 +1,4 @@
+import os
 from unittest.mock import Mock, AsyncMock, patch
 
 import pytest
@@ -34,6 +35,7 @@ from proxy.main import (
     sync_dbtcore_flow_v1,
     post_dataflow_v1,
     put_dataflow_v1,
+    get_long_running_flows,
 )
 
 from proxy.schemas import (
@@ -993,3 +995,26 @@ async def test_post_dataflow_v1_failure(mock_post_deployment_v1: AsyncMock):
     with pytest.raises(HTTPException) as excinfo:
         await post_dataflow_v1(request, payload)
     assert excinfo.value.detail == "failed to create deployment"
+
+
+def test_get_long_running_flows():
+    """tests get_long_running_flows"""
+    request = Mock()
+    nhours = 10
+    start_time_str = "2024-01-01T00:00:00+05:30"
+    root = os.getenv("PREFECT_API_URL")
+    request_parameters = {
+        "flow_runs": {
+            "operator": "and_",
+            "state": {
+                "operator": "and_",
+                "type": {"any_": ["RUNNING"]},
+            },
+            "start_time": {"before_": "2023-12-31T08:30:00+00:00"},
+        }
+    }
+    with patch("proxy.main.requests.post") as mock_post:
+        get_long_running_flows(request, nhours, start_time_str)
+    mock_post.assert_called_once_with(
+        f"{root}/flow_runs/filter", json=request_parameters, timeout=10
+    )
