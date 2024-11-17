@@ -1016,5 +1016,5 @@ def test_get_long_running_flows():
     with patch("proxy.main.requests.post") as mock_post:
         get_long_running_flows(request, nhours, start_time_str)
     mock_post.assert_called_once_with(
-        f"{root}/flow_runs/filter", json=request_parameters, timeout=10
+        f"{root}/flow_runs/filter", json=request_parameters, timeout=30
     )
