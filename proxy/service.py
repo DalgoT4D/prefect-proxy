@@ -3,20 +3,21 @@
 import os
 import queue
 from time import sleep
+from datetime import datetime, timedelta
+import pytz
 import requests
 from fastapi import HTTPException
 
-from prefect.deployments import Deployment, run_deployment
+from prefect.deployments import run_deployment
 from prefect import flow
 from prefect.server.schemas.schedules import CronSchedule
 from prefect.server.schemas.states import Cancelled
 from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
 from prefect.client import get_client
-from prefect_airbyte import AirbyteServer
 from prefect.runner.storage import GitRepository
+from prefect_airbyte import AirbyteServer
 import pendulum
-from datetime import datetime
 
 from prefect_gcp import GcpCredentials
 from prefect_dbt.cli.configs import TargetConfigs
@@ -858,13 +859,15 @@ def traverse_flow_run_graph(flow_run_id: str, flow_runs: list) -> list:
     if len(flow_graph_data) == 0:
         return flow_runs
 
-    for flow in flow_graph_data:
+    for the_flow in flow_graph_data:
         if (
-            "state" in flow
-            and "state_details" in flow["state"]
-            and flow["state"]["state_details"]["child_flow_run_id"]
+            "state" in the_flow
+            and "state_details" in the_flow["state"]
+            and the_flow["state"]["state_details"]["child_flow_run_id"]
         ):
-            traverse_flow_run_graph(flow["state"]["state_details"]["child_flow_run_id"], flow_runs)
+            traverse_flow_run_graph(
+                the_flow["state"]["state_details"]["child_flow_run_id"], flow_runs
+            )
 
     return flow_runs
 
@@ -1103,6 +1106,28 @@ def delete_flow_run(flow_run_id: str) -> dict:
         logger.exception(err)
         raise PrefectException("failed to cancel flow-run") from err
     return None
+
+
+def get_long_running_flow_runs(nhours: int, start_time_str: str):
+    """Get long-running Flow Runs. the start_time, if provided, must be in ISO-8601 format"""
+    if start_time_str:
+        start_time = datetime.fromisoformat(start_time_str)
+    else:
+        start_time = datetime.now()
+    nhoursago = start_time - timedelta(seconds=nhours * 3600)
+    request_parameters = {
+        "flow_runs": {
+            "operator": "and_",
+            "state": {
+                "operator": "and_",
+                "type": {"any_": ["RUNNING"]},
+            },
+            "start_time": {"before_": nhoursago.astimezone(pytz.utc).isoformat()},
+        }
+    }
+    # logger.info(request_parameters)
+    flow_runs = prefect_post("flow_runs/filter", request_parameters)
+    return flow_runs
 
 
 def get_current_prefect_version() -> str:

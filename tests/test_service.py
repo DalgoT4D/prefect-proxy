@@ -59,6 +59,7 @@ from proxy.service import (
     cancel_flow_run,
     get_flow_run_logs_v2,
     retry_flow_run,
+    get_long_running_flow_runs,
 )
 
 
@@ -1537,3 +1538,22 @@ def test_retry_flow_run(mock_pendulum: Mock, mock_prefect_post: Mock):
             },
         },
     )
+
+
+def test_get_long_running_flow_runs():
+    """Test the get_long_running_flow_runs function."""
+    nhours = 10
+    start_time_str = "2024-01-01T00:00:00+05:30"
+    request_parameters = {
+        "flow_runs": {
+            "operator": "and_",
+            "state": {
+                "operator": "and_",
+                "type": {"any_": ["RUNNING"]},
+            },
+            "start_time": {"before_": "2023-12-31T08:30:00+00:00"},
+        }
+    }
+    with patch("proxy.service.prefect_post") as mock_prefect_post:
+        get_long_running_flow_runs(nhours, start_time_str)
+    mock_prefect_post.assert_called_once_with("flow_runs/filter", request_parameters)

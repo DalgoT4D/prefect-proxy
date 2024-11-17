@@ -37,6 +37,7 @@ from proxy.service import (
     update_dbt_cli_profile,
     get_dbt_cli_profile,
     delete_flow_run,
+    get_long_running_flow_runs,
     get_current_prefect_version,
 )
 from proxy.schemas import (
@@ -800,3 +801,10 @@ def get_prefect_version(request: Request):
     except Exception as error:
         logger.exception(error)
     return ver
+
+
+@app.get("/proxy/flow_runs/long-running/{nhours}")
+def get_long_running_flows(request: Request, nhours: int, start_time_str: str = ""):
+    """Get long-running Flow Runs. the start_time, if provided, must be in ISO-8601 format"""
+    flow_runs = get_long_running_flow_runs(nhours, start_time_str)
+    return {"flow_runs": flow_runs}
