@@ -3,8 +3,6 @@
 import os
 import re
 import base64
-from datetime import datetime, timedelta
-import pytz
 import requests
 from fastapi import FastAPI, HTTPException, Request
 from prefect_airbyte import AirbyteConnection

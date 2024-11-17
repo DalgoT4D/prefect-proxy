@@ -859,13 +859,15 @@ def traverse_flow_run_graph(flow_run_id: str, flow_runs: list) -> list:
     if len(flow_graph_data) == 0:
         return flow_runs
 
-    for flow in flow_graph_data:
+    for the_flow in flow_graph_data:
         if (
-            "state" in flow
-            and "state_details" in flow["state"]
-            and flow["state"]["state_details"]["child_flow_run_id"]
+            "state" in the_flow
+            and "state_details" in the_flow["state"]
+            and the_flow["state"]["state_details"]["child_flow_run_id"]
         ):
-            traverse_flow_run_graph(flow["state"]["state_details"]["child_flow_run_id"], flow_runs)
+            traverse_flow_run_graph(
+                the_flow["state"]["state_details"]["child_flow_run_id"], flow_runs
+            )
 
     return flow_runs
 
