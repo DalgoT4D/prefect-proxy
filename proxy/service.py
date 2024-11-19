@@ -962,6 +962,11 @@ def get_flow_run_tasks(flow_run_id: str) -> dict:
                 "state_name": run_obj["state_name"],
                 "start_time": run["start_time"],
                 "end_time": run["end_time"],
+                "parameters": (
+                    run_obj["parameters"]["payload"]
+                    if "parameters" in run_obj and "payload" in run_obj["parameters"]
+                    else None
+                ),
             }
         )
 
