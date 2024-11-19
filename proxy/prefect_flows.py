@@ -14,6 +14,7 @@ from prefect_airbyte.flows import (
     reset_connection,
     reset_connection_streams,
     update_connection_schema,
+    clear_connection,
 )
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_airbyte.connections import ResetStream
@@ -81,6 +82,34 @@ def run_airbyte_conn_reset(payload: dict):
         )
         result = reset_connection(connection_block)
         logger.info("airbyte connection reset result=")
+        logger.info(result)
+        return result
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job <num> failed."
+        raise
+
+
+# task config for a airbyte reset operation
+# {
+#     type AIRBYTECONNECTION,
+#     slug: "airbyte-clear"
+#     airbyte_server_block:  str
+#     connection_id: str
+#     timeout: int
+# }
+@flow
+def run_airbyte_conn_clear(payload: dict):
+    """reset an airbyte connection"""
+    try:
+        airbyte_server_block = payload["airbyte_server_block"]
+        serverblock = AirbyteServer.load(airbyte_server_block)
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=payload["connection_id"],
+            timeout=payload["timeout"] or 15,
+        )
+        result = clear_connection(connection_block)
+        logger.info("airbyte connection clear result=")
         logger.info(result)
         return result
     except Exception as error:  # skipcq PYL-W0703
@@ -297,6 +326,9 @@ def deployment_schedule_flow_v4(config: dict, dbt_blocks: list = [], airbyte_blo
                         run_airbyte_conn_reset(task_config)
                 elif task_config["slug"] == "airbyte-sync":
                     run_airbyte_connection_flow_v1(task_config)
+
+                elif task_config["slug"] == "airbyte-clear":
+                    run_airbyte_conn_clear(task_config)
 
                 elif task_config["slug"] == "update-schema":
                     run_refresh_schema_flow(
