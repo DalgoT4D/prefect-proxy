@@ -143,6 +143,24 @@ def dbtjob(dbt_op_name: str, command: str):
     if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
         os.unlink(dbt_op.profiles_dir / "profiles.yml")
 
+    tunnel = sshtunnel.SSHTunnelForwarder(
+        ("15.206.94.142", 22),
+        remote_bind_address=("dalgo-staging-warehouses", 5432),
+        # ...and credentials
+        ssh_pkey="/Users/fatchat/tech4dev/ec2-instances/staging/ddp.pem",
+        ssh_username="ddp",
+        # ssh_password=conn_info.get("ssh_password"),
+        # ssh_private_key_password=conn_info.get("ssh_private_key_password"),
+    )
+    tunnel.start()
+
+    cli_profile_block = DbtCliProfile.load("rc-dev-postgres-dbtrepo")
+
+    extras = cli_profile_block.target_configs.extras
+    extras["host"] = tunnel.local_bind_address[0]
+    extras["port"] = tunnel.local_bind_address[1]
+    cli_profile_block.target_configs.extras = extras
+
     try:
         return dbt_op.run()
     except Exception:  # skipcq PYL-W0703

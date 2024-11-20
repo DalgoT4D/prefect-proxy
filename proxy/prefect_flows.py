@@ -205,30 +205,46 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
     # load the cli block first
     cli_profile_block = DbtCliProfile.load(task_config["cli_profile_block"])
 
-    dbt_op: DbtCoreOperation = DbtCoreOperation(
-        commands=task_config["commands"],
-        env=task_config["env"],
-        working_dir=task_config["working_dir"],
-        profiles_dir=task_config["profiles_dir"],
-        project_dir=task_config["project_dir"],
-        dbt_cli_profile=cli_profile_block,
-    )
-    logger.info("running dbtjob with DBT_TEST_FAILED update")
+    extras = cli_profile_block.target_configs.extras
 
-    if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
-        os.unlink(dbt_op.profiles_dir / "profiles.yml")
+    with sshtunnel.SSHTunnelForwarder(
+        ("15.206.94.142", 22),
+        remote_bind_address=(extras["host"], extras["port"]),
+        # ...and credentials
+        ssh_pkey="/Users/fatchat/tech4dev/ec2-instances/staging/ddp.pem",
+        ssh_username="ddp",
+        # ssh_password=conn_info.get("ssh_password"),
+        # ssh_private_key_password=conn_info.get("ssh_private_key_password"),
+    ) as tunnel:
 
-    try:
-        return dbt_op.run()
-    except Exception:  # skipcq PYL-W0703
-        if task_config["slug"] == "dbt-test":
-            return State(
-                type=StateType.COMPLETED,
-                name="DBT_TEST_FAILED",
-                message="WARNING: dbt test failed",
-            )
+        extras["host"] = tunnel.local_bind_address[0]
+        extras["port"] = tunnel.local_bind_address[1]
+        cli_profile_block.target_configs.extras = extras
 
-        raise
+        dbt_op: DbtCoreOperation = DbtCoreOperation(
+            commands=task_config["commands"],
+            env=task_config["env"],
+            working_dir=task_config["working_dir"],
+            profiles_dir=task_config["profiles_dir"],
+            project_dir=task_config["project_dir"],
+            dbt_cli_profile=cli_profile_block,
+        )
+        logger.info("running dbtjob with DBT_TEST_FAILED update")
+
+        if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
+            os.unlink(dbt_op.profiles_dir / "profiles.yml")
+
+        try:
+            return dbt_op.run()
+        except Exception:  # skipcq PYL-W0703
+            if task_config["slug"] == "dbt-test":
+                return State(
+                    type=StateType.COMPLETED,
+                    name="DBT_TEST_FAILED",
+                    message="WARNING: dbt test failed",
+                )
+
+            raise
 
 
 # =============================================================================
