@@ -23,6 +23,7 @@ from prefect_dbt.cli import DbtCliProfile
 from proxy.helpers import CustomLogger
 from prefect_dbt.cloud import DbtCloudJob, DbtCloudCredentials
 from prefect_dbt.cloud.jobs import run_dbt_cloud_job
+
 logger = CustomLogger("prefect-proxy")
 
 
@@ -232,36 +233,35 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
 
         raise
 
+
 @task(name="dbtcloudjob_v1", task_run_name="dbtcloudjob-{task_slug}")
 def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """Create a dbt Cloud Credentials block and a dbt Cloud Job block"""
 
-    block_name = f"dbtcloudjob-{task_slug}-{task_config["orgtask_uuid"]}"
+    block_name = f"dbtcloudjob-{task_slug}-{task_config['orgtask_uuid']}"
+
     credentials_block = DbtCloudCredentials.load(f"{block_name}-creds")
 
     if credentials_block is not None:
         raise ValueError(f"Credentials block '{block_name}-creds' already exists!")
-    
-    #saving dbt cloud credentials to a block
-    DbtCloudCredentials(
-        api_key=task_config["api_key"],
-        account_id=task_config["account_id"]
-    ).save(f"{block_name}-creds")
-    
+
+    # saving dbt cloud credentials to a block
+    DbtCloudCredentials(api_key=task_config["api_key"], account_id=task_config["account_id"]).save(
+        f"{block_name}-creds"
+    )
+
     # creating dbt cloud job block.
     dbt_cloud_credentials = DbtCloudCredentials.load(f"{block_name}-creds")
-    DbtCloudJob(
-        dbt_cloud_credentials=dbt_cloud_credentials,
-        job_id=task_config["job_id"]
-    ).save(block_name)
-
-    # Trigger the job run 
-    dbt_cloud_job =  DbtCloudJob.load(block_name)
-    result =  run_dbt_cloud_job(
-        dbt_cloud_job=dbt_cloud_job,
-        targeted_retries=0
+    DbtCloudJob(dbt_cloud_credentials=dbt_cloud_credentials, job_id=task_config["job_id"]).save(
+        block_name
     )
+
+    # Trigger the job run
+    dbt_cloud_job = DbtCloudJob.load(block_name)
+    result = run_dbt_cloud_job(dbt_cloud_job=dbt_cloud_job, targeted_retries=0)
     return result
+
+
 # =============================================================================
 # task config for a shell operation
 # {
@@ -345,7 +345,7 @@ def deployment_schedule_flow_v4(config: dict, dbt_blocks: list = [], airbyte_blo
 
             elif task_config["type"] == DBTCLOUD:
                 dbtcloudjob_v1(task_config, task_config["slug"])
-                
+
             elif task_config["type"] == SHELLOPERATION:
                 shellopjob(task_config, task_config["slug"])
 
