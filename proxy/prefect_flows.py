@@ -21,8 +21,8 @@ from prefect_airbyte.connections import ResetStream
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
 from proxy.helpers import CustomLogger
-from prefect_dbt.cloud import DbtCloudJob, DbtCloudCredentials
-from prefect_dbt.cloud.jobs import run_dbt_cloud_job
+from prefect_dbt.cloud import DbtCloudCredentials
+from prefect_dbt.cloud.jobs import trigger_dbt_cloud_job_run
 
 logger = CustomLogger("prefect-proxy")
 
@@ -32,7 +32,7 @@ AIRBYTESERVER = "Airbyte Server"
 AIRBYTECONNECTION = "Airbyte Connection"
 SHELLOPERATION = "Shell Operation"
 DBTCORE = "dbt Core Operation"
-DBTCLOUD = "dbt Cloud Operation"
+DBTCLOUD = "dbt Cloud Job"
 
 
 # =============================================================================
@@ -194,6 +194,8 @@ def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
 #     commands: list
 #     cli_profile_block: str
 #     cli_args: list = []
+#     dbt_cloud_creds_block: str | None ### cloud related
+#     dbt_cloud_job_id: str | None ### cloud related
 #     flow_name: str
 #     flow_run_name: str
 # }
@@ -234,32 +236,38 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
         raise
 
 
+# =============================================================================
+# tasks
+# task config for a dbt cloud operation
+# {
+#     type: DBTCORE,
+#     slug: str
+#     profiles_dir: str | None
+#     project_dir: str | None
+#     working_dir: str | None
+#     env: dict | None
+#     commands: list | None
+#     cli_profile_block: str | None
+#     cli_args: list = []
+#     dbt_cloud_creds_block: str | None ### cloud related
+#     dbt_cloud_job_id: str | None ### cloud related
+#     flow_name: str
+#     flow_run_name: str
+# }
 @task(name="dbtcloudjob_v1", task_run_name="dbtcloudjob-{task_slug}")
 def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """Create a dbt Cloud Credentials block and a dbt Cloud Job block"""
 
-    block_name = f"dbtcloudjob-{task_slug}-{task_config['orgtask_uuid']}"
+    try:
+        # load the cloud credentials
+        dbt_cloud_creds = DbtCloudCredentials.load(task_config["dbt_cloud_creds_block"])
 
-    credentials_block = DbtCloudCredentials.load(f"{block_name}-creds")
+        result = trigger_dbt_cloud_job_run(dbt_cloud_creds, task_config["dbt_cloud_job_id"])
 
-    if credentials_block is not None:
-        raise ValueError(f"Credentials block '{block_name}-creds' already exists!")
-
-    # saving dbt cloud credentials to a block
-    DbtCloudCredentials(api_key=task_config["api_key"], account_id=task_config["account_id"]).save(
-        f"{block_name}-creds"
-    )
-
-    # creating dbt cloud job block.
-    dbt_cloud_credentials = DbtCloudCredentials.load(f"{block_name}-creds")
-    DbtCloudJob(dbt_cloud_credentials=dbt_cloud_credentials, job_id=task_config["job_id"]).save(
-        block_name
-    )
-
-    # Trigger the job run
-    dbt_cloud_job = DbtCloudJob.load(block_name)
-    result = run_dbt_cloud_job(dbt_cloud_job=dbt_cloud_job, targeted_retries=0)
-    return result
+        return result
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job <num> failed."
+        raise
 
 
 # =============================================================================
