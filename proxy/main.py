@@ -39,6 +39,8 @@ from proxy.service import (
     delete_flow_run,
     get_long_running_flow_runs,
     get_current_prefect_version,
+    patch_dbt_cloud_creds_block,
+    get_dbt_cloud_creds_block,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -54,6 +56,7 @@ from proxy.schemas import (
     PrefectSecretBlockCreate,
     PrefectSecretBlockEdit,
     DbtCliProfileBlockCreate,
+    DbtCloudCredsBlockPatch,
     DeploymentUpdate2,
     DbtCliProfileBlockUpdate,
     RunAirbyteResetConnection,
@@ -808,3 +811,43 @@ def get_long_running_flows(request: Request, nhours: int, start_time_str: str = 
     """Get long-running Flow Runs. the start_time, if provided, must be in ISO-8601 format"""
     flow_runs = get_long_running_flow_runs(nhours, start_time_str)
     return {"flow_runs": flow_runs}
+
+
+# =============================================================================
+@app.patch("/proxy/blocks/dbtcloudcreds/")
+async def patch_dbt_cloud_creds(request: Request, payload: DbtCloudCredsBlockPatch):
+    """
+    create a new DbtCloudCredentials with this block name,
+    if the name already exists overwrite the new details with this name
+    """
+    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
+    if not isinstance(payload, DbtCloudCredsBlockPatch):
+        raise TypeError("payload is invalid")
+    try:
+        _, block_id, cleaned_blockname = await patch_dbt_cloud_creds_block(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to save dbt cloud credentials block"
+        ) from error
+    logger.info(
+        "Saved new dbt cloud credentials block with ID: %s and name: %s",
+        block_id,
+        cleaned_blockname,
+    )
+    return {"block_id": block_id, "block_name": cleaned_blockname}
+
+
+@app.get("/proxy/blocks/dbtcloudcreds/{block_name}")
+async def get_dbt_cloud_creds(request: Request, block_name: str):
+    """Fetches the dbt cloud creds block"""
+    if not isinstance(block_name, str):
+        raise TypeError("block name is invalid")
+    try:
+        data = await get_dbt_cloud_creds_block(block_name)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch dbt cloud creds block"
+        ) from error
+    return data
