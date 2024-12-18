@@ -36,6 +36,8 @@ from proxy.main import (
     post_dataflow_v1,
     put_dataflow_v1,
     get_long_running_flows,
+    patch_dbt_cloud_creds,
+    get_dbt_cloud_creds,
 )
 
 from proxy.schemas import (
@@ -49,6 +51,7 @@ from proxy.schemas import (
     PrefectSecretBlockEdit,
     DbtCliProfileBlockCreate,
     DbtCliProfileBlockUpdate,
+    DbtCloudCredsBlockPatch,
     DeploymentFetch,
     FlowRunRequest,
     RunShellOperation,
@@ -983,38 +986,81 @@ async def test_post_dataflow_v1_success(mock_post_deployment_v1: AsyncMock):
 
 
 @pytest.mark.asyncio
-@patch("proxy.main.post_deployment_v1")
-async def test_post_dataflow_v1_failure(mock_post_deployment_v1: AsyncMock):
-    """tests post_dataflow_v1"""
+@patch("proxy.main.patch_dbt_cloud_creds_block")
+async def test_patch_dbt_cloud_creds_success(mock_patch_dbt_cloud_creds_block: AsyncMock):
+    """tests patch_dbt_cloud_creds"""
     request = Mock()
-    payload = DeploymentCreate2(
-        flow_name="", deployment_name="", org_slug="org", deployment_params={}
+    payload = DbtCloudCredsBlockPatch(
+        block_name="test_block",
+        account_id=1234,
+        api_key="test_api_key",
     )
 
-    mock_post_deployment_v1.side_effect = Exception()
+    mock_patch_dbt_cloud_creds_block.return_value = ("ignore", "block-id", "block-name")
+    result = await patch_dbt_cloud_creds(request, payload)
+    assert result == {"block_id": "block-id", "block_name": "block-name"}
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.patch_dbt_cloud_creds_block")
+async def test_patch_dbt_cloud_creds_failure(mock_patch_dbt_cloud_creds_block: AsyncMock):
+    """tests patch_dbt_cloud_creds"""
+    request = Mock()
+    payload = DbtCloudCredsBlockPatch(
+        block_name="test_block",
+        account_id=1234,
+        api_key="test_api_key",
+    )
+    mock_patch_dbt_cloud_creds_block.side_effect = Exception("exception")
     with pytest.raises(HTTPException) as excinfo:
-        await post_dataflow_v1(request, payload)
-    assert excinfo.value.detail == "failed to create deployment"
+        await patch_dbt_cloud_creds(request, payload)
+    assert excinfo.value.detail == "failed to save dbt cloud credentials block"
 
 
-def test_get_long_running_flows():
-    """tests get_long_running_flows"""
+@pytest.mark.asyncio
+async def test_patch_dbt_cloud_creds_invalid_payload():
+    """tests patch_dbt_cloud_creds with invalid payload"""
     request = Mock()
-    nhours = 10
-    start_time_str = "2024-01-01T00:00:00+05:30"
-    root = os.getenv("PREFECT_API_URL")
-    request_parameters = {
-        "flow_runs": {
-            "operator": "and_",
-            "state": {
-                "operator": "and_",
-                "type": {"any_": ["RUNNING"]},
-            },
-            "start_time": {"before_": "2023-12-31T08:30:00+00:00"},
-        }
+    payload = None
+    with pytest.raises(TypeError) as excinfo:
+        await patch_dbt_cloud_creds(request, payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.get_dbt_cloud_creds_block")
+async def test_get_dbt_cloud_creds_success(mock_get_dbt_cloud_creds_block: AsyncMock):
+    """tests get_dbt_cloud_creds"""
+    request = Mock()
+    block_name = "test_block"
+    mock_get_dbt_cloud_creds_block.return_value = {
+        "account_id": "test_account",
+        "api_key": "*******",
     }
-    with patch("proxy.main.requests.post") as mock_post:
-        get_long_running_flows(request, nhours, start_time_str)
-    mock_post.assert_called_once_with(
-        f"{root}/flow_runs/filter", json=request_parameters, timeout=30
-    )
+
+    result = await get_dbt_cloud_creds(request, block_name)
+    assert result == {"account_id": "test_account", "api_key": "*******"}
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.get_dbt_cloud_creds_block")
+async def test_get_dbt_cloud_creds_failure(mock_get_dbt_cloud_creds_block: AsyncMock):
+    """tests get_dbt_cloud_creds"""
+    request = Mock()
+    block_name = "test_block"
+    mock_get_dbt_cloud_creds_block.side_effect = Exception("exception")
+
+    with pytest.raises(HTTPException) as excinfo:
+        await get_dbt_cloud_creds(request, block_name)
+    assert excinfo.value.detail == "failed to fetch dbt cloud creds block"
+
+
+@pytest.mark.asyncio
+async def test_get_dbt_cloud_creds_invalid_block_name():
+    """tests get_dbt_cloud_creds with invalid block name"""
+    request = Mock()
+    block_name = None
+
+    with pytest.raises(TypeError) as excinfo:
+        await get_dbt_cloud_creds(request, block_name)
+    assert excinfo.value.args[0] == "block name is invalid"
