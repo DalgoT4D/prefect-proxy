@@ -1147,15 +1147,14 @@ async def patch_dbt_cloud_creds_block(
     payload: DbtCloudCredsBlockPatch,
 ) -> dict:
     """credentials are decrypted by now"""
-    if not (isinstance(payload, DbtCloudCredsBlockPatch)):
+    if not isinstance(payload, DbtCloudCredsBlockPatch):
         raise TypeError("payload is of wrong type")
 
     dbt_cloud_creds_block = None
     try:
         # load the block if its created
         dbt_cloud_creds_block = await DbtCloudCredentials.load(payload.block_name)
-    except Exception as error:
-        pass
+    except Exception:
         logger.info("no dbt cloud creds block named %s creating a new one", payload.block_name)
 
     try:

@@ -257,7 +257,6 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
 @task(name="dbtcloudjob_v1", task_run_name="dbtcloudjob-{task_slug}")
 def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """Create a dbt Cloud Credentials block and a dbt Cloud Job block"""
-
     try:
         # load the cloud credentials
         dbt_cloud_creds = DbtCloudCredentials.load(task_config["dbt_cloud_creds_block"])
