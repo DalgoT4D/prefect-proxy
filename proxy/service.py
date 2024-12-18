@@ -24,6 +24,7 @@ from prefect_dbt.cli.configs import TargetConfigs
 from prefect_dbt.cli.configs import BigQueryTargetConfigs
 from prefect_dbt.cli.commands import DbtCoreOperation
 from prefect_dbt.cli import DbtCliProfile
+from prefect_dbt.cloud.credentials import DbtCloudCredentials
 from dotenv import load_dotenv
 
 
@@ -39,6 +40,7 @@ from proxy.schemas import (
     DbtCliProfileBlockCreate,
     DbtCliProfileBlockUpdate,
     DeploymentUpdate2,
+    DbtCloudCredsBlockPatch,
 )
 
 
@@ -1138,3 +1140,58 @@ def get_long_running_flow_runs(nhours: int, start_time_str: str):
 def get_current_prefect_version() -> str:
     """Fetch deployment and its details"""
     return prefect_get(f"admin/version")
+
+
+# ================================================================================================
+async def patch_dbt_cloud_creds_block(
+    payload: DbtCloudCredsBlockPatch,
+) -> dict:
+    """credentials are decrypted by now"""
+    if not isinstance(payload, DbtCloudCredsBlockPatch):
+        raise TypeError("payload is of wrong type")
+
+    dbt_cloud_creds_block = None
+    try:
+        # load the block if its created
+        dbt_cloud_creds_block = await DbtCloudCredentials.load(payload.block_name)
+    except Exception:
+        logger.info("no dbt cloud creds block named %s creating a new one", payload.block_name)
+
+    try:
+        if dbt_cloud_creds_block is None:
+            dbt_cloud_creds_block = DbtCloudCredentials(
+                api_key=payload.api_key,
+                account_id=payload.account_id,
+            )
+        else:
+            if payload.api_key:
+                dbt_cloud_creds_block.api_key = payload.api_key
+            if payload.account_id:
+                dbt_cloud_creds_block.account_id = payload.account_id
+
+        cleaned_blockname = cleaned_name_for_prefectblock(payload.block_name)
+        await dbt_cloud_creds_block.save(
+            cleaned_blockname,
+            overwrite=True,
+        )
+
+        return dbt_cloud_creds_block, _block_id(dbt_cloud_creds_block), cleaned_blockname
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to create dbt cli profile") from error
+
+
+async def get_dbt_cloud_creds_block(block_name: str) -> dict:
+    """look up a dbt cloud creds block by name and return the configuration"""
+    if not isinstance(block_name, str):
+        raise TypeError("blockname must be a string")
+
+    try:
+        block = await DbtCloudCredentials.load(block_name)
+        return block
+    except ValueError:
+        # pylint: disable=raise-missing-from
+        raise HTTPException(
+            status_code=404,
+            detail=f"No dbt cloud credentials block found named {block_name}",
+        )

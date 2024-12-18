@@ -276,3 +276,11 @@ class ScheduleFlowRunRequest(BaseModel):
 
     runParams: dict
     scheduledTime: datetime = None  # by default it will be scheduled to run now
+
+
+class DbtCloudCredsBlockPatch(BaseModel):
+    """payload to create a dbt cloud credentials block"""
+
+    block_name: str
+    account_id: int = None
+    api_key: str = None
