@@ -41,9 +41,11 @@ from proxy.service import (
     get_current_prefect_version,
     patch_dbt_cloud_creds_block,
     get_dbt_cloud_creds_block,
+    update_airbyte_server_block,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
+    AirbyteServerUpdate,
     DbtCoreCreate,
     DbtCoreCredentialUpdate,
     DbtCoreSchemaUpdate,
@@ -238,6 +240,25 @@ async def post_airbyte_server(request: Request, payload: AirbyteServerCreate):
         raise TypeError("payload is invalid")
     try:
         block_id, cleaned_block_name = await create_airbyte_server_block(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to create airbyte server block"
+        ) from error
+    logger.info("Created new airbyte server block with ID: %s", block_id)
+    return {"block_id": block_id, "cleaned_block_name": cleaned_block_name}
+
+
+@app.put("/proxy/blocks/airbyte/server/")
+async def put_airbyte_server(request: Request, payload: AirbyteServerUpdate):
+    """
+    create a new airbyte server block with this block name,
+    raise an exception if the name is already in use
+    """
+    if not isinstance(payload, AirbyteServerUpdate):
+        raise TypeError("payload is invalid")
+    try:
+        block_id, cleaned_block_name = await update_airbyte_server_block(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
