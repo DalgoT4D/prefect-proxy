@@ -262,7 +262,7 @@ async def update_airbyte_server_block(payload: AirbyteServerUpdate):
         logger.exception(error)
         raise PrefectException("failed to update airbyte server block") from error
     logger.info("updated airbyte server block named %s", payload.blockName)
-    return _block_id(airbyteservercblock), airbyteservercblock
+    return _block_id(airbyteservercblock), payload.blockName
 
 
 def delete_airbyte_server_block(blockid: str):

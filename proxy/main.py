@@ -262,7 +262,7 @@ async def put_airbyte_server(request: Request, payload: AirbyteServerUpdate):
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
-            status_code=400, detail="failed to create airbyte server block"
+            status_code=400, detail="failed to update airbyte server block"
         ) from error
     logger.info("Created new airbyte server block with ID: %s", block_id)
     return {"block_id": block_id, "cleaned_block_name": cleaned_block_name}

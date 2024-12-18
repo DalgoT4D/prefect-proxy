@@ -19,6 +19,7 @@ from proxy.main import (
     get_flowrun,
     get_read_deployment,
     post_airbyte_server,
+    put_airbyte_server,
     post_create_deployment_flow_run,
     post_dbtcore,
     post_dbtcli_profile,
@@ -42,6 +43,7 @@ from proxy.main import (
 
 from proxy.schemas import (
     AirbyteServerCreate,
+    AirbyteServerUpdate,
     DbtCoreCreate,
     DbtCoreCredentialUpdate,
     DbtProfileCreate,
@@ -269,6 +271,45 @@ async def test_post_airbyte_server_with_invalid_payload():
     with pytest.raises(TypeError) as excinfo:
         await post_airbyte_server(request, payload)
     assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
+async def test_put_airbyte_server_invalid_payload():
+    payload = None
+    request = client.request("PUT", "/")
+    with pytest.raises(TypeError) as excinfo:
+        await put_airbyte_server(request, payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
+async def test_put_airbyte_server_exception():
+    payload = AirbyteServerUpdate(
+        blockName="testserver",
+        serverHost="http://test-server.com",
+        serverPort=8000,
+        apiVersion="v1",
+    )
+    request = client.request("PUT", "/")
+    with patch("proxy.main.update_airbyte_server_block", side_effect=Exception("test error")):
+        with pytest.raises(HTTPException) as excinfo:
+            await put_airbyte_server(request, payload)
+        assert excinfo.value.status_code == 400
+        assert excinfo.value.detail == "failed to update airbyte server block"
+
+
+@pytest.mark.asyncio
+async def test_put_airbyte_server_success():
+    payload = AirbyteServerUpdate(
+        blockName="testserver",
+        serverHost="http://test-server.com",
+        serverPort=8000,
+        apiVersion="v1",
+    )
+    request = client.request("PUT", "/")
+    with patch("proxy.main.update_airbyte_server_block", return_value=("12345", "testserver")):
+        response = await put_airbyte_server(request, payload)
+        assert response == {"block_id": "12345", "cleaned_block_name": "testserver"}
 
 
 @pytest.mark.asyncio
