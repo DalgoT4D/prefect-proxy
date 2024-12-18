@@ -194,8 +194,6 @@ def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
 #     commands: list
 #     cli_profile_block: str
 #     cli_args: list = []
-#     dbt_cloud_creds_block: str | None ### cloud related
-#     dbt_cloud_job_id: str | None ### cloud related
 #     flow_name: str
 #     flow_run_name: str
 # }
@@ -240,15 +238,8 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
 # tasks
 # task config for a dbt cloud operation
 # {
-#     type: DBTCORE,
+#     type: DBTCLOUDJOB,
 #     slug: str
-#     profiles_dir: str | None
-#     project_dir: str | None
-#     working_dir: str | None
-#     env: dict | None
-#     commands: list | None
-#     cli_profile_block: str | None
-#     cli_args: list = []
 #     dbt_cloud_creds_block: str | None ### cloud related
 #     dbt_cloud_job_id: str | None ### cloud related
 #     flow_name: str
