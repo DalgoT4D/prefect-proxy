@@ -32,6 +32,7 @@ from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock
 from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
+    AirbyteServerUpdate,
     DbtCoreCreate,
     DeploymentCreate2,
     DeploymentUpdate,
@@ -234,11 +235,34 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate):
     return _block_id(airbyteservercblock), block_name_for_save
 
 
-def update_airbyte_server_block(blockname: str):
-    """We don't update server blocks"""
-    if not isinstance(blockname, str):
-        raise TypeError("blockname must be a string")
-    raise PrefectException("not implemented")
+async def update_airbyte_server_block(payload: AirbyteServerUpdate):
+    """Create airbyte server block in prefect"""
+    if not isinstance(payload, AirbyteServerUpdate):
+        raise TypeError("payload must be an AirbyteServerUpdate")
+    try:
+        airbyteservercblock: AirbyteServer = await AirbyteServer.load(payload.blockName)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("no airbyte server block named " + payload.blockName) from error
+
+    try:
+        if payload.serverHost:
+            airbyteservercblock.server_host = payload.serverHost
+        if payload.serverPort:
+            airbyteservercblock.server_port = payload.serverPort
+        if payload.apiVersion:
+            airbyteservercblock.api_version = payload.apiVersion
+        if payload.username:
+            airbyteservercblock.username = payload.username
+        if payload.password:
+            airbyteservercblock.password = payload.password
+
+        await airbyteservercblock.save(payload.blockName, overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to update airbyte server block") from error
+    logger.info("updated airbyte server block named %s", payload.blockName)
+    return _block_id(airbyteservercblock), payload.blockName
 
 
 def delete_airbyte_server_block(blockid: str):

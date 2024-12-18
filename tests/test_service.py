@@ -10,6 +10,7 @@ import pendulum
 from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
+    AirbyteServerUpdate,
     DbtCoreCreate,
     DbtProfileCreate,
     DbtProfileUpdate,
@@ -61,6 +62,20 @@ from proxy.service import (
     retry_flow_run,
     get_long_running_flow_runs,
 )
+
+
+class MockAirbyteServer:
+    def __init__(self, server_host, server_port, api_version):
+        pass
+
+    async def save(self, block_name, **kwargs):
+        pass
+
+    async def load(self, block_name, **kwargs):
+        pass
+
+    def dict(self):
+        return {"_block_document_id": "expected_server_block_id"}
 
 
 def test_prefect_post_invalid_endpoint():
@@ -295,17 +310,6 @@ async def test_get_airbyte_server_block_id_non_string_blockname():
         await get_airbyte_server_block_id(123)
 
 
-class MockAirbyteServer:
-    def __init__(self, server_host, server_port, api_version):
-        pass
-
-    async def save(self, block_name):
-        pass
-
-    def dict(self):
-        return {"_block_document_id": "expected_block_id"}
-
-
 @pytest.mark.asyncio
 async def test_get_airbyte_server_block_paramcheck():
     blockname = "test_blockname"
@@ -333,7 +337,7 @@ async def test_create_airbyte_server_block():
         apiVersion="test_version",
     )
     result = await create_airbyte_server_block(payload)
-    assert result == ("expected_block_id", "testblock")
+    assert result == ("expected_server_block_id", "testblock")
 
 
 @pytest.mark.asyncio
@@ -361,6 +365,54 @@ async def test_create_airbyte_server_block_invalid_payload():
     assert str(excinfo.value) == "payload must be an AirbyteServerCreate"
 
 
+@pytest.mark.asyncio
+@patch("proxy.service.AirbyteServer", new=MockAirbyteServer)
+async def test_put_airbyte_server_block():
+    payload = AirbyteServerUpdate(
+        blockName="testblock",
+        serverHost="test_host",
+        serverPort=1234,
+        apiVersion="test_version",
+    )
+    with patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock) as mock_load, patch(
+        "proxy.service.AirbyteServer.save", new_callable=AsyncMock
+    ) as mock_save:
+        mock_load.return_value = MockAirbyteServer(
+            payload.serverHost, payload.serverPort, payload.apiVersion
+        )
+        result = await update_airbyte_server_block(payload)
+        print(result)
+        assert result == ("expected_server_block_id", "testblock")
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.AirbyteServer", new=MockAirbyteServer)
+async def test_put_airbyte_server_block_failure():
+    payload = AirbyteServerUpdate(
+        blockName="test_block",
+        serverHost="test_host",
+        serverPort=1234,
+        apiVersion="test_version",
+    )
+    with patch("proxy.service.AirbyteServer.save", new_callable=AsyncMock) as mock_save, patch(
+        "proxy.service.AirbyteServer.load", new_callable=AsyncMock
+    ) as mock_load:
+        mock_load.return_value = "expected_block_id"
+        mock_save.side_effect = Exception("failed to update airbyte server block")
+        with pytest.raises(Exception) as excinfo:
+            await update_airbyte_server_block(payload)
+        assert str(excinfo.value) == "failed to update airbyte server block"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.AirbyteServer", new=MockAirbyteServer)
+async def test_put_airbyte_server_block_invalid_payload():
+    payload = "invalid_payload"
+    with pytest.raises(TypeError) as excinfo:
+        await update_airbyte_server_block(payload)
+    assert str(excinfo.value) == "payload must be an AirbyteServerUpdate"
+
+
 @patch("proxy.service.prefect_delete")
 def test_delete_airbyte_server_block(mock_prefect_delete):
     blockid = "test_blockid"
@@ -376,30 +428,6 @@ def test_delete_airbyte_server_block_invalid_blockid():
 
 
 # =================================================================================================
-def test_update_airbyte_server_block_must_be_string():
-    with pytest.raises(TypeError) as excinfo:
-        update_airbyte_server_block(123)
-    assert str(excinfo.value) == "blockname must be a string"
-
-
-def test_update_airbyte_server_block_not_implemented():
-    with pytest.raises(PrefectException) as excinfo:
-        update_airbyte_server_block("blockname")
-    assert str(excinfo.value) == "not implemented"
-
-
-# =================================================================================================
-
-
-class MockAirbyteServer:
-    def __init__(self, server_host, server_port, api_version):
-        pass
-
-    async def save(self, block_name):
-        pass
-
-    def dict(self):
-        return {"_block_document_id": "expected_server_block_id"}
 
 
 class MockAirbyteConnection:
