@@ -332,6 +332,8 @@ async def _create_dbt_cli_profile(
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
         extras = payload.credentials
+        if "schema" in extras:
+            del extras["schema"]
         extras["user"] = extras["username"]
         target_configs = TargetConfigs(
             type="postgres",
@@ -409,6 +411,8 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
                 dbtcli_block.target_configs.extras["user"] = dbtcli_block.target_configs.extras[
                     "username"
                 ]
+                if "schema" in dbtcli_block.target_configs.extras:
+                    del dbtcli_block.target_configs.extras["schema"]
 
             elif payload.wtype == "bigquery":
                 dbcredentials = GcpCredentials(service_account_info=payload.credentials)
