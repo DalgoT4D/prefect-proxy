@@ -635,7 +635,7 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
             schedules=(
                 [{"schedule": CronSchedule(cron=payload.cron), "active": True}]
                 if payload.cron
-                else None
+                else []
             ),
         )
 
@@ -650,47 +650,25 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     }
 
 
-def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:
-    """create a deployment from a flow and a schedule"""
-    if not isinstance(payload, DeploymentUpdate):
-        raise TypeError("payload must be a DeploymentUpdate")
-
-    logger.info(payload)
-
-    schedule = CronSchedule(cron=payload.cron).dict() if payload.cron else None
-
-    payload = {
-        "schedule": schedule,
-        "parameters": {
-            "airbyte_blocks": payload.connection_blocks,
-            "dbt_blocks": payload.dbt_blocks,
-        },
-    }
-
-    # res will be any empty json if success since status code is 204
-    res = prefect_patch(f"deployments/{deployment_id}", payload)
-    logger.info("Update deployment with ID: %s", deployment_id)
-    return res
-
-
 def put_deployment_v1(deployment_id: str, payload: DeploymentUpdate2) -> dict:
     """
     update a deployment's schedule / work queue / work pool / other paramters
-    the work pool must already exist
-    work queues are created on the fly
+
+    work pool and work queue should already exist for the deployment,
+    so here they are patch style updated
     """
     if not isinstance(payload, DeploymentUpdate2):
         raise TypeError("payload must be a DeploymentUpdate2")
 
-    logger.info(payload)
-
     newpayload = {}
 
-    if payload.deployment_params:
-        newpayload["parameters"] = payload.deployment_params
+    newpayload["parameters"] = payload.deployment_params if payload.deployment_params else {}
 
-    if payload.cron:
-        newpayload["schedule"] = CronSchedule(cron=payload.cron).dict()
+    newpayload["schedules"] = (
+        [{"schedule": CronSchedule(cron=payload.cron).dict(), "active": True}]
+        if payload.cron
+        else []
+    )
 
     if payload.work_pool_name:
         newpayload["work_pool_name"] = payload.work_pool_name
