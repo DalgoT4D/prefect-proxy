@@ -16,7 +16,6 @@ from proxy.schemas import (
     DbtProfileUpdate,
     DbtCliProfileBlockUpdate,
     DeploymentCreate2,
-    DeploymentUpdate,
     DeploymentUpdate2,
     PrefectSecretBlockCreate,
 )

@@ -35,7 +35,6 @@ from proxy.schemas import (
     AirbyteServerUpdate,
     DbtCoreCreate,
     DeploymentCreate2,
-    DeploymentUpdate,
     PrefectSecretBlockCreate,
     PrefectSecretBlockEdit,
     DbtCliProfileBlockCreate,

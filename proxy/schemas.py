@@ -220,14 +220,6 @@ class DeploymentCreate2(BaseModel):
     work_pool_name: str = None
 
 
-class DeploymentUpdate(BaseModel):
-    """parameters to create a deployment from a flow"""
-
-    connection_blocks: list
-    dbt_blocks: list
-    cron: str = None
-
-
 class DeploymentUpdate2(BaseModel):
     """parameters to create a deployment from a flow"""
 
