@@ -1070,7 +1070,7 @@ def test_put_deployment_v1(mock_prefect_patch):
     mock_prefect_patch.assert_called_once_with(
         "deployments/deployment-id",
         {
-            "schedule": CronSchedule(cron="* * * * *").dict(),
+            "schedules": [{"schedule": CronSchedule(cron="* * * * *").dict(), "active": True}],
             "parameters": {"param1": "value1"},
             "work_pool_name": "pool-name",
             "work_queue_name": "queue-name",
