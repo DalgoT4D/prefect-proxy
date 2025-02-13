@@ -16,7 +16,6 @@ from proxy.schemas import (
     DbtProfileUpdate,
     DbtCliProfileBlockUpdate,
     DeploymentCreate2,
-    DeploymentUpdate,
     DeploymentUpdate2,
     PrefectSecretBlockCreate,
 )
@@ -50,7 +49,6 @@ from proxy.service import (
     update_bigquery_credentials,
     update_target_configs_schema,
     post_deployment_v1,
-    put_deployment,
     put_deployment_v1,
     get_deployment,
     CronSchedule,
@@ -1071,34 +1069,12 @@ def test_put_deployment_v1(mock_prefect_patch):
     mock_prefect_patch.assert_called_once_with(
         "deployments/deployment-id",
         {
-            "schedule": CronSchedule(cron="* * * * *").dict(),
+            "schedules": [{"schedule": CronSchedule(cron="* * * * *").dict(), "active": True}],
             "parameters": {"param1": "value1"},
             "work_pool_name": "pool-name",
             "work_queue_name": "queue-name",
         },
     )
-
-
-def test_put_deployment_bad_param():
-    payload = 123
-    with pytest.raises(TypeError) as excinfo:
-        put_deployment("deployment-id", payload)
-    assert str(excinfo.value) == "payload must be a DeploymentUpdate"
-
-
-@patch("proxy.service.prefect_patch")
-def test_put_deployment(mock_patch: Mock):
-    payload = DeploymentUpdate(cron="* * * * *", connection_blocks=[], dbt_blocks=[])
-    mock_patch.return_value = "retval"
-    response = put_deployment("deployment-id", payload)
-    mock_patch.assert_called_once_with(
-        "deployments/deployment-id",
-        {
-            "schedule": CronSchedule(cron="* * * * *").dict(),
-            "parameters": {"airbyte_blocks": [], "dbt_blocks": []},
-        },
-    )
-    assert response == "retval"
 
 
 def test_get_deployment_bad_param():
