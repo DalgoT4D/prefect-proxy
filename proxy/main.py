@@ -42,6 +42,8 @@ from proxy.service import (
     patch_dbt_cloud_creds_block,
     get_dbt_cloud_creds_block,
     update_airbyte_server_block,
+    filter_late_flow_runs,
+    filter_prefect_workers,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -63,6 +65,8 @@ from proxy.schemas import (
     DbtCliProfileBlockUpdate,
     RunAirbyteResetConnection,
     ScheduleFlowRunRequest,
+    FilterLateFlowRuns,
+    FilterPrefectWorkers,
 )
 from proxy.flows import run_airbyte_connection_flow
 
@@ -563,6 +567,19 @@ def get_flow_runs(request: Request, deployment_id: str, limit: int = 0, start_ti
     return {"flow_runs": flow_runs}
 
 
+@app.post("/proxy/flow_runs/late")
+def post_late_flow_runs(request: Request, query: FilterLateFlowRuns):
+    """Get Late flow Runs"""
+    try:
+        flow_runs = filter_late_flow_runs(payload=query)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch flow_runs for deployment"
+        ) from error
+    return {"flow_runs": flow_runs}
+
+
 @app.get("/proxy/flow_runs/{flow_run_id}")
 def get_flow_run_by_id(request: Request, flow_run_id):
     """Get a flow run"""
@@ -866,6 +883,18 @@ async def get_dbt_cloud_creds(request: Request, block_name: str):
         raise TypeError("block name is invalid")
     try:
         data = await get_dbt_cloud_creds_block(block_name)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch dbt cloud creds block"
+        ) from error
+    return data
+
+
+@app.post("/proxy/workers/filter")
+def post_filter_prefect_workers(request: Request, payload: FilterPrefectWorkers):
+    try:
+        data = filter_prefect_workers(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
