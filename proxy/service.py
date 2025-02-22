@@ -780,38 +780,41 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int, start_time_gt
 
 
 def filter_late_flow_runs(payload: FilterLateFlowRuns) -> list[dict]:
-    query = {
+    query_payload = {
         "sort": "START_TIME_DESC",
         "flow_runs": {
             "operator": "and_",
             "state": {"name": {"any_": ["Late"]}},
+            "id": {"not_any_": payload.exclude_flow_run_ids},
         },
     }
 
     if payload.deployment_id:
-        query["deployments"] = {"id": {"any_": [payload.deployment_id]}}
+        query_payload["deployments"] = {"id": {"any_": [payload.deployment_id]}}
 
     if payload.work_pool_name:
-        query["work_pools"] = {"name": {"any": [payload.work_pool_name]}}
+        query_payload["work_pools"] = {"name": {"any_": [payload.work_pool_name]}}
 
     if payload.work_queue_name:
-        query["work_pool_queues"] = {"name": {"any": [payload.work_queue_name]}}
+        query_payload["work_pool_queues"] = {"name": {"any_": [payload.work_queue_name]}}
 
     if payload.limit and payload.limit > 0:
-        query["limit"] = payload.limit
+        query_payload["limit"] = payload.limit
 
     if payload.before_start_time:
-        query["flow_runs"]["expected_start_time"] = {"before_": payload.before_start_time}
+        query_payload["flow_runs"]["expected_start_time"] = {
+            "before_": str(payload.before_start_time)
+        }
 
     if payload.after_start_time:
-        query["flow_runs"]["expected_start_time"] = query["flow_runs"].get(
+        query_payload["flow_runs"]["expected_start_time"] = query_payload["flow_runs"].get(
             "expected_start_time", {}
         )
-        query["flow_runs"]["expected_start_time"]["after_"] = payload.after_start_time
+        query_payload["flow_runs"]["expected_start_time"]["after_"] = str(payload.after_start_time)
 
     try:
-        result = prefect_post("flow_runs/filter", query)
-
+        logger.info(f"Query payload {query_payload}")
+        result = prefect_post("flow_runs/filter", query_payload)
     except Exception as error:
         logger.exception(error)
         raise PrefectException(f"failed to fetch late flow_runs for {payload.dict()}") from error
@@ -827,8 +830,8 @@ def filter_late_flow_runs(payload: FilterLateFlowRuns) -> list[dict]:
                 "expectedStartTime": flow_run["expected_start_time"],
                 "totalRunTime": flow_run["total_run_time"],
                 "estimatedRunTime": flow_run["estimated_run_time"],
-                "work_queue_name": flow_run["work_queue_name"],
-                "work_pool_name": flow_run["work_pool_name"],
+                "workQueueName": flow_run["work_queue_name"],
+                "workPoolName": flow_run["work_pool_name"],
                 "deployment_id": flow_run["deployment_id"],
             }
         )

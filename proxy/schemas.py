@@ -298,6 +298,7 @@ class FilterLateFlowRuns(BaseModel):
     limit: int = 1
     before_start_time: datetime = None
     after_start_time: datetime = None
+    exclude_flow_run_ids: list[str] = []
 
 
 class FilterPrefectWorkers(BaseModel):
