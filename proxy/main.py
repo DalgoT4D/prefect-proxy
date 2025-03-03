@@ -891,13 +891,14 @@ async def get_dbt_cloud_creds(request: Request, block_name: str):
     return data
 
 
-@app.post("/proxy/workers/filter")
-def post_filter_prefect_workers(request: Request, payload: FilterPrefectWorkers):
+@app.post("/proxy/workers/filter/")
+def post_filter_prefect_workers(payload: FilterPrefectWorkers):
     try:
-        data = filter_prefect_workers(payload)
+        count = filter_prefect_workers(payload)
+        logger.info(f"Found {count} workers")
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
             status_code=400, detail="failed to fetch dbt cloud creds block"
         ) from error
-    return data
+    return {"count": count}

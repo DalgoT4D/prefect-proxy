@@ -1,5 +1,6 @@
 """interface with prefect's python client api"""
 
+import subprocess
 import os
 import queue
 from time import sleep
@@ -1265,9 +1266,18 @@ async def get_dbt_cloud_creds_block(block_name: str) -> dict:
 
 
 def filter_prefect_workers(payload: FilterPrefectWorkers) -> list[dict]:
-    """Filter prefect workers"""
-    workers: list[dict] = []
-    for work_pool_name in payload.work_pool_names:
-        query = {"workers": {"status": {"any_": [payload.status]}}}
-
-    return workers
+    """Filter prefect workers using pm2 processses. Prefect api doesn't let you filter workers by queue name"""
+    try:
+        logger.info(payload)
+        # Run the pm2 list command and capture the output
+        result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, text=True)
+        # Filter the output to count the number of processes with the specified name
+        count = sum(
+            1
+            for line in result.stdout.splitlines()
+            if any(queue_name in line for queue_name in payload.work_queue_names)
+        )
+        return count
+    except Exception as e:
+        print(f"An error occurred while fetching workers: {e}")
+        return 0
