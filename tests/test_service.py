@@ -10,12 +10,12 @@ import pendulum
 from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
+    AirbyteServerUpdate,
     DbtCoreCreate,
     DbtProfileCreate,
     DbtProfileUpdate,
     DbtCliProfileBlockUpdate,
     DeploymentCreate2,
-    DeploymentUpdate,
     DeploymentUpdate2,
     PrefectSecretBlockCreate,
 )
@@ -49,7 +49,6 @@ from proxy.service import (
     update_bigquery_credentials,
     update_target_configs_schema,
     post_deployment_v1,
-    put_deployment,
     put_deployment_v1,
     get_deployment,
     CronSchedule,
@@ -61,6 +60,20 @@ from proxy.service import (
     retry_flow_run,
     get_long_running_flow_runs,
 )
+
+
+class MockAirbyteServer:
+    def __init__(self, server_host, server_port, api_version):
+        pass
+
+    async def save(self, block_name, **kwargs):
+        pass
+
+    async def load(self, block_name, **kwargs):
+        pass
+
+    def dict(self):
+        return {"_block_document_id": "expected_server_block_id"}
 
 
 def test_prefect_post_invalid_endpoint():
@@ -295,17 +308,6 @@ async def test_get_airbyte_server_block_id_non_string_blockname():
         await get_airbyte_server_block_id(123)
 
 
-class MockAirbyteServer:
-    def __init__(self, server_host, server_port, api_version):
-        pass
-
-    async def save(self, block_name):
-        pass
-
-    def dict(self):
-        return {"_block_document_id": "expected_block_id"}
-
-
 @pytest.mark.asyncio
 async def test_get_airbyte_server_block_paramcheck():
     blockname = "test_blockname"
@@ -333,7 +335,7 @@ async def test_create_airbyte_server_block():
         apiVersion="test_version",
     )
     result = await create_airbyte_server_block(payload)
-    assert result == ("expected_block_id", "testblock")
+    assert result == ("expected_server_block_id", "testblock")
 
 
 @pytest.mark.asyncio
@@ -361,6 +363,54 @@ async def test_create_airbyte_server_block_invalid_payload():
     assert str(excinfo.value) == "payload must be an AirbyteServerCreate"
 
 
+@pytest.mark.asyncio
+@patch("proxy.service.AirbyteServer", new=MockAirbyteServer)
+async def test_put_airbyte_server_block():
+    payload = AirbyteServerUpdate(
+        blockName="testblock",
+        serverHost="test_host",
+        serverPort=1234,
+        apiVersion="test_version",
+    )
+    with patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock) as mock_load, patch(
+        "proxy.service.AirbyteServer.save", new_callable=AsyncMock
+    ) as mock_save:
+        mock_load.return_value = MockAirbyteServer(
+            payload.serverHost, payload.serverPort, payload.apiVersion
+        )
+        result = await update_airbyte_server_block(payload)
+        print(result)
+        assert result == ("expected_server_block_id", "testblock")
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.AirbyteServer", new=MockAirbyteServer)
+async def test_put_airbyte_server_block_failure():
+    payload = AirbyteServerUpdate(
+        blockName="test_block",
+        serverHost="test_host",
+        serverPort=1234,
+        apiVersion="test_version",
+    )
+    with patch("proxy.service.AirbyteServer.save", new_callable=AsyncMock) as mock_save, patch(
+        "proxy.service.AirbyteServer.load", new_callable=AsyncMock
+    ) as mock_load:
+        mock_load.return_value = "expected_block_id"
+        mock_save.side_effect = Exception("failed to update airbyte server block")
+        with pytest.raises(Exception) as excinfo:
+            await update_airbyte_server_block(payload)
+        assert str(excinfo.value) == "failed to update airbyte server block"
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.AirbyteServer", new=MockAirbyteServer)
+async def test_put_airbyte_server_block_invalid_payload():
+    payload = "invalid_payload"
+    with pytest.raises(TypeError) as excinfo:
+        await update_airbyte_server_block(payload)
+    assert str(excinfo.value) == "payload must be an AirbyteServerUpdate"
+
+
 @patch("proxy.service.prefect_delete")
 def test_delete_airbyte_server_block(mock_prefect_delete):
     blockid = "test_blockid"
@@ -376,30 +426,6 @@ def test_delete_airbyte_server_block_invalid_blockid():
 
 
 # =================================================================================================
-def test_update_airbyte_server_block_must_be_string():
-    with pytest.raises(TypeError) as excinfo:
-        update_airbyte_server_block(123)
-    assert str(excinfo.value) == "blockname must be a string"
-
-
-def test_update_airbyte_server_block_not_implemented():
-    with pytest.raises(PrefectException) as excinfo:
-        update_airbyte_server_block("blockname")
-    assert str(excinfo.value) == "not implemented"
-
-
-# =================================================================================================
-
-
-class MockAirbyteServer:
-    def __init__(self, server_host, server_port, api_version):
-        pass
-
-    async def save(self, block_name):
-        pass
-
-    def dict(self):
-        return {"_block_document_id": "expected_server_block_id"}
 
 
 class MockAirbyteConnection:
@@ -1043,34 +1069,12 @@ def test_put_deployment_v1(mock_prefect_patch):
     mock_prefect_patch.assert_called_once_with(
         "deployments/deployment-id",
         {
-            "schedule": CronSchedule(cron="* * * * *").dict(),
+            "schedules": [{"schedule": CronSchedule(cron="* * * * *").dict(), "active": True}],
             "parameters": {"param1": "value1"},
             "work_pool_name": "pool-name",
             "work_queue_name": "queue-name",
         },
     )
-
-
-def test_put_deployment_bad_param():
-    payload = 123
-    with pytest.raises(TypeError) as excinfo:
-        put_deployment("deployment-id", payload)
-    assert str(excinfo.value) == "payload must be a DeploymentUpdate"
-
-
-@patch("proxy.service.prefect_patch")
-def test_put_deployment(mock_patch: Mock):
-    payload = DeploymentUpdate(cron="* * * * *", connection_blocks=[], dbt_blocks=[])
-    mock_patch.return_value = "retval"
-    response = put_deployment("deployment-id", payload)
-    mock_patch.assert_called_once_with(
-        "deployments/deployment-id",
-        {
-            "schedule": CronSchedule(cron="* * * * *").dict(),
-            "parameters": {"airbyte_blocks": [], "dbt_blocks": []},
-        },
-    )
-    assert response == "retval"
 
 
 def test_get_deployment_bad_param():

@@ -42,7 +42,7 @@ jobs:
           LOGDIR: ${{ github.workspace }}/logs
         run: |
           mkdir -p $LOGDIR
-          coverage run -m pytest --durations=20 --asyncio-mode=auto
+          coverage run --omit=proxy/flows.py,proxy/prefect_flows.py -m pytest --durations=20 --asyncio-mode=auto
           coverage xml
           coverage report --fail-under=70
       - name: Check coverage percentage

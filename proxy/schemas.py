@@ -14,6 +14,17 @@ class AirbyteServerCreate(BaseModel):
     apiVersion: str
 
 
+class AirbyteServerUpdate(BaseModel):
+    """payload to create an airbyte server block"""
+
+    blockName: str
+    serverHost: str = None
+    serverPort: str = None
+    apiVersion: str = None
+    username: str = None
+    password: str = None
+
+
 class AirbyteServerBlockResponse(BaseModel):
     """response from the airbyte server block"""
 
@@ -207,14 +218,6 @@ class DeploymentCreate2(BaseModel):
     cron: str = None
     work_queue_name: str = None
     work_pool_name: str = None
-
-
-class DeploymentUpdate(BaseModel):
-    """parameters to create a deployment from a flow"""
-
-    connection_blocks: list
-    dbt_blocks: list
-    cron: str = None
 
 
 class DeploymentUpdate2(BaseModel):

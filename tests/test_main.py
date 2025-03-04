@@ -19,6 +19,7 @@ from proxy.main import (
     get_flowrun,
     get_read_deployment,
     post_airbyte_server,
+    put_airbyte_server,
     post_create_deployment_flow_run,
     post_dbtcore,
     post_dbtcli_profile,
@@ -36,10 +37,13 @@ from proxy.main import (
     post_dataflow_v1,
     put_dataflow_v1,
     get_long_running_flows,
+    patch_dbt_cloud_creds,
+    get_dbt_cloud_creds,
 )
 
 from proxy.schemas import (
     AirbyteServerCreate,
+    AirbyteServerUpdate,
     DbtCoreCreate,
     DbtCoreCredentialUpdate,
     DbtProfileCreate,
@@ -49,6 +53,7 @@ from proxy.schemas import (
     PrefectSecretBlockEdit,
     DbtCliProfileBlockCreate,
     DbtCliProfileBlockUpdate,
+    DbtCloudCredsBlockPatch,
     DeploymentFetch,
     FlowRunRequest,
     RunShellOperation,
@@ -266,6 +271,45 @@ async def test_post_airbyte_server_with_invalid_payload():
     with pytest.raises(TypeError) as excinfo:
         await post_airbyte_server(request, payload)
     assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
+async def test_put_airbyte_server_invalid_payload():
+    payload = None
+    request = client.request("PUT", "/")
+    with pytest.raises(TypeError) as excinfo:
+        await put_airbyte_server(request, payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
+async def test_put_airbyte_server_exception():
+    payload = AirbyteServerUpdate(
+        blockName="testserver",
+        serverHost="http://test-server.com",
+        serverPort=8000,
+        apiVersion="v1",
+    )
+    request = client.request("PUT", "/")
+    with patch("proxy.main.update_airbyte_server_block", side_effect=Exception("test error")):
+        with pytest.raises(HTTPException) as excinfo:
+            await put_airbyte_server(request, payload)
+        assert excinfo.value.status_code == 400
+        assert excinfo.value.detail == "failed to update airbyte server block"
+
+
+@pytest.mark.asyncio
+async def test_put_airbyte_server_success():
+    payload = AirbyteServerUpdate(
+        blockName="testserver",
+        serverHost="http://test-server.com",
+        serverPort=8000,
+        apiVersion="v1",
+    )
+    request = client.request("PUT", "/")
+    with patch("proxy.main.update_airbyte_server_block", return_value=("12345", "testserver")):
+        response = await put_airbyte_server(request, payload)
+        assert response == {"block_id": "12345", "cleaned_block_name": "testserver"}
 
 
 @pytest.mark.asyncio
@@ -983,38 +1027,81 @@ async def test_post_dataflow_v1_success(mock_post_deployment_v1: AsyncMock):
 
 
 @pytest.mark.asyncio
-@patch("proxy.main.post_deployment_v1")
-async def test_post_dataflow_v1_failure(mock_post_deployment_v1: AsyncMock):
-    """tests post_dataflow_v1"""
+@patch("proxy.main.patch_dbt_cloud_creds_block")
+async def test_patch_dbt_cloud_creds_success(mock_patch_dbt_cloud_creds_block: AsyncMock):
+    """tests patch_dbt_cloud_creds"""
     request = Mock()
-    payload = DeploymentCreate2(
-        flow_name="", deployment_name="", org_slug="org", deployment_params={}
+    payload = DbtCloudCredsBlockPatch(
+        block_name="test_block",
+        account_id=1234,
+        api_key="test_api_key",
     )
 
-    mock_post_deployment_v1.side_effect = Exception()
+    mock_patch_dbt_cloud_creds_block.return_value = ("ignore", "block-id", "block-name")
+    result = await patch_dbt_cloud_creds(request, payload)
+    assert result == {"block_id": "block-id", "block_name": "block-name"}
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.patch_dbt_cloud_creds_block")
+async def test_patch_dbt_cloud_creds_failure(mock_patch_dbt_cloud_creds_block: AsyncMock):
+    """tests patch_dbt_cloud_creds"""
+    request = Mock()
+    payload = DbtCloudCredsBlockPatch(
+        block_name="test_block",
+        account_id=1234,
+        api_key="test_api_key",
+    )
+    mock_patch_dbt_cloud_creds_block.side_effect = Exception("exception")
     with pytest.raises(HTTPException) as excinfo:
-        await post_dataflow_v1(request, payload)
-    assert excinfo.value.detail == "failed to create deployment"
+        await patch_dbt_cloud_creds(request, payload)
+    assert excinfo.value.detail == "failed to save dbt cloud credentials block"
 
 
-def test_get_long_running_flows():
-    """tests get_long_running_flows"""
+@pytest.mark.asyncio
+async def test_patch_dbt_cloud_creds_invalid_payload():
+    """tests patch_dbt_cloud_creds with invalid payload"""
     request = Mock()
-    nhours = 10
-    start_time_str = "2024-01-01T00:00:00+05:30"
-    root = os.getenv("PREFECT_API_URL")
-    request_parameters = {
-        "flow_runs": {
-            "operator": "and_",
-            "state": {
-                "operator": "and_",
-                "type": {"any_": ["RUNNING"]},
-            },
-            "start_time": {"before_": "2023-12-31T08:30:00+00:00"},
-        }
+    payload = None
+    with pytest.raises(TypeError) as excinfo:
+        await patch_dbt_cloud_creds(request, payload)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.get_dbt_cloud_creds_block")
+async def test_get_dbt_cloud_creds_success(mock_get_dbt_cloud_creds_block: AsyncMock):
+    """tests get_dbt_cloud_creds"""
+    request = Mock()
+    block_name = "test_block"
+    mock_get_dbt_cloud_creds_block.return_value = {
+        "account_id": "test_account",
+        "api_key": "*******",
     }
-    with patch("proxy.main.requests.post") as mock_post:
-        get_long_running_flows(request, nhours, start_time_str)
-    mock_post.assert_called_once_with(
-        f"{root}/flow_runs/filter", json=request_parameters, timeout=30
-    )
+
+    result = await get_dbt_cloud_creds(request, block_name)
+    assert result == {"account_id": "test_account", "api_key": "*******"}
+
+
+@pytest.mark.asyncio
+@patch("proxy.main.get_dbt_cloud_creds_block")
+async def test_get_dbt_cloud_creds_failure(mock_get_dbt_cloud_creds_block: AsyncMock):
+    """tests get_dbt_cloud_creds"""
+    request = Mock()
+    block_name = "test_block"
+    mock_get_dbt_cloud_creds_block.side_effect = Exception("exception")
+
+    with pytest.raises(HTTPException) as excinfo:
+        await get_dbt_cloud_creds(request, block_name)
+    assert excinfo.value.detail == "failed to fetch dbt cloud creds block"
+
+
+@pytest.mark.asyncio
+async def test_get_dbt_cloud_creds_invalid_block_name():
+    """tests get_dbt_cloud_creds with invalid block name"""
+    request = Mock()
+    block_name = None
+
+    with pytest.raises(TypeError) as excinfo:
+        await get_dbt_cloud_creds(request, block_name)
+    assert excinfo.value.args[0] == "block name is invalid"

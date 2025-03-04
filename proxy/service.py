@@ -32,9 +32,9 @@ from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock
 from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
+    AirbyteServerUpdate,
     DbtCoreCreate,
     DeploymentCreate2,
-    DeploymentUpdate,
     PrefectSecretBlockCreate,
     PrefectSecretBlockEdit,
     DbtCliProfileBlockCreate,
@@ -234,11 +234,34 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate):
     return _block_id(airbyteservercblock), block_name_for_save
 
 
-def update_airbyte_server_block(blockname: str):
-    """We don't update server blocks"""
-    if not isinstance(blockname, str):
-        raise TypeError("blockname must be a string")
-    raise PrefectException("not implemented")
+async def update_airbyte_server_block(payload: AirbyteServerUpdate):
+    """Create airbyte server block in prefect"""
+    if not isinstance(payload, AirbyteServerUpdate):
+        raise TypeError("payload must be an AirbyteServerUpdate")
+    try:
+        airbyteservercblock: AirbyteServer = await AirbyteServer.load(payload.blockName)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("no airbyte server block named " + payload.blockName) from error
+
+    try:
+        if payload.serverHost:
+            airbyteservercblock.server_host = payload.serverHost
+        if payload.serverPort:
+            airbyteservercblock.server_port = payload.serverPort
+        if payload.apiVersion:
+            airbyteservercblock.api_version = payload.apiVersion
+        if payload.username:
+            airbyteservercblock.username = payload.username
+        if payload.password:
+            airbyteservercblock.password = payload.password
+
+        await airbyteservercblock.save(payload.blockName, overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to update airbyte server block") from error
+    logger.info("updated airbyte server block named %s", payload.blockName)
+    return _block_id(airbyteservercblock), payload.blockName
 
 
 def delete_airbyte_server_block(blockid: str):
@@ -308,6 +331,8 @@ async def _create_dbt_cli_profile(
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
         extras = payload.credentials
+        if "schema" in extras:
+            del extras["schema"]
         extras["user"] = extras["username"]
         target_configs = TargetConfigs(
             type="postgres",
@@ -385,6 +410,8 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
                 dbtcli_block.target_configs.extras["user"] = dbtcli_block.target_configs.extras[
                     "username"
                 ]
+                if "schema" in dbtcli_block.target_configs.extras:
+                    del dbtcli_block.target_configs.extras["schema"]
 
             elif payload.wtype == "bigquery":
                 dbcredentials = GcpCredentials(service_account_info=payload.credentials)
@@ -607,7 +634,7 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
             schedules=(
                 [{"schedule": CronSchedule(cron=payload.cron), "active": True}]
                 if payload.cron
-                else None
+                else []
             ),
         )
 
@@ -622,47 +649,25 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     }
 
 
-def put_deployment(deployment_id: str, payload: DeploymentUpdate) -> dict:
-    """create a deployment from a flow and a schedule"""
-    if not isinstance(payload, DeploymentUpdate):
-        raise TypeError("payload must be a DeploymentUpdate")
-
-    logger.info(payload)
-
-    schedule = CronSchedule(cron=payload.cron).dict() if payload.cron else None
-
-    payload = {
-        "schedule": schedule,
-        "parameters": {
-            "airbyte_blocks": payload.connection_blocks,
-            "dbt_blocks": payload.dbt_blocks,
-        },
-    }
-
-    # res will be any empty json if success since status code is 204
-    res = prefect_patch(f"deployments/{deployment_id}", payload)
-    logger.info("Update deployment with ID: %s", deployment_id)
-    return res
-
-
 def put_deployment_v1(deployment_id: str, payload: DeploymentUpdate2) -> dict:
     """
     update a deployment's schedule / work queue / work pool / other paramters
-    the work pool must already exist
-    work queues are created on the fly
+
+    work pool and work queue should already exist for the deployment,
+    so here they are patch style updated
     """
     if not isinstance(payload, DeploymentUpdate2):
         raise TypeError("payload must be a DeploymentUpdate2")
 
-    logger.info(payload)
-
     newpayload = {}
 
-    if payload.deployment_params:
-        newpayload["parameters"] = payload.deployment_params
+    newpayload["parameters"] = payload.deployment_params if payload.deployment_params else {}
 
-    if payload.cron:
-        newpayload["schedule"] = CronSchedule(cron=payload.cron).dict()
+    newpayload["schedules"] = (
+        [{"schedule": CronSchedule(cron=payload.cron).dict(), "active": True}]
+        if payload.cron
+        else []
+    )
 
     if payload.work_pool_name:
         newpayload["work_pool_name"] = payload.work_pool_name
@@ -1147,15 +1152,14 @@ async def patch_dbt_cloud_creds_block(
     payload: DbtCloudCredsBlockPatch,
 ) -> dict:
     """credentials are decrypted by now"""
-    if not (isinstance(payload, DbtCloudCredsBlockPatch)):
+    if not isinstance(payload, DbtCloudCredsBlockPatch):
         raise TypeError("payload is of wrong type")
 
     dbt_cloud_creds_block = None
     try:
         # load the block if its created
         dbt_cloud_creds_block = await DbtCloudCredentials.load(payload.block_name)
-    except Exception as error:
-        pass
+    except Exception:
         logger.info("no dbt cloud creds block named %s creating a new one", payload.block_name)
 
     try:
