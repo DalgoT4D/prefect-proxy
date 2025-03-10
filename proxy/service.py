@@ -829,6 +829,7 @@ async def post_deployment_flow_run(
             deployment_id,
             timeout=0,
             parameters=run_params,
+            scheduled_time=(scheduled_time + timedelta(minutes=1)) if scheduled_time else None,
         )
         return {"flow_run_id": flow_run.id}
     except Exception as exc:
