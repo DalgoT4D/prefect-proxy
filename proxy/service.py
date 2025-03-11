@@ -41,6 +41,7 @@ from proxy.schemas import (
     DbtCliProfileBlockUpdate,
     DeploymentUpdate2,
     DbtCloudCredsBlockPatch,
+    CancelQueuedManualJob
 )
 
 
@@ -1200,3 +1201,20 @@ async def get_dbt_cloud_creds_block(block_name: str) -> dict:
             status_code=404,
             detail=f"No dbt cloud credentials block found named {block_name}",
         )
+
+def cancel_queued_manual_job(flow_run_id: str, payload:CancelQueuedManualJob ):
+    if not isinstance(flow_run_id, str):
+        raise TypeError("flow_run_id must be a string")
+    try:
+        res = prefect_get(f"/api/flow_run_states/{flow_run_id}")
+        if res.type != "PENDING":
+            raise ValueError("Unable to cancel a non-queued job.") 
+
+        prefect_post(
+            f"flow_runs/{flow_run_id}/set_state",
+            payload=payload
+        )
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException("failed to cancel queued job") from err
+    return None
