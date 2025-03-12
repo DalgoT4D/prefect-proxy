@@ -1201,18 +1201,19 @@ async def get_dbt_cloud_creds_block(block_name: str) -> dict:
             status_code=404,
             detail=f"No dbt cloud credentials block found named {block_name}",
         )
+        
 
-def cancel_queued_manual_job(flow_run_id: str, payload:CancelQueuedManualJob ):
+def set_cancel_queued_flow_run(flow_run_id: str, payload:CancelQueuedManualJob ):
     if not isinstance(flow_run_id, str):
         raise TypeError("flow_run_id must be a string")
     try:
-        res = prefect_get(f"/api/flow_run_states/{flow_run_id}")
-        if res.type != "PENDING":
+        flow_run = prefect_get(f"flow_runs/{flow_run_id}")
+        if flow_run.get("state_type") != "PENDING" and flow_run.get("state_type") != "SCHEDULED":
             raise ValueError("Unable to cancel a non-queued job.") 
 
         prefect_post(
             f"flow_runs/{flow_run_id}/set_state",
-            payload=payload
+            payload=payload.dict()
         )
     except Exception as err:
         logger.exception(err)
