@@ -6,7 +6,7 @@ import pytest
 import requests
 from fastapi import HTTPException
 import pendulum
-
+from pydantic import BaseModel
 from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -59,6 +59,7 @@ from proxy.service import (
     get_flow_run_logs_v2,
     retry_flow_run,
     get_long_running_flow_runs,
+    set_cancel_queued_flow_run
 )
 
 
@@ -1561,3 +1562,53 @@ def test_get_long_running_flow_runs():
     with patch("proxy.service.prefect_post") as mock_prefect_post:
         get_long_running_flow_runs(nhours, start_time_str)
     mock_prefect_post.assert_called_once_with("flow_runs/filter", request_parameters)
+
+
+
+
+class PayloadModel(BaseModel):
+    state: dict
+    force: str
+
+@pytest.fixture
+def mock_payload():
+    return PayloadModel(state={"name": "Cancelling", "type": "CANCELLING"}, force="TRUE")
+
+@patch("proxy.service.prefect_get")
+@patch("proxy.service.prefect_post")
+def test_cancel_flow_run_pending(mock_prefect_post, mock_prefect_get, mock_payload):
+    """Test successful cancellation of a PENDING flow run."""
+    mock_prefect_get.return_value = {"state_type": "PENDING"}
+
+    set_cancel_queued_flow_run("valid_flow_run_id", mock_payload)
+
+    mock_prefect_post.assert_called_once_with(
+        "flow_runs/valid_flow_run_id/set_state",
+        payload=mock_payload
+    )
+
+
+@patch("proxy.service.prefect_get")
+@patch("proxy.service.prefect_post")
+def test_cancel_flow_run_scheduled(mock_prefect_post, mock_prefect_get, mock_payload):
+    """Test successful cancellation of a SCHEDULED flow run."""
+    mock_prefect_get.return_value = {"state_type": "SCHEDULED"}
+
+    set_cancel_queued_flow_run("valid_flow_run_id", mock_payload)
+
+    mock_prefect_post.assert_called_once_with(
+        "flow_runs/valid_flow_run_id/set_state",
+        payload=mock_payload
+    )
+
+
+@patch("proxy.service.prefect_get")
+@patch("proxy.service.prefect_post")
+def test_cannot_cancel_non_queued_run(mock_prefect_post, mock_prefect_get, mock_payload):
+    """Test that cancellation fails if the flow run is not PENDING or SCHEDULED."""
+    mock_prefect_get.return_value = {"state_type": "RUNNING"}
+
+    with pytest.raises(ValueError, match="Unable to cancel a non-queued job."):
+        set_cancel_queued_flow_run("valid_flow_run_id", mock_payload)
+
+    mock_prefect_post.assert_not_called()
