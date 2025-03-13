@@ -172,7 +172,7 @@ def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
-            timeout=payload["timeout"] or 80,
+            timeout=80,
         )
         return update_connection_schema(connection_block, catalog_diff=catalog_diff)
     except Exception as error:  # skipcq PYL-W0703
