@@ -298,7 +298,7 @@ class CancelQueuedManualJob(BaseModel):
         type: Literal["CANCELLING"]
 
     state: State
-    force: bool
+    force: str
 
     class Config:
         from_attributes = True
