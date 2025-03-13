@@ -174,8 +174,7 @@ def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
             connection_id=payload["connection_id"],
             timeout=payload["timeout"] or 15,
         )
-        update_connection_schema(connection_block, catalog_diff=catalog_diff)
-        return True
+        return update_connection_schema(connection_block, catalog_diff=catalog_diff)
     except Exception as error:  # skipcq PYL-W0703
         logger.error(str(error))  # "Job <num> failed."
         raise
