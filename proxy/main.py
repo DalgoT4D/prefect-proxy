@@ -42,7 +42,7 @@ from proxy.service import (
     patch_dbt_cloud_creds_block,
     get_dbt_cloud_creds_block,
     update_airbyte_server_block,
-    set_cancel_queued_flow_run
+    set_cancel_queued_flow_run,
 )
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -64,7 +64,7 @@ from proxy.schemas import (
     DbtCliProfileBlockUpdate,
     RunAirbyteResetConnection,
     ScheduleFlowRunRequest,
-    CancelQueuedManualJob
+    CancelQueuedManualJob,
 )
 from proxy.flows import run_airbyte_connection_flow
 
@@ -877,10 +877,10 @@ async def get_dbt_cloud_creds(request: Request, block_name: str):
 
 
 @app.post("/proxy/flow_runs/{flow_run_id}/set_state")
-def cancel_queued_flow_run(request:Request, flow_run_id: str, payload: CancelQueuedManualJob):
+def cancel_queued_flow_run(request: Request, flow_run_id: str, payload: CancelQueuedManualJob):
     """Cancel a queued manual sync"""
     try:
-        set_cancel_queued_flow_run(flow_run_id , payload)
+        set_cancel_queued_flow_run(flow_run_id, payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(

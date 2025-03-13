@@ -59,7 +59,7 @@ from proxy.service import (
     get_flow_run_logs_v2,
     retry_flow_run,
     get_long_running_flow_runs,
-    set_cancel_queued_flow_run
+    set_cancel_queued_flow_run,
 )
 
 
@@ -1564,15 +1564,15 @@ def test_get_long_running_flow_runs():
     mock_prefect_post.assert_called_once_with("flow_runs/filter", request_parameters)
 
 
-
-
 class PayloadModel(BaseModel):
     state: dict
     force: str
 
+
 @pytest.fixture
 def mock_payload():
     return PayloadModel(state={"name": "Cancelling", "type": "CANCELLING"}, force="TRUE")
+
 
 @patch("proxy.service.prefect_get")
 @patch("proxy.service.prefect_post")
@@ -1583,8 +1583,7 @@ def test_cancel_flow_run_pending(mock_prefect_post, mock_prefect_get, mock_paylo
     set_cancel_queued_flow_run("valid_flow_run_id", mock_payload)
 
     mock_prefect_post.assert_called_once_with(
-        "flow_runs/valid_flow_run_id/set_state",
-        payload=mock_payload
+        "flow_runs/valid_flow_run_id/set_state", payload=mock_payload
     )
 
 
@@ -1597,8 +1596,7 @@ def test_cancel_flow_run_scheduled(mock_prefect_post, mock_prefect_get, mock_pay
     set_cancel_queued_flow_run("valid_flow_run_id", mock_payload)
 
     mock_prefect_post.assert_called_once_with(
-        "flow_runs/valid_flow_run_id/set_state",
-        payload=mock_payload
+        "flow_runs/valid_flow_run_id/set_state", payload=mock_payload
     )
 
 

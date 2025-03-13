@@ -290,14 +290,15 @@ class DbtCloudCredsBlockPatch(BaseModel):
     api_key: str = None
 
 
-
 class CancelQueuedManualJob(BaseModel):
     """Payload to cancel a manually queued job"""
+
     class State(BaseModel):
         name: str
-        type: Literal["CANCELLING"]  
+        type: Literal["CANCELLING"]
 
     state: State
-    force: bool 
+    force: bool
+
     class Config:
-        from_attributes = True  
+        from_attributes = True
