@@ -3,6 +3,7 @@
 from uuid import UUID
 from pydantic import BaseModel, Extra
 from datetime import datetime
+from typing import Literal
 
 
 class AirbyteServerCreate(BaseModel):
@@ -287,3 +288,17 @@ class DbtCloudCredsBlockPatch(BaseModel):
     block_name: str
     account_id: int = None
     api_key: str = None
+
+
+class CancelQueuedManualJob(BaseModel):
+    """Payload to cancel a manually queued job"""
+
+    class State(BaseModel):
+        name: str
+        type: Literal["CANCELLING"]
+
+    state: State
+    force: str
+
+    class Config:
+        from_attributes = True
