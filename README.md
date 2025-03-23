@@ -23,6 +23,12 @@ Below are instructions on each the two options
 
 Clone the [Prefect Proxy](https://github.com/DalgoT4D/prefect-proxy) repository
 
+On Ubuntu you may need to install some packages
+
+- `sudo apt install -y libssl-dev liblzma-dev libbz2-dev libncurses-dev libncursesw-dev`
+- `sudo apt install -y libffi-dev git build-essential libreadline-dev libsqlite3-dev`
+- `sudo apt install -y python3-dev python3-pip python3-setuptools python3-wheel`
+
 In the cloned repository, open the terminal and run the following commands:
 
 - `pyenv local 3.10`
@@ -31,7 +37,11 @@ In the cloned repository, open the terminal and run the following commands:
 
 - `source venv/bin/activate`
 
-- `pip install --upgrade pip`
+- `pip install --upgrade pip setuptools wheel`
+
+- `curl https://sh.rustup.rs -sSf | sh`
+
+- Add `$HOME/.cargo/bin` to your `PATH`
 
 - `pip install -r requirements.txt`
 
