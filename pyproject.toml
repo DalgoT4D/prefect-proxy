@@ -12,6 +12,7 @@ dependencies = [
   "dbt-semantic-interfaces",
   "fastapi",
   "gunicorn",
+  "pre-commit>=4.2.0",
   "prefect==3.1.15",
   "prefect-airbyte @ git+https://github.com/Ishankoradia/prefect-airbyte.git",
   "prefect-dbt",
