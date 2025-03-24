@@ -1,4 +1,4 @@
-name: Dalgo CD
+name: Dalgo prefect-proxy CD
 
 on:
   push:
