@@ -1,4 +1,4 @@
-name: Deploy proxy
+name: Dalgo CD
 
 on:
   push:
@@ -7,65 +7,25 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.10"]
 
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v4
+    steps: 
+      - name: Deploy code to EC2 server
+        uses: appleboy/ssh-action@v1.2.0
         with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: Create logs directory
-        run: |
-          mkdir -p logs
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
-        with:
-          enable-cache: true
-
-      - name: Install dependencies
-        run: |
-          uv sync
-  
-      - name: Create known_hosts file
-        run: |
-          mkdir -p ~/.ssh
-          touch ~/.ssh/known_hosts
-
-      - name: Add remote host key to known_hosts
-        run: ssh-keyscan ${{ secrets.SERVERIP }} >> ~/.ssh/known_hosts
-
-      - name: Create Google App credentials file
-        run: |
-          echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > /tmp/google_credentials.json
-
-      - name: Test with pytest
-        env: 
-          GOOGLE_APPLICATION_CREDENTIALS: /tmp/google_credentials.json
-          LOGDIR: ${{ github.workspace }}/logs
-        run: |
-          mkdir -p $LOGDIR
-          uv run coverage run -m pytest --asyncio-mode=auto
-          uv run coverage xml
-          uv run coverage report --fail-under=70
-
-      - name: Upload coverage reports to codecov
-        uses: codecov/codecov-action@v3
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          fail_ci_if_error: true
-
-      - name: Check coverage percentage
-        run: |
-          uv run coverage report --fail-under=70
-          
-      - name: Deploy to EC2
-        run: |
-          eval `ssh-agent -s`
-          ssh-add - <<< "${{ secrets.SSH_PRIVATE_KEY }}"
-          ssh ${{ secrets.SERVER }} "source ~/.nvm/nvm.sh; cd /home/ddp/prefect-proxy; git pull; /home/ddp/.yarn/bin/pm2 restart prefect-proxy"
+          host: ${{ secrets.SERVERIP }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 500s
+          script: |
+            set -e
+            source ~/.nvm/nvm.sh
+            cd /home/ddp/prefect-proxy
+            current_branch=$(git rev-parse --abbrev-ref HEAD)
+            if [ "$current_branch" != "main" ]; then
+              echo "Error: You are not on the main branch. Current branch is $current_branch."
+              exit 1
+            fi
+            git pull
+            /home/ddp/.yarn/bin/pm2 restart prefect-proxy
+            
