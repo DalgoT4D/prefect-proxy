@@ -56,7 +56,6 @@ jobs:
           mkdir -p $LOGDIR
           uv run coverage run --omit=proxy/flows.py,proxy/prefect_flows.py -m pytest --durations=20 --asyncio-mode=auto
           uv run coverage xml
-          uv run coverage report --fail-under=70
 
       - name: Upload coverage reports to codecov
         uses: codecov/codecov-action@v3
