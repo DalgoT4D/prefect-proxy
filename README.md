@@ -31,19 +31,17 @@ On Ubuntu you may need to install some packages
 
 In the cloned repository, open the terminal and run the following commands:
 
-- `pyenv local 3.10`
-
-- `pyenv exec python -m venv venv`
-
-- `source venv/bin/activate`
-
-- `pip install --upgrade pip setuptools wheel`
-
 - `curl https://sh.rustup.rs -sSf | sh`
 
 - Add `$HOME/.cargo/bin` to your `PATH`
 
-- `pip install -r requirements.txt`
+- `pyenv local 3.10`
+
+- `pyenv exec uv venv`
+
+- `source .venv/bin/activate`
+
+- `uv sync`
 
 - create `.env` from `.env.template`
 - set the value for the `LOGDIR` in the `.env` file with the name of the directory to hold the logs. The directory will be automatically created on running the prefect proxy
@@ -52,7 +50,7 @@ In the cloned repository, open the terminal and run the following commands:
 
 Start Prefect on port 4200
 
-    prefect server start
+    uv run prefect server start
 
 and set `PREFECT_API_URL` in `.env` to `http://localhost:4200/api`. Change the port in this URL if you are running Prefect on a different port.
 
@@ -60,9 +58,9 @@ and set `PREFECT_API_URL` in `.env` to `http://localhost:4200/api`. Change the p
 
 Next, start your Prefect worker(s). On Tech4Dev's production system, Dalgo runs three workers on two queues called `ddp` and `manual-dbt`:
 
-    prefect worker start -q ddp --pool dalgo_work_pool
+    uv run prefect worker start -q ddp --pool dalgo_work_pool
 
-    prefect worker start -q manual-dbt --pool dalgo_work_pool
+    uv run prefect worker start -q manual-dbt --pool dalgo_work_pool
 
 (Make sure to set up the work pool from the prefect UI first).
 
@@ -70,7 +68,7 @@ Next, start your Prefect worker(s). On Tech4Dev's production system, Dalgo runs 
 
 The proxy server needs to listen for requests coming from Django; pick an available port and run
 
-    gunicorn proxy.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:<port number>
+    uv run gunicorn proxy.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:<port number>
 
 Make sure to add this URL with the port number into the `.env` for DDP_backend in the variable `PREFECT_PROXY_API_URL`.
 
