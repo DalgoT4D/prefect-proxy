@@ -13,47 +13,57 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
+
       - name: Create logs directory
         run: |
           mkdir -p logs
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          uv sync
+  
       - name: Create known_hosts file
         run: |
           mkdir -p ~/.ssh
           touch ~/.ssh/known_hosts
+
       - name: Add remote host key to known_hosts
         run: ssh-keyscan ${{ secrets.SERVERIP }} >> ~/.ssh/known_hosts
+
       - name: Create Google App credentials file
         run: |
           echo '${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_JSON }}' > /tmp/google_credentials.json
+
       - name: Test with pytest
         env: 
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/google_credentials.json
           LOGDIR: ${{ github.workspace }}/logs
         run: |
           mkdir -p $LOGDIR
-          coverage run -m pytest --asyncio-mode=auto
-          coverage xml
-          coverage report --fail-under=70
-      - name: Check coverage percentage
-        run: |
-          coverage_percentage=$(coverage report --show-missing | tail -n 1 | awk '{print $4}')
-          if (( $(echo "$coverage_percentage < 70" | bc -l) )); then
-            echo "Coverage percentage is below 70%"
-            exit 1
-          fi
+          uv run coverage run -m pytest --asyncio-mode=auto
+          uv run coverage xml
+          uv run coverage report --fail-under=70
+
       - name: Upload coverage reports to codecov
         uses: codecov/codecov-action@v3
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
+
+      - name: Check coverage percentage
+        run: |
+          uv run coverage report --fail-under=70
+          
       - name: Deploy to EC2
         run: |
           eval `ssh-agent -s`
