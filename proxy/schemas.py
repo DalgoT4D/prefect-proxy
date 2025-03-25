@@ -1,7 +1,7 @@
 """Schemas for requests"""
 
 from uuid import UUID
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
 from typing import Literal, Optional
 
