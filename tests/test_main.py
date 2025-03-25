@@ -239,7 +239,7 @@ async def test_post_airbyte_server_success():
     payload = AirbyteServerCreate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     request = client.request("POST", "/")
@@ -253,7 +253,7 @@ async def test_post_airbyte_server_failure():
     payload = AirbyteServerCreate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     request = client.request("POST", "/")
@@ -287,7 +287,7 @@ async def test_put_airbyte_server_exception():
     payload = AirbyteServerUpdate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     request = client.request("PUT", "/")
@@ -303,7 +303,7 @@ async def test_put_airbyte_server_success():
     payload = AirbyteServerUpdate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     request = client.request("PUT", "/")

@@ -1,9 +1,9 @@
 """Schemas for requests"""
 
 from uuid import UUID
-from pydantic import BaseModel, Extra
+from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 
 class AirbyteServerCreate(BaseModel):
@@ -80,7 +80,7 @@ class DbtCoreCreate(BaseModel):
     project_dir: str
 
 
-class DbtCliProfileBlockCreate(BaseModel, extra=Extra.allow):
+class DbtCliProfileBlockCreate(BaseModel):
     """payload to create a dbt cli profile block"""
 
     cli_profile_block_name: str
@@ -88,6 +88,8 @@ class DbtCliProfileBlockCreate(BaseModel, extra=Extra.allow):
     wtype: str
     bqlocation: str = None
     credentials: dict
+
+    model_config = ConfigDict(extra="allow")
 
 
 class DbtProfileUpdate(BaseModel):
@@ -98,14 +100,16 @@ class DbtProfileUpdate(BaseModel):
     target: str = None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
 
 
-class DbtCliProfileBlockUpdate(BaseModel, extra=Extra.allow):
+class DbtCliProfileBlockUpdate(BaseModel):
     """update a dbt cli profile block's warehouse credentials, schema and target"""
 
     cli_profile_block_name: str
-    wtype: str = None
-    profile: DbtProfileUpdate = None
-    credentials: dict = None
-    bqlocation: str = None
+    wtype: Optional[str] = None
+    profile: Optional[DbtProfileUpdate] = None
+    credentials: Optional[dict] = None
+    bqlocation: Optional[str] = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class DbtCoreCredentialUpdate(BaseModel):
@@ -300,5 +304,4 @@ class CancelQueuedManualJob(BaseModel):
     state: State
     force: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)

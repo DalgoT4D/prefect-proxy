@@ -14,7 +14,7 @@ from prefect.server.schemas.schedules import CronSchedule
 from prefect.server.schemas.states import Cancelled
 from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
-from prefect.client import get_client
+from prefect.client.orchestration import get_client
 from prefect.runner.storage import GitRepository
 from prefect_airbyte import AirbyteServer
 import pendulum
@@ -175,12 +175,12 @@ def prefect_delete(endpoint: str) -> dict:
 
 def _block_id(block: Block) -> str:
     """Get the id of block"""
-    return str(block.dict()["_block_document_id"])
+    return str(block.model_dump()["_block_document_id"])
 
 
 def _block_name(block: Block) -> str:
     """Get the name of block"""
-    return str(block.dict()["_block_document_name"])
+    return str(block.model_dump()["_block_document_name"])
 
 
 # ================================================================================================
@@ -519,7 +519,7 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
         "username": "user",
     }
 
-    extras = block.dbt_cli_profile.target_configs.dict()["extras"]
+    extras = block.dbt_cli_profile.target_configs.model_dump()["extras"]
     cleaned_extras = {}
     # copy existing extras over to cleaned_extras with the right keys
     for key, value in extras.items():
@@ -531,7 +531,7 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
 
     block.dbt_cli_profile.target_configs = TargetConfigs(
         type=block.dbt_cli_profile.target_configs.type,
-        schema=block.dbt_cli_profile.target_configs.dict()["schema"],
+        schema=block.dbt_cli_profile.target_configs.model_dump()["schema"],
         extras=cleaned_extras,
     )
 
@@ -560,8 +560,8 @@ async def update_bigquery_credentials(dbt_blockname: str, credentials: dict):
 
     block.dbt_cli_profile.target_configs = BigQueryTargetConfigs(
         credentials=dbcredentials,
-        schema=block.dbt_cli_profile.target_configs.dict()["schema_"],
-        extras=block.dbt_cli_profile.target_configs.dict()["extras"],
+        schema=block.dbt_cli_profile.target_configs.model_dump()["schema_"],
+        extras=block.dbt_cli_profile.target_configs.model_dump()["extras"],
     )
 
     try:
@@ -665,7 +665,7 @@ def put_deployment_v1(deployment_id: str, payload: DeploymentUpdate2) -> dict:
     newpayload["parameters"] = payload.deployment_params if payload.deployment_params else {}
 
     newpayload["schedules"] = (
-        [{"schedule": CronSchedule(cron=payload.cron).dict(), "active": True}]
+        [{"schedule": CronSchedule(cron=payload.cron).model_dump(), "active": True}]
         if payload.cron
         else []
     )
@@ -1213,7 +1213,7 @@ def set_cancel_queued_flow_run(flow_run_id: str, payload: CancelQueuedManualJob)
         raise ValueError("Unable to cancel a non-queued job.")
 
     try:
-        prefect_post(f"flow_runs/{flow_run_id}/set_state", payload=payload.dict())
+        prefect_post(f"flow_runs/{flow_run_id}/set_state", payload=payload.model_dump())
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to cancel queued job") from err
