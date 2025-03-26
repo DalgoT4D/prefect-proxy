@@ -23,6 +23,7 @@ def backup_one_rds(rds_to_backup):
     ShellOperation(
         commands=["/home/ddp/.local/bin/uv run /home/ddp/maintenance/dailybackup.py"],
         env=secret_env,
+        working_dir="/home/ddp/maintenance",
     ).run()
 
 

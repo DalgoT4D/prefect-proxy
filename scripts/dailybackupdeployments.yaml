@@ -24,7 +24,7 @@ deployments:
   version: null
   tags: ["dailybackup"]
   description: backs up the production database
-  entrypoint: dailybackupdeployment.py:backup_production
+  entrypoint: scripts/dailybackupdeployment.py:backup_production
   parameters: {}
   work_pool:
     name: dailybackup
@@ -39,7 +39,7 @@ deployments:
   version: null
   tags: ["dailybackup"]
   description: backs up the superset database
-  entrypoint: dailybackupdeployment.py:backup_superset
+  entrypoint: scripts/dailybackupdeployment.py:backup_superset
   parameters: {}
   work_pool:
     name: dailybackup
@@ -54,7 +54,7 @@ deployments:
   version: null
   tags: ["dailybackup"]
   description: backs up the airbyte_prod database
-  entrypoint: dailybackupdeployment.py:backup_airbyte_prod
+  entrypoint: scripts/dailybackupdeployment.py:backup_airbyte_prod
   parameters: {}
   work_pool:
     name: dailybackup
@@ -69,7 +69,7 @@ deployments:
   version: null
   tags: ["dailybackup"]
   description: backs up the staging database
-  entrypoint: dailybackupdeployment.py:backup_staging
+  entrypoint: scripts/dailybackupdeployment.py:backup_staging
   parameters: {}
   work_pool:
     name: dailybackup
@@ -84,7 +84,7 @@ deployments:
   version: null
   tags: ["dailybackup"]
   description: backs up the staging warehouses database
-  entrypoint: dailybackupdeployment.py:backup_staging_warehouses
+  entrypoint: scripts/dailybackupdeployment.py:backup_staging_warehouses
   parameters: {}
   work_pool:
     name: dailybackup
