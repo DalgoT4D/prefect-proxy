@@ -172,7 +172,7 @@ def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
-            timeout=max(payload.get("timeout", 0) or 100),
+            timeout=max(payload.get("timeout", 0), 100),
         )
         update_connection_schema(connection_block, catalog_diff=catalog_diff)
         return True
