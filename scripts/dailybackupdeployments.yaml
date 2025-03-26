@@ -1,0 +1,37 @@
+# Welcome to your prefect.yaml file! You can use this file for storing and managing
+# configuration for deploying your flows. We recommend committing this file to source
+# control along with your flow code.
+
+# Generic metadata about this project
+name: scripts
+prefect-version: 2.18.3
+
+# build section allows you to manage and build docker images
+build: null
+
+# push section allows you to manage if and how this project is uploaded to remote locations
+push: null
+
+# pull section allows you to provide instructions for cloning this project in remote locations
+pull:
+- prefect.deployments.steps.git_clone:
+    repository: https://github.com/DalgoT4D/prefect-proxy.git
+    branch: main
+
+# the deployments section allows you to provide configuration for deploying flows
+deployments:
+- name: 'Daily RDS Backup: Production'
+  version: null
+  tags: []
+  description: backs up the production database
+  entrypoint: dailybackupdeployment.py:backup_production
+  parameters: {}
+  work_pool:
+    name: dailybackup
+    work_queue_name: null
+    job_variables: {}
+  schedules:
+  - interval: 86400.0
+    anchor_date: '2025-03-26T06:25:32.845840+00:00'
+    timezone: UTC
+    active: true
