@@ -22,7 +22,7 @@ pull:
 deployments:
 - name: 'Daily RDS Backup: Production'
   version: null
-  tags: []
+  tags: ["dailybackup"]
   description: backs up the production database
   entrypoint: dailybackupdeployment.py:backup_production
   parameters: {}
@@ -37,7 +37,7 @@ deployments:
     active: true
 - name: 'Daily RDS Backup: Superset'
   version: null
-  tags: []
+  tags: ["dailybackup"]
   description: backs up the superset database
   entrypoint: dailybackupdeployment.py:backup_superset
   parameters: {}
@@ -52,7 +52,7 @@ deployments:
     active: true
 - name: 'Daily RDS Backup: Airbyte Production'
   version: null
-  tags: []
+  tags: ["dailybackup"]
   description: backs up the airbyte_prod database
   entrypoint: dailybackupdeployment.py:backup_airbyte_prod
   parameters: {}
@@ -67,7 +67,7 @@ deployments:
     active: true
 - name: 'Daily RDS Backup: Staging'
   version: null
-  tags: []
+  tags: ["dailybackup"]
   description: backs up the staging database
   entrypoint: dailybackupdeployment.py:backup_staging
   parameters: {}
@@ -82,7 +82,7 @@ deployments:
     active: true
 - name: 'Daily RDS Backup: Staging Warehouses'
   version: null
-  tags: []
+  tags: ["dailybackup"]
   description: backs up the staging warehouses database
   entrypoint: dailybackupdeployment.py:backup_staging_warehouses
   parameters: {}
