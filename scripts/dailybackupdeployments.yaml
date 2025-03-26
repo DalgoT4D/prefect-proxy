@@ -35,3 +35,63 @@ deployments:
     anchor_date: '2025-03-26T06:25:32.845840+00:00'
     timezone: UTC
     active: true
+- name: 'Daily RDS Backup: Superset'
+  version: null
+  tags: []
+  description: backs up the superset database
+  entrypoint: dailybackupdeployment.py:backup_superset
+  parameters: {}
+  work_pool:
+    name: dailybackup
+    work_queue_name: null
+    job_variables: {}
+  schedules:
+  - interval: 86400.0
+    anchor_date: '2025-03-26T06:25:32.845840+00:00'
+    timezone: UTC
+    active: true
+- name: 'Daily RDS Backup: Airbyte Production'
+  version: null
+  tags: []
+  description: backs up the airbyte_prod database
+  entrypoint: dailybackupdeployment.py:backup_airbyte_prod
+  parameters: {}
+  work_pool:
+    name: dailybackup
+    work_queue_name: null
+    job_variables: {}
+  schedules:
+  - interval: 86400.0
+    anchor_date: '2025-03-26T06:25:32.845840+00:00'
+    timezone: UTC
+    active: true
+- name: 'Daily RDS Backup: Staging'
+  version: null
+  tags: []
+  description: backs up the staging database
+  entrypoint: dailybackupdeployment.py:backup_staging
+  parameters: {}
+  work_pool:
+    name: dailybackup
+    work_queue_name: null
+    job_variables: {}
+  schedules:
+  - interval: 86400.0
+    anchor_date: '2025-03-26T06:25:32.845840+00:00'
+    timezone: UTC
+    active: true
+- name: 'Daily RDS Backup: Staging Warehouses'
+  version: null
+  tags: []
+  description: backs up the staging warehouses database
+  entrypoint: dailybackupdeployment.py:backup_staging_warehouses
+  parameters: {}
+  work_pool:
+    name: dailybackup
+    work_queue_name: null
+    job_variables: {}
+  schedules:
+  - interval: 86400.0
+    anchor_date: '2025-03-26T06:25:32.845840+00:00'
+    timezone: UTC
+    active: true
