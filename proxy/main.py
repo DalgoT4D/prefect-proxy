@@ -42,6 +42,7 @@ from proxy.service import (
     patch_dbt_cloud_creds_block,
     get_dbt_cloud_creds_block,
     update_airbyte_server_block,
+    set_cancel_queued_flow_run,
     filter_late_flow_runs,
     filter_prefect_workers,
 )
@@ -65,6 +66,7 @@ from proxy.schemas import (
     DbtCliProfileBlockUpdate,
     RunAirbyteResetConnection,
     ScheduleFlowRunRequest,
+    CancelQueuedManualJob,
     FilterLateFlowRuns,
     FilterPrefectWorkers,
 )
@@ -889,6 +891,20 @@ async def get_dbt_cloud_creds(request: Request, block_name: str):
             status_code=400, detail="failed to fetch dbt cloud creds block"
         ) from error
     return data
+
+
+@app.post("/proxy/flow_runs/{flow_run_id}/set_state")
+def cancel_queued_flow_run(request: Request, flow_run_id: str, payload: CancelQueuedManualJob):
+    """Cancel a queued manual sync"""
+    try:
+        set_cancel_queued_flow_run(flow_run_id, payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to cancel the queued manual job"
+        ) from error
+
+    return {"success": 1}
 
 
 @app.post("/proxy/workers/filter/")
