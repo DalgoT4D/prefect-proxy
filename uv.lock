@@ -2013,6 +2013,14 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/36/d1/a8bbd0e9573c5f7029f3a178e48b47d9414f4a1b6d68f4ef27d4ab156117/prefect-3.1.15-py3-none-any.whl", hash = "sha256:29d25d535d04e54db9a27db198ef5d31baf1cbcd73e3c7d1ae48135bb419dd39", size = 6238741 },
 ]
 
+[package.optional-dependencies]
+dbt = [
+    { name = "prefect-dbt" },
+]
+gcp = [
+    { name = "prefect-gcp" },
+]
+
 [[package]]
 name = "prefect-airbyte"
 version = "0.2+5.gbd0813d"
@@ -2082,10 +2090,8 @@ dependencies = [
     { name = "fastapi" },
     { name = "gunicorn" },
     { name = "pre-commit" },
-    { name = "prefect" },
+    { name = "prefect", extra = ["dbt", "gcp"] },
     { name = "prefect-airbyte" },
-    { name = "prefect-dbt" },
-    { name = "prefect-gcp" },
     { name = "prefect-github" },
     { name = "prefect-shell" },
     { name = "prefect-sqlalchemy" },
@@ -2112,10 +2118,8 @@ requires-dist = [
     { name = "fastapi" },
     { name = "gunicorn" },
     { name = "pre-commit", specifier = ">=4.2.0" },
-    { name = "prefect", specifier = "==3.1.15" },
+    { name = "prefect", extras = ["dbt", "gcp"], specifier = "==3.1.15" },
     { name = "prefect-airbyte", git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=upgrade-pydantic-v2" },
-    { name = "prefect-dbt" },
-    { name = "prefect-gcp" },
     { name = "prefect-github" },
     { name = "prefect-shell" },
     { name = "prefect-sqlalchemy" },
