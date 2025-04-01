@@ -815,7 +815,7 @@ def filter_late_flow_runs(payload: FilterLateFlowRuns) -> list[dict]:
         query_payload["flow_runs"]["expected_start_time"]["after_"] = str(payload.after_start_time)
 
     try:
-        logger.info(f"Query payload {query_payload}")
+        logger.info("Query payload %s", query_payload)
         result = prefect_post("flow_runs/filter", query_payload)
     except Exception as error:
         logger.exception(error)
@@ -1282,7 +1282,7 @@ def set_cancel_queued_flow_run(flow_run_id: str, payload: CancelQueuedManualJob)
         raise PrefectException("failed to cancel queued job") from err
 
 
-def filter_prefect_workers(payload: FilterPrefectWorkers) -> list[dict]:
+def filter_prefect_workers(payload: FilterPrefectWorkers) -> int:
     """Filter prefect workers using pm2 processses. Prefect api doesn't let you filter workers by queue name"""
     try:
         logger.info(payload)
@@ -1295,6 +1295,6 @@ def filter_prefect_workers(payload: FilterPrefectWorkers) -> list[dict]:
             if any(queue_name in line for queue_name in payload.work_queue_names)
         )
         return count
-    except Exception as e:
-        print(f"An error occurred while fetching workers: {e}")
-        return 0
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException(f"failed to fetch workers: {e}") from e

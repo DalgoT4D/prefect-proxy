@@ -573,12 +573,10 @@ def get_flow_runs(request: Request, deployment_id: str, limit: int = 0, start_ti
 def post_late_flow_runs(request: Request, query: FilterLateFlowRuns):
     """Get Late flow Runs"""
     try:
-        flow_runs = filter_late_flow_runs(payload=query)
+        flow_runs = filter_late_flow_runs(query)
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to fetch flow_runs for deployment"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to fetch late flow runs") from error
     return {"flow_runs": flow_runs}
 
 
