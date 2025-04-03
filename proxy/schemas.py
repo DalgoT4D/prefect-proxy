@@ -302,3 +302,23 @@ class CancelQueuedManualJob(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class FilterLateFlowRuns(BaseModel):
+    """Filter late flow runs"""
+
+    deployment_id: str = None
+    work_pool_name: str = None
+    work_queue_name: str = None
+    limit: int = 1
+    before_start_time: datetime = None
+    after_start_time: datetime = None
+    exclude_flow_run_ids: list[str] = []
+
+
+class FilterPrefectWorkers(BaseModel):
+    """FIlter prefect workers"""
+
+    work_queue_names: list[str] = []
+    work_pool_names: list[str] = []
+    status: str = "ONLINE"

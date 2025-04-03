@@ -1,5 +1,6 @@
 """interface with prefect's python client api"""
 
+import subprocess
 import os
 import queue
 from time import sleep
@@ -42,12 +43,14 @@ from proxy.schemas import (
     DeploymentUpdate2,
     DbtCloudCredsBlockPatch,
     CancelQueuedManualJob,
+    FilterLateFlowRuns,
+    FilterPrefectWorkers,
 )
 
 
 load_dotenv()
 
-# terminal
+# terminal states
 FLOW_RUN_FAILED = "FAILED"
 FLOW_RUN_COMPLETED = "COMPLETED"
 FLOW_RUN_CRASHED = "CRASHED"
@@ -778,6 +781,66 @@ def get_flow_runs_by_deployment_id(deployment_id: str, limit: int, start_time_gt
     return flow_runs
 
 
+def filter_late_flow_runs(payload: FilterLateFlowRuns) -> list[dict]:
+    query_payload = {
+        "sort": "START_TIME_DESC",
+        "flow_runs": {
+            "operator": "and_",
+            "state": {"name": {"any_": ["Late"]}},
+            "id": {"not_any_": payload.exclude_flow_run_ids},
+        },
+    }
+
+    if payload.deployment_id:
+        query_payload["deployments"] = {"id": {"any_": [payload.deployment_id]}}
+
+    if payload.work_pool_name:
+        query_payload["work_pools"] = {"name": {"any_": [payload.work_pool_name]}}
+
+    if payload.work_queue_name:
+        query_payload["work_pool_queues"] = {"name": {"any_": [payload.work_queue_name]}}
+
+    if payload.limit and payload.limit > 0:
+        query_payload["limit"] = payload.limit
+
+    if payload.before_start_time:
+        query_payload["flow_runs"]["expected_start_time"] = {
+            "before_": str(payload.before_start_time)
+        }
+
+    if payload.after_start_time:
+        query_payload["flow_runs"]["expected_start_time"] = query_payload["flow_runs"].get(
+            "expected_start_time", {}
+        )
+        query_payload["flow_runs"]["expected_start_time"]["after_"] = str(payload.after_start_time)
+
+    try:
+        logger.info("Query payload %s", query_payload)
+        result = prefect_post("flow_runs/filter", query_payload)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException(f"failed to fetch late flow_runs for {payload.dict()}") from error
+
+    flow_runs = []
+    for flow_run in result:
+        flow_runs.append(
+            {
+                "id": flow_run["id"],
+                "name": flow_run["name"],
+                "tags": flow_run["tags"],
+                "startTime": flow_run["start_time"],
+                "expectedStartTime": flow_run["expected_start_time"],
+                "totalRunTime": flow_run["total_run_time"],
+                "estimatedRunTime": flow_run["estimated_run_time"],
+                "workQueueName": flow_run["work_queue_name"],
+                "workPoolName": flow_run["work_pool_name"],
+                "deployment_id": flow_run["deployment_id"],
+            }
+        )
+
+    return flow_runs
+
+
 def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
     # pylint: disable=dangerous-default-value
     """fetch all deployments by org"""
@@ -1217,3 +1280,21 @@ def set_cancel_queued_flow_run(flow_run_id: str, payload: CancelQueuedManualJob)
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to cancel queued job") from err
+
+
+def filter_prefect_workers(payload: FilterPrefectWorkers) -> int:
+    """Filter prefect workers using pm2 processses. Prefect api doesn't let you filter workers by queue name"""
+    try:
+        logger.info(payload)
+        # Run the pm2 list command and capture the output
+        result = subprocess.run(["pm2", "list"], stdout=subprocess.PIPE, text=True)
+        # Filter the output to count the number of processes with the specified name
+        count = sum(
+            1
+            for line in result.stdout.splitlines()
+            if any(queue_name in line for queue_name in payload.work_queue_names)
+        )
+        return count
+    except Exception as err:
+        logger.exception(err)
+        raise PrefectException(f"failed to fetch workers: {err}") from err
