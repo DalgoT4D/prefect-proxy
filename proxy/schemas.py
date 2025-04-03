@@ -97,7 +97,9 @@ class DbtProfileUpdate(BaseModel):
 
     name: str = None  # profile name in profiles.yml that should be the same as in dbt_project.yml
     target_configs_schema: str = None  # schema that dbt will write against in the warehouse
-    target: str = None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
+    target: str = (
+        None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
+    )
 
 
 class DbtCliProfileBlockUpdate(BaseModel):
@@ -305,3 +307,23 @@ class CancelQueuedManualJob(BaseModel):
     force: str
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FilterLateFlowRuns(BaseModel):
+    """Filter late flow runs"""
+
+    deployment_id: str = None
+    work_pool_name: str = None
+    work_queue_name: str = None
+    limit: int = 1
+    before_start_time: datetime = None
+    after_start_time: datetime = None
+    exclude_flow_run_ids: list[str] = []
+
+
+class FilterPrefectWorkers(BaseModel):
+    """FIlter prefect workers"""
+
+    work_queue_names: list[str] = []
+    work_pool_names: list[str] = []
+    status: str = "ONLINE"
