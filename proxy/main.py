@@ -4,7 +4,7 @@ import os
 import re
 import base64
 import requests
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from prefect_airbyte import AirbyteConnection
 from proxy.helpers import CustomLogger
 import sentry_sdk
