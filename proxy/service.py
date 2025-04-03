@@ -1297,4 +1297,4 @@ def filter_prefect_workers(payload: FilterPrefectWorkers) -> int:
         return count
     except Exception as err:
         logger.exception(err)
-        raise PrefectException(f"failed to fetch workers: {e}") from e
+        raise PrefectException(f"failed to fetch workers: {err}") from err
