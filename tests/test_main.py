@@ -236,7 +236,7 @@ async def test_post_airbyte_server_success():
     payload = AirbyteServerCreate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     with patch("proxy.main.create_airbyte_server_block", return_value=("12345", "testserver")):
@@ -249,7 +249,7 @@ async def test_post_airbyte_server_failure():
     payload = AirbyteServerCreate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     with patch("proxy.main.create_airbyte_server_block", side_effect=Exception("test error")):
@@ -280,7 +280,7 @@ async def test_put_airbyte_server_exception():
     payload = AirbyteServerUpdate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     with patch("proxy.main.update_airbyte_server_block", side_effect=Exception("test error")):
@@ -295,7 +295,7 @@ async def test_put_airbyte_server_success():
     payload = AirbyteServerUpdate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     with patch("proxy.main.update_airbyte_server_block", return_value=("12345", "testserver")):
