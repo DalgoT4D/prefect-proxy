@@ -154,7 +154,7 @@ def dbtrun_v1(task_config: RunDbtCoreOperation):
         flow = flow.with_options(flow_run_name=task_config.flow_run_name)
 
     try:
-        result = flow(task_config)
+        result = flow(task_config.model_dump())
         return result
     except Exception as error:
         logger.exception(error)
@@ -175,7 +175,7 @@ def shelloprun(task_config: RunShellOperation):
         flow = flow.with_options(flow_run_name=task_config.flow_run_name)
 
     try:
-        result = flow(task_config)
+        result = flow(task_config.model_dump())
         return result
     except Exception as error:
         logger.exception(error)
