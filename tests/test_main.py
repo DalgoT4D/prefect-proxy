@@ -175,7 +175,7 @@ def test_shelloprun_success():
             mock_run_shell_operation_flow.with_options.return_value, "with_options"
         ) as mock_with_options:
             mock_with_options.return_value = lambda x: expected_result
-            result = shelloprun(task_config.model_dump())
+            result = shelloprun(task_config)
             assert result == expected_result
 
 
