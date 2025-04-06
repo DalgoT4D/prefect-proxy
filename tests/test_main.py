@@ -155,7 +155,7 @@ def test_dbtrun_v1():
         mock_run_dbtcore_flow_v1.return_value = {"result": "example_result"}
         result = dbtrun_v1(task_config)
         assert result == {"result": "example_result"}
-        mock_run_dbtcore_flow_v1.assert_called_once_with(task_config)
+        mock_run_dbtcore_flow_v1.assert_called_once_with(task_config.model_dump())
 
 
 def test_shelloprun_success():
@@ -175,7 +175,7 @@ def test_shelloprun_success():
             mock_run_shell_operation_flow.with_options.return_value, "with_options"
         ) as mock_with_options:
             mock_with_options.return_value = lambda x: expected_result
-            result = shelloprun(task_config)
+            result = shelloprun(task_config.model_dump())
             assert result == expected_result
 
 
