@@ -1080,7 +1080,6 @@ async def test_post_deployment_1(mock_from_source):
     #     work_queue_name="queue-name",
     #     work_pool_name="pool-name",
     #     tags=[payload.org_slug],
-    #     is_schedule_active=True,
     # )
     assert deployment == {
         "id": "deployment-id",
@@ -1237,8 +1236,13 @@ def test_get_deployments_by_filter_prefect_post():
                 "name": "name1",
                 "id": "id1",
                 "tags": "tags1",
-                "schedule": {"cron": "cron1"},
-                "is_schedule_active": True,
+                "schedules": [
+                    {
+                        "schedule": {"cron": "0 0 0 0 * 0 0"},
+                        "active": True,
+                    }
+                ],
+                "parameters": {"param1": "value1"},
             }
         ]
         response = get_deployments_by_filter(org_slug, deployment_ids)
@@ -1255,8 +1259,9 @@ def test_get_deployments_by_filter_prefect_post():
                 "name": "name1",
                 "deploymentId": "id1",
                 "tags": "tags1",
-                "cron": "cron1",
+                "cron": "0 0 0 0 * 0 0",
                 "isScheduleActive": True,
+                "parameters": {"param1": "value1"},
             }
         ]
 

@@ -37,7 +37,6 @@ def test_deployment_to_json_1():
                     "active": True,
                 }
             ],
-            "is_schedule_active": True,
             "parameters": {
                 "key1": "value1",
                 "key2": "value2",
