@@ -633,7 +633,6 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
             work_queue_name=work_queue_name,
             work_pool_name=work_pool_name,
             tags=[payload.org_slug],
-            is_schedule_active=True,
             parameters=payload.deployment_params,
             schedules=(
                 [{"schedule": CronSchedule(cron=payload.cron), "active": True}]
