@@ -94,11 +94,15 @@ def command_from_dbt_blockname(blockname):
 
 def deployment_to_json(deployment: dict) -> dict:
     """formats a deployment to json"""
-    return {
+    retval = {
         "name": deployment["name"],
         "deploymentId": deployment["id"],
         "tags": deployment["tags"],
-        "cron": (deployment["schedule"]["cron"] if deployment.get("schedule") else ""),
-        "isScheduleActive": deployment.get("is_schedule_active", False),
+        "cron": "",
+        "isScheduleActive": False,
         "parameters": deployment["parameters"],
     }
+    if deployment.get("schedules") and len(deployment["schedules"]) > 0:
+        retval["cron"] = deployment["schedules"][0]["schedule"]["cron"]
+        retval["isScheduleActive"] = deployment["schedules"][0]["active"]
+    return retval

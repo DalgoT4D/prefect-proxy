@@ -29,9 +29,14 @@ def test_deployment_to_json_1():
             "name": "THE_NAME",
             "id": "THE_ID",
             "tags": ["tag1", "tag2"],
-            "schedule": {
-                "cron": "0 0 * * *",
-            },
+            "schedules": [
+                {
+                    "schedule": {
+                        "cron": "0 0 * * *",
+                    },
+                    "active": True,
+                }
+            ],
             "is_schedule_active": True,
             "parameters": {
                 "key1": "value1",
