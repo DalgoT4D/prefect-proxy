@@ -90,3 +90,15 @@ def command_from_dbt_blockname(blockname):
     # for docs-generate this returns docs
     # see prefect_api.post_prefect_dbt_core_block
     return command
+
+
+def deployment_to_json(deployment: dict) -> dict:
+    """formats a deployment to json"""
+    return {
+        "name": deployment["name"],
+        "deploymentId": deployment["id"],
+        "tags": deployment["tags"],
+        "cron": (deployment["schedule"]["cron"] if deployment.get("schedule") else ""),
+        "isScheduleActive": deployment.get("is_schedule_active", False),
+        "parameters": deployment["parameters"],
+    }

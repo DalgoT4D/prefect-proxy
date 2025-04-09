@@ -29,7 +29,7 @@ from prefect_dbt.cloud.credentials import DbtCloudCredentials
 from dotenv import load_dotenv
 
 
-from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock
+from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock, deployment_to_json
 from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -868,15 +868,7 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
     deployments = []
 
     for deployment in res:
-        deployments.append(
-            {
-                "name": deployment["name"],
-                "deploymentId": deployment["id"],
-                "tags": deployment["tags"],
-                "cron": (deployment["schedule"]["cron"] if deployment.get("schedule") else None),
-                "isScheduleActive": deployment.get("is_schedule_active", False),
-            }
-        )
+        deployments.append(deployment_to_json(deployment))
 
     return deployments
 

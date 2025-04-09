@@ -6,8 +6,8 @@ import base64
 import requests
 from fastapi import FastAPI, HTTPException
 from prefect_airbyte import AirbyteConnection
-from proxy.helpers import CustomLogger
 import sentry_sdk
+from proxy.helpers import CustomLogger, deployment_to_json
 
 
 from proxy.service import (
@@ -719,14 +719,7 @@ def get_read_deployment(deployment_id):
             status_code=400, detail="failed to fetch deployment " + deployment_id
         ) from error
 
-    res = {
-        "name": deployment["name"],
-        "deploymentId": deployment["id"],
-        "tags": deployment["tags"],
-        "cron": deployment["schedule"]["cron"] if deployment["schedule"] else "",
-        "isScheduleActive": deployment["is_schedule_active"],
-        "parameters": deployment["parameters"],
-    }
+    res = deployment_to_json(deployment)
 
     if "airbyte_blocks" in res["parameters"]:
         for airbyte_block in res["parameters"]["airbyte_blocks"]:
