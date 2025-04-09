@@ -1489,17 +1489,6 @@ def test_get_flow_runs_by_name_exception():
             get_flow_runs_by_name("flow_run_name")
 
 
-def test_set_deployment_schedule_prefect_post():
-    with patch("proxy.service.prefect_post") as prefect_post_mock:
-        deployment_id = "deployment_id"
-        set_deployment_schedule(deployment_id, "active")
-        prefect_post_mock.assert_called_with(f"deployments/{deployment_id}/set_schedule_active", {})
-        set_deployment_schedule(deployment_id, "inactive")
-        prefect_post_mock.assert_called_with(
-            f"deployments/{deployment_id}/set_schedule_inactive", {}
-        )
-
-
 @patch("proxy.service.prefect_get")
 @patch("proxy.service.update_flow_run_final_state")
 def test_get_flow_run_success(mock_update_flow_run_final_state: Mock, mock_get: Mock):
@@ -1529,11 +1518,52 @@ def test_get_flow_run_falure(mock_get: Mock):
     assert str(excinfo.value) == "failed to fetch a flow-run"
 
 
-def test_set_deployment_schedule_result():
-    with patch("proxy.service.prefect_post"):
+def test_set_deployment_schedule_result_1():
+    with patch("proxy.service.prefect_patch") as mock_patch, patch(
+        "proxy.service.prefect_get"
+    ) as mock_get:
+        mock_get.return_value = {
+            "schedules": [
+                {
+                    "id": "fake-id",
+                    "created": "date",
+                    "updated": "date",
+                    "deployment_id": "fake-deployment-id",
+                    "schedule": {"cron": "0 0 * * *"},
+                    "active": False,
+                }
+            ]
+        }
         deployment_id = "deployment_id"
-        result = set_deployment_schedule(deployment_id, "active")
-        assert result is None
+        set_deployment_schedule(deployment_id, "active")
+        mock_patch.assert_called_once_with(
+            f"deployments/{deployment_id}",
+            {"schedules": [{"schedule": {"cron": "0 0 * * *"}, "active": True}]},
+        )
+
+
+def test_set_deployment_schedule_result_2():
+    with patch("proxy.service.prefect_patch") as mock_patch, patch(
+        "proxy.service.prefect_get"
+    ) as mock_get:
+        mock_get.return_value = {
+            "schedules": [
+                {
+                    "id": "fake-id",
+                    "created": "date",
+                    "updated": "date",
+                    "deployment_id": "fake-deployment-id",
+                    "schedule": {"cron": "0 0 * * *"},
+                    "active": True,
+                }
+            ]
+        }
+        deployment_id = "deployment_id"
+        set_deployment_schedule(deployment_id, "inactive")
+        mock_patch.assert_called_once_with(
+            f"deployments/{deployment_id}",
+            {"schedules": [{"schedule": {"cron": "0 0 * * *"}, "active": False}]},
+        )
 
 
 async def test_cancel_flow_runs_type_error():

@@ -1113,11 +1113,15 @@ def get_flow_run(flow_run_id: str) -> dict:
 def set_deployment_schedule(deployment_id: str, status: str) -> None:
     """Set deployment schedule to active or inactive"""
     # both the apis return null below
-    if status == "active":
-        prefect_post(f"deployments/{deployment_id}/set_schedule_active", {})
-
-    if status == "inactive":
-        prefect_post(f"deployments/{deployment_id}/set_schedule_inactive", {})
+    deployment = prefect_get(f"deployments/{deployment_id}")
+    if len(deployment["schedules"]) > 0:
+        schedule = deployment["schedules"][0]
+        del schedule["id"]
+        del schedule["created"]
+        del schedule["updated"]
+        del schedule["deployment_id"]
+        schedule["active"] = status == "active"
+        prefect_patch(f"deployments/{deployment_id}", {"schedules": [schedule]})
 
     return None
 
