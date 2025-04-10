@@ -19,11 +19,11 @@ class AirbyteServerUpdate(BaseModel):
     """payload to create an airbyte server block"""
 
     blockName: str
-    serverHost: str = None
-    serverPort: str = None
-    apiVersion: str = None
-    username: str = None
-    password: str = None
+    serverHost: Optional[str] = None
+    serverPort: Optional[str] = None
+    apiVersion: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class AirbyteServerBlockResponse(BaseModel):
@@ -95,9 +95,13 @@ class DbtCliProfileBlockCreate(BaseModel):
 class DbtProfileUpdate(BaseModel):
     """schema to update dbt profile"""
 
-    name: str = None  # profile name in profiles.yml that should be the same as in dbt_project.yml
-    target_configs_schema: str = None  # schema that dbt will write against in the warehouse
-    target: str = (
+    name: Optional[str] = (
+        None  # profile name in profiles.yml that should be the same as in dbt_project.yml
+    )
+    target_configs_schema: Optional[str] = (
+        None  # schema that dbt will write against in the warehouse
+    )
+    target: Optional[str] = (
         None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
     )
 
@@ -151,8 +155,8 @@ class RunFlow(BaseModel):
     """just a blockname"""
 
     blockName: str
-    flowName: str = None
-    flowRunName: str = None
+    flowName: Optional[str] = None
+    flowRunName: Optional[str] = None
 
 
 class RunDbtCoreOperation(BaseModel):
@@ -212,7 +216,7 @@ class DeploymentCreate(BaseModel):
     org_slug: str
     connection_blocks: list
     dbt_blocks: list
-    cron: str = None
+    cron: Optional[str] = None
 
 
 class DeploymentCreate2(BaseModel):
@@ -222,18 +226,18 @@ class DeploymentCreate2(BaseModel):
     deployment_name: str
     org_slug: str
     deployment_params: dict
-    cron: str = None
-    work_queue_name: str = None
-    work_pool_name: str = None
+    cron: Optional[str] = None
+    work_queue_name: Optional[str] = None
+    work_pool_name: Optional[str] = None
 
 
 class DeploymentUpdate2(BaseModel):
     """parameters to create a deployment from a flow"""
 
     deployment_params: dict = {}
-    cron: str = None
-    work_queue_name: str = None
-    work_pool_name: str = None
+    cron: Optional[str] = None
+    work_queue_name: Optional[str] = None
+    work_pool_name: Optional[str] = None
 
 
 class DeploymentFetch(BaseModel):
@@ -293,7 +297,7 @@ class DbtCloudCredsBlockPatch(BaseModel):
 
     block_name: str
     account_id: int = None
-    api_key: str = None
+    api_key: Optional[str] = None
 
 
 class CancelQueuedManualJob(BaseModel):
@@ -312,9 +316,9 @@ class CancelQueuedManualJob(BaseModel):
 class FilterLateFlowRuns(BaseModel):
     """Filter late flow runs"""
 
-    deployment_id: str = None
-    work_pool_name: str = None
-    work_queue_name: str = None
+    deployment_id: Optional[str] = None
+    work_pool_name: Optional[str] = None
+    work_queue_name: Optional[str] = None
     limit: int = 1
     before_start_time: datetime = None
     after_start_time: datetime = None
