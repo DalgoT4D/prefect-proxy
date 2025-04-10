@@ -69,7 +69,7 @@ class DbtCoreCreate(BaseModel):
 
     profile: DbtProfileCreate
     wtype: str
-    bqlocation: str = None
+    bqlocation: Optional[str] = None
     credentials: dict
     cli_profile_block_name: str
 
@@ -86,7 +86,7 @@ class DbtCliProfileBlockCreate(BaseModel):
     cli_profile_block_name: str
     profile: DbtProfileCreate
     wtype: str
-    bqlocation: str = None
+    bqlocation: Optional[str] = None
     credentials: dict
 
     model_config = ConfigDict(extra="allow")
@@ -97,7 +97,9 @@ class DbtProfileUpdate(BaseModel):
 
     name: str = None  # profile name in profiles.yml that should be the same as in dbt_project.yml
     target_configs_schema: str = None  # schema that dbt will write against in the warehouse
-    target: str = None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
+    target: str = (
+        None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
+    )
 
 
 class DbtCliProfileBlockUpdate(BaseModel):
