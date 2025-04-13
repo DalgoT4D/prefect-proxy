@@ -112,7 +112,7 @@ dependencies = [
   "pluggy==1.5.0",
   "pre-commit==4.2.0",
   "prefect==3.1.15",
-  "prefect-airbyte @ git+https://github.com/Ishankoradia/prefect-airbyte.git@cf2659d7d79baea0b13a446fe76db71845cf7f39",
+  "prefect-airbyte @ git+https://github.com/Ishankoradia/prefect-airbyte.git",
   "prefect-dbt==0.6.6",
   "prefect-gcp==0.6.4",
   "prefect-github==0.3.1",
