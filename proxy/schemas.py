@@ -1,9 +1,9 @@
 """Schemas for requests"""
 
 from uuid import UUID
-from pydantic import BaseModel, Extra
+from pydantic import BaseModel, ConfigDict
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 
 class AirbyteServerCreate(BaseModel):
@@ -19,11 +19,11 @@ class AirbyteServerUpdate(BaseModel):
     """payload to create an airbyte server block"""
 
     blockName: str
-    serverHost: str = None
-    serverPort: str = None
-    apiVersion: str = None
-    username: str = None
-    password: str = None
+    serverHost: Optional[str] = None
+    serverPort: Optional[str] = None
+    apiVersion: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
 
 
 class AirbyteServerBlockResponse(BaseModel):
@@ -69,7 +69,7 @@ class DbtCoreCreate(BaseModel):
 
     profile: DbtProfileCreate
     wtype: str
-    bqlocation: str = None
+    bqlocation: Optional[str] = None
     credentials: dict
     cli_profile_block_name: str
 
@@ -80,32 +80,42 @@ class DbtCoreCreate(BaseModel):
     project_dir: str
 
 
-class DbtCliProfileBlockCreate(BaseModel, extra=Extra.allow):
+class DbtCliProfileBlockCreate(BaseModel):
     """payload to create a dbt cli profile block"""
 
     cli_profile_block_name: str
     profile: DbtProfileCreate
     wtype: str
-    bqlocation: str = None
+    bqlocation: Optional[str] = None
     credentials: dict
+
+    model_config = ConfigDict(extra="allow")
 
 
 class DbtProfileUpdate(BaseModel):
     """schema to update dbt profile"""
 
-    name: str = None  # profile name in profiles.yml that should be the same as in dbt_project.yml
-    target_configs_schema: str = None  # schema that dbt will write against in the warehouse
-    target: str = None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
+    name: Optional[
+        str
+    ] = None  # profile name in profiles.yml that should be the same as in dbt_project.yml
+    target_configs_schema: Optional[
+        str
+    ] = None  # schema that dbt will write against in the warehouse
+    target: Optional[
+        str
+    ] = None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
 
 
-class DbtCliProfileBlockUpdate(BaseModel, extra=Extra.allow):
+class DbtCliProfileBlockUpdate(BaseModel):
     """update a dbt cli profile block's warehouse credentials, schema and target"""
 
     cli_profile_block_name: str
-    wtype: str = None
-    profile: DbtProfileUpdate = None
-    credentials: dict = None
-    bqlocation: str = None
+    wtype: Optional[str] = None
+    profile: Optional[DbtProfileUpdate] = None
+    credentials: Optional[dict] = None
+    bqlocation: Optional[str] = None
+
+    model_config = ConfigDict(extra="allow")
 
 
 class DbtCoreCredentialUpdate(BaseModel):
@@ -145,8 +155,8 @@ class RunFlow(BaseModel):
     """just a blockname"""
 
     blockName: str
-    flowName: str = None
-    flowRunName: str = None
+    flowName: Optional[str] = None
+    flowRunName: Optional[str] = None
 
 
 class RunDbtCoreOperation(BaseModel):
@@ -206,7 +216,7 @@ class DeploymentCreate(BaseModel):
     org_slug: str
     connection_blocks: list
     dbt_blocks: list
-    cron: str = None
+    cron: Optional[str] = None
 
 
 class DeploymentCreate2(BaseModel):
@@ -216,18 +226,18 @@ class DeploymentCreate2(BaseModel):
     deployment_name: str
     org_slug: str
     deployment_params: dict
-    cron: str = None
-    work_queue_name: str = None
-    work_pool_name: str = None
+    cron: Optional[str] = None
+    work_queue_name: Optional[str] = None
+    work_pool_name: Optional[str] = None
 
 
 class DeploymentUpdate2(BaseModel):
     """parameters to create a deployment from a flow"""
 
     deployment_params: dict = {}
-    cron: str = None
-    work_queue_name: str = None
-    work_pool_name: str = None
+    cron: Optional[str] = None
+    work_queue_name: Optional[str] = None
+    work_pool_name: Optional[str] = None
 
 
 class DeploymentFetch(BaseModel):
@@ -279,15 +289,15 @@ class ScheduleFlowRunRequest(BaseModel):
     """Schema for scheduling a flow run at a later stage"""
 
     runParams: dict
-    scheduledTime: datetime = None  # by default it will be scheduled to run now
+    scheduledTime: Optional[datetime] = None  # by default it will be scheduled to run now
 
 
 class DbtCloudCredsBlockPatch(BaseModel):
     """payload to create a dbt cloud credentials block"""
 
     block_name: str
-    account_id: int = None
-    api_key: str = None
+    account_id: Optional[int] = None
+    api_key: Optional[str] = None
 
 
 class CancelQueuedManualJob(BaseModel):
@@ -300,19 +310,18 @@ class CancelQueuedManualJob(BaseModel):
     state: State
     force: str
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class FilterLateFlowRuns(BaseModel):
     """Filter late flow runs"""
 
-    deployment_id: str = None
-    work_pool_name: str = None
-    work_queue_name: str = None
+    deployment_id: Optional[str] = None
+    work_pool_name: Optional[str] = None
+    work_queue_name: Optional[str] = None
     limit: int = 1
-    before_start_time: datetime = None
-    after_start_time: datetime = None
+    before_start_time: Optional[datetime] = None
+    after_start_time: Optional[datetime] = None
     exclude_flow_run_ids: list[str] = []
 
 

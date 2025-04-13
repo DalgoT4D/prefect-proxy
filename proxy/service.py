@@ -15,7 +15,7 @@ from prefect.server.schemas.schedules import CronSchedule
 from prefect.server.schemas.states import Cancelled
 from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
-from prefect.client import get_client
+from prefect.client.orchestration import get_client
 from prefect.runner.storage import GitRepository
 from prefect_airbyte import AirbyteServer
 import pendulum
@@ -29,7 +29,7 @@ from prefect_dbt.cloud.credentials import DbtCloudCredentials
 from dotenv import load_dotenv
 
 
-from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock
+from proxy.helpers import CustomLogger, cleaned_name_for_prefectblock, deployment_to_json
 from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
@@ -178,12 +178,12 @@ def prefect_delete(endpoint: str) -> dict:
 
 def _block_id(block: Block) -> str:
     """Get the id of block"""
-    return str(block.dict()["_block_document_id"])
+    return str(block.model_dump()["_block_document_id"])
 
 
 def _block_name(block: Block) -> str:
     """Get the name of block"""
-    return str(block.dict()["_block_document_name"])
+    return str(block.model_dump()["_block_document_name"])
 
 
 # ================================================================================================
@@ -522,7 +522,7 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
         "username": "user",
     }
 
-    extras = block.dbt_cli_profile.target_configs.dict()["extras"]
+    extras = block.dbt_cli_profile.target_configs.model_dump()["extras"]
     cleaned_extras = {}
     # copy existing extras over to cleaned_extras with the right keys
     for key, value in extras.items():
@@ -534,7 +534,7 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
 
     block.dbt_cli_profile.target_configs = TargetConfigs(
         type=block.dbt_cli_profile.target_configs.type,
-        schema=block.dbt_cli_profile.target_configs.dict()["schema"],
+        schema=block.dbt_cli_profile.target_configs.model_dump()["schema"],
         extras=cleaned_extras,
     )
 
@@ -563,8 +563,8 @@ async def update_bigquery_credentials(dbt_blockname: str, credentials: dict):
 
     block.dbt_cli_profile.target_configs = BigQueryTargetConfigs(
         credentials=dbcredentials,
-        schema=block.dbt_cli_profile.target_configs.dict()["schema_"],
-        extras=block.dbt_cli_profile.target_configs.dict()["extras"],
+        schema=block.dbt_cli_profile.target_configs.model_dump()["schema_"],
+        extras=block.dbt_cli_profile.target_configs.model_dump()["extras"],
     )
 
     try:
@@ -633,7 +633,6 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
             work_queue_name=work_queue_name,
             work_pool_name=work_pool_name,
             tags=[payload.org_slug],
-            is_schedule_active=True,
             parameters=payload.deployment_params,
             schedules=(
                 [{"schedule": CronSchedule(cron=payload.cron), "active": True}]
@@ -668,7 +667,7 @@ def put_deployment_v1(deployment_id: str, payload: DeploymentUpdate2) -> dict:
     newpayload["parameters"] = payload.deployment_params if payload.deployment_params else {}
 
     newpayload["schedules"] = (
-        [{"schedule": CronSchedule(cron=payload.cron).dict(), "active": True}]
+        [{"schedule": CronSchedule(cron=payload.cron).model_dump(), "active": True}]
         if payload.cron
         else []
     )
@@ -868,15 +867,7 @@ def get_deployments_by_filter(org_slug: str, deployment_ids=None) -> list:
     deployments = []
 
     for deployment in res:
-        deployments.append(
-            {
-                "name": deployment["name"],
-                "deploymentId": deployment["id"],
-                "tags": deployment["tags"],
-                "cron": (deployment["schedule"]["cron"] if deployment["schedule"] else None),
-                "isScheduleActive": deployment["is_schedule_active"],
-            }
-        )
+        deployments.append(deployment_to_json(deployment))
 
     return deployments
 
@@ -1024,22 +1015,18 @@ def get_flow_run_tasks(flow_run_id: str) -> dict:
         elif run["kind"] == "task-run":
             run_obj = prefect_get(f"task_runs/{run['id']}")
 
-        res.append(
-            {
-                "id": run["id"],
-                "kind": run["kind"],
-                "label": run["label"],
-                "state_type": run_obj["state_type"],
-                "state_name": run_obj["state_name"],
-                "start_time": run["start_time"],
-                "end_time": run["end_time"],
-                "parameters": (
-                    run_obj["parameters"]["payload"]
-                    if "parameters" in run_obj and "payload" in run_obj["parameters"]
-                    else None
-                ),
-            }
-        )
+        info_obj = {
+            "id": run["id"],
+            "kind": run["kind"],
+            "label": run["label"],
+            "state_type": run_obj["state_type"],
+            "state_name": run_obj["state_name"],
+            "start_time": run["start_time"],
+            "end_time": run["end_time"],
+        }
+        if "parameters" in run_obj and "payload" in run_obj["parameters"]:
+            info_obj["parameters"] = run_obj["parameters"]["payload"]
+        res.append(info_obj)
 
     return res
 
@@ -1122,11 +1109,15 @@ def get_flow_run(flow_run_id: str) -> dict:
 def set_deployment_schedule(deployment_id: str, status: str) -> None:
     """Set deployment schedule to active or inactive"""
     # both the apis return null below
-    if status == "active":
-        prefect_post(f"deployments/{deployment_id}/set_schedule_active", {})
-
-    if status == "inactive":
-        prefect_post(f"deployments/{deployment_id}/set_schedule_inactive", {})
+    deployment = prefect_get(f"deployments/{deployment_id}")
+    if len(deployment["schedules"]) > 0:
+        schedule = deployment["schedules"][0]
+        del schedule["id"]
+        del schedule["created"]
+        del schedule["updated"]
+        del schedule["deployment_id"]
+        schedule["active"] = status == "active"
+        prefect_patch(f"deployments/{deployment_id}", {"schedules": [schedule]})
 
     return None
 
@@ -1276,7 +1267,7 @@ def set_cancel_queued_flow_run(flow_run_id: str, payload: CancelQueuedManualJob)
         raise ValueError("Unable to cancel a non-queued job.")
 
     try:
-        prefect_post(f"flow_runs/{flow_run_id}/set_state", payload=payload.dict())
+        prefect_post(f"flow_runs/{flow_run_id}/set_state", payload=payload.model_dump())
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to cancel queued job") from err

@@ -155,7 +155,7 @@ def test_dbtrun_v1():
         mock_run_dbtcore_flow_v1.return_value = {"result": "example_result"}
         result = dbtrun_v1(task_config)
         assert result == {"result": "example_result"}
-        mock_run_dbtcore_flow_v1.assert_called_once_with(task_config)
+        mock_run_dbtcore_flow_v1.assert_called_once_with(task_config.model_dump())
 
 
 def test_shelloprun_success():
@@ -236,7 +236,7 @@ async def test_post_airbyte_server_success():
     payload = AirbyteServerCreate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     with patch("proxy.main.create_airbyte_server_block", return_value=("12345", "testserver")):
@@ -249,7 +249,7 @@ async def test_post_airbyte_server_failure():
     payload = AirbyteServerCreate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     with patch("proxy.main.create_airbyte_server_block", side_effect=Exception("test error")):
@@ -280,7 +280,7 @@ async def test_put_airbyte_server_exception():
     payload = AirbyteServerUpdate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     with patch("proxy.main.update_airbyte_server_block", side_effect=Exception("test error")):
@@ -295,7 +295,7 @@ async def test_put_airbyte_server_success():
     payload = AirbyteServerUpdate(
         blockName="testserver",
         serverHost="http://test-server.com",
-        serverPort=8000,
+        serverPort="8000",
         apiVersion="v1",
     )
     with patch("proxy.main.update_airbyte_server_block", return_value=("12345", "testserver")):
@@ -840,7 +840,6 @@ def test_get_read_deployment_success():
         "id": deployment_id,
         "tags": ["tag1", "tag2"],
         "schedule": {"cron": "* * * * *"},
-        "is_schedule_active": True,
         "parameters": {"airbyte_blocks": []},
     }
     with patch("proxy.main.get_deployment") as mock_get_deployment:

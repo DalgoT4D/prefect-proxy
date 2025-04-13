@@ -76,6 +76,9 @@ class MockAirbyteServer:
     def dict(self):
         return {"_block_document_id": "expected_server_block_id"}
 
+    def model_dump(self):
+        return {"_block_document_id": "expected_server_block_id"}
+
 
 def test_prefect_post_invalid_endpoint():
     with pytest.raises(TypeError) as excinfo:
@@ -282,6 +285,9 @@ class MockBlock:
     def dict(self):
         return {"_block_document_id": "expected_block_id"}
 
+    def model_dump(self):
+        return {"_block_document_id": "expected_block_id"}
+
 
 @pytest.mark.asyncio
 @patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock)
@@ -332,7 +338,7 @@ async def test_create_airbyte_server_block():
     payload = AirbyteServerCreate(
         blockName="test_block",
         serverHost="test_host",
-        serverPort=1234,
+        serverPort="1234",
         apiVersion="test_version",
     )
     result = await create_airbyte_server_block(payload)
@@ -345,7 +351,7 @@ async def test_create_airbyte_server_block_failure():
     payload = AirbyteServerCreate(
         blockName="test_block",
         serverHost="test_host",
-        serverPort=1234,
+        serverPort="1234",
         apiVersion="test_version",
     )
     with patch("proxy.service.AirbyteServer.save", new_callable=AsyncMock) as mock_save:
@@ -370,7 +376,7 @@ async def test_put_airbyte_server_block():
     payload = AirbyteServerUpdate(
         blockName="testblock",
         serverHost="test_host",
-        serverPort=1234,
+        serverPort="1234",
         apiVersion="test_version",
     )
     with patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock) as mock_load, patch(
@@ -390,7 +396,7 @@ async def test_put_airbyte_server_block_failure():
     payload = AirbyteServerUpdate(
         blockName="test_block",
         serverHost="test_host",
-        serverPort=1234,
+        serverPort="1234",
         apiVersion="test_version",
     )
     with patch("proxy.service.AirbyteServer.save", new_callable=AsyncMock) as mock_save, patch(
@@ -507,6 +513,9 @@ def test_delete_shell_block_non_string_blockid():
 
 class MockBlock:
     def dict(self):
+        return {"_block_document_id": "expected_block_id"}
+
+    def model_dump(self):
         return {"_block_document_id": "expected_block_id"}
 
 
@@ -669,6 +678,7 @@ async def test_update_dbt_cli_profile_postgres(mock_load: AsyncMock):
         target_configs=Mock(schema="old-schema"),
         save=AsyncMock(),
         dict=Mock(return_value={"_block_document_id": "_block_document_id"}),
+        model_dump=Mock(return_value={"_block_document_id": "_block_document_id"}),
     )
     block, block_id, block_name = await update_dbt_cli_profile(payload)
     assert block_name == "block-name"
@@ -705,6 +715,7 @@ async def test_update_dbt_cli_profile_postgres_override_target(mock_load: AsyncM
         target_configs=Mock(schema="old-schema"),
         save=AsyncMock(),
         dict=Mock(return_value={"_block_document_id": "_block_document_id"}),
+        model_dump=Mock(return_value={"_block_document_id": "_block_document_id"}),
     )
     block, block_id, block_name = await update_dbt_cli_profile(payload)
     assert block_name == "block-name"
@@ -733,6 +744,7 @@ async def test_update_dbt_cli_profile_bigquery(mock_load: AsyncMock):
         target_configs=Mock(schema="old-schema"),
         save=AsyncMock(),
         dict=Mock(return_value={"_block_document_id": "_block_document_id"}),
+        model_dump=Mock(return_value={"_block_document_id": "_block_document_id"}),
     )
     block, block_id, block_name = await update_dbt_cli_profile(payload)
     assert block_name == "block-name"
@@ -861,13 +873,16 @@ async def test_create_secret_block(mock_save: AsyncMock):
 
 
 @pytest.mark.asyncio
+@patch("proxy.service.Secret.load", new_callable=AsyncMock)
 @patch("proxy.service.Secret.save", new_callable=AsyncMock)
-async def test_edit_secret_block(mock_save: AsyncMock):
+async def test_edit_secret_block(mock_save: AsyncMock, mock_load: AsyncMock):
+    mock_load.return_value = Mock()
+
     mock_save.side_effect = Exception("exception thrown")
     payload = PrefectSecretBlockCreate(secret="my-secret", blockName="my-blockname")
     with pytest.raises(PrefectException) as excinfo:
         await upsert_secret_block(payload)
-    assert str(excinfo.value) == "Could not create a secret block"
+    assert str(excinfo.value) == "Could not edit the secret block"
 
 
 @pytest.mark.asyncio
@@ -900,6 +915,17 @@ async def test_update_postgres_credentials_success(mock_load):
             target_configs=Mock(
                 type="postgres",
                 dict=Mock(
+                    return_value={
+                        "extras": {
+                            "host": "old_host",
+                            "database": "old_database",
+                            "user": "old_user",
+                            "password": "old_password",
+                        },
+                        "schema": "old_schema",
+                    }
+                ),
+                model_dump=Mock(
                     return_value={
                         "extras": {
                             "host": "old_host",
@@ -964,6 +990,12 @@ async def test_update_bigquery_credentials_success(mock_load):
             target_configs=Mock(
                 type="bigquery",
                 dict=Mock(
+                    return_value={
+                        "extras": {},
+                        "schema_": "old_schema",
+                    }
+                ),
+                model_dump=Mock(
                     return_value={
                         "extras": {},
                         "schema_": "old_schema",
@@ -1048,7 +1080,6 @@ async def test_post_deployment_1(mock_from_source):
     #     work_queue_name="queue-name",
     #     work_pool_name="pool-name",
     #     tags=[payload.org_slug],
-    #     is_schedule_active=True,
     # )
     assert deployment == {
         "id": "deployment-id",
@@ -1070,7 +1101,9 @@ def test_put_deployment_v1(mock_prefect_patch):
     mock_prefect_patch.assert_called_once_with(
         "deployments/deployment-id",
         {
-            "schedules": [{"schedule": CronSchedule(cron="* * * * *").dict(), "active": True}],
+            "schedules": [
+                {"schedule": CronSchedule(cron="* * * * *").model_dump(), "active": True}
+            ],
             "parameters": {"param1": "value1"},
             "work_pool_name": "pool-name",
             "work_queue_name": "queue-name",
@@ -1203,8 +1236,13 @@ def test_get_deployments_by_filter_prefect_post():
                 "name": "name1",
                 "id": "id1",
                 "tags": "tags1",
-                "schedule": {"cron": "cron1"},
-                "is_schedule_active": True,
+                "schedules": [
+                    {
+                        "schedule": {"cron": "0 0 0 0 * 0 0"},
+                        "active": True,
+                    }
+                ],
+                "parameters": {"param1": "value1"},
             }
         ]
         response = get_deployments_by_filter(org_slug, deployment_ids)
@@ -1221,8 +1259,9 @@ def test_get_deployments_by_filter_prefect_post():
                 "name": "name1",
                 "deploymentId": "id1",
                 "tags": "tags1",
-                "cron": "cron1",
+                "cron": "0 0 0 0 * 0 0",
                 "isScheduleActive": True,
+                "parameters": {"param1": "value1"},
             }
         ]
 
@@ -1450,17 +1489,6 @@ def test_get_flow_runs_by_name_exception():
             get_flow_runs_by_name("flow_run_name")
 
 
-def test_set_deployment_schedule_prefect_post():
-    with patch("proxy.service.prefect_post") as prefect_post_mock:
-        deployment_id = "deployment_id"
-        set_deployment_schedule(deployment_id, "active")
-        prefect_post_mock.assert_called_with(f"deployments/{deployment_id}/set_schedule_active", {})
-        set_deployment_schedule(deployment_id, "inactive")
-        prefect_post_mock.assert_called_with(
-            f"deployments/{deployment_id}/set_schedule_inactive", {}
-        )
-
-
 @patch("proxy.service.prefect_get")
 @patch("proxy.service.update_flow_run_final_state")
 def test_get_flow_run_success(mock_update_flow_run_final_state: Mock, mock_get: Mock):
@@ -1490,11 +1518,52 @@ def test_get_flow_run_falure(mock_get: Mock):
     assert str(excinfo.value) == "failed to fetch a flow-run"
 
 
-def test_set_deployment_schedule_result():
-    with patch("proxy.service.prefect_post"):
+def test_set_deployment_schedule_result_1():
+    with patch("proxy.service.prefect_patch") as mock_patch, patch(
+        "proxy.service.prefect_get"
+    ) as mock_get:
+        mock_get.return_value = {
+            "schedules": [
+                {
+                    "id": "fake-id",
+                    "created": "date",
+                    "updated": "date",
+                    "deployment_id": "fake-deployment-id",
+                    "schedule": {"cron": "0 0 * * *"},
+                    "active": False,
+                }
+            ]
+        }
         deployment_id = "deployment_id"
-        result = set_deployment_schedule(deployment_id, "active")
-        assert result is None
+        set_deployment_schedule(deployment_id, "active")
+        mock_patch.assert_called_once_with(
+            f"deployments/{deployment_id}",
+            {"schedules": [{"schedule": {"cron": "0 0 * * *"}, "active": True}]},
+        )
+
+
+def test_set_deployment_schedule_result_2():
+    with patch("proxy.service.prefect_patch") as mock_patch, patch(
+        "proxy.service.prefect_get"
+    ) as mock_get:
+        mock_get.return_value = {
+            "schedules": [
+                {
+                    "id": "fake-id",
+                    "created": "date",
+                    "updated": "date",
+                    "deployment_id": "fake-deployment-id",
+                    "schedule": {"cron": "0 0 * * *"},
+                    "active": True,
+                }
+            ]
+        }
+        deployment_id = "deployment_id"
+        set_deployment_schedule(deployment_id, "inactive")
+        mock_patch.assert_called_once_with(
+            f"deployments/{deployment_id}",
+            {"schedules": [{"schedule": {"cron": "0 0 * * *"}, "active": False}]},
+        )
 
 
 async def test_cancel_flow_runs_type_error():
@@ -1576,33 +1645,35 @@ def mock_payload():
 
 @patch("proxy.service.prefect_get")
 @patch("proxy.service.prefect_post")
-def test_cancel_flow_run_pending(mock_prefect_post, mock_prefect_get, mock_payload):
+def test_cancel_flow_run_pending(mock_prefect_post, mock_prefect_get, mock_payload: PayloadModel):
     """Test successful cancellation of a PENDING flow run."""
     mock_prefect_get.return_value = {"state_type": "PENDING"}
 
     set_cancel_queued_flow_run("valid_flow_run_id", mock_payload)
 
     mock_prefect_post.assert_called_once_with(
-        "flow_runs/valid_flow_run_id/set_state", payload=mock_payload
+        "flow_runs/valid_flow_run_id/set_state", payload=mock_payload.model_dump()
     )
 
 
 @patch("proxy.service.prefect_get")
 @patch("proxy.service.prefect_post")
-def test_cancel_flow_run_scheduled(mock_prefect_post, mock_prefect_get, mock_payload):
+def test_cancel_flow_run_scheduled(mock_prefect_post, mock_prefect_get, mock_payload: PayloadModel):
     """Test successful cancellation of a SCHEDULED flow run."""
     mock_prefect_get.return_value = {"state_type": "SCHEDULED"}
 
     set_cancel_queued_flow_run("valid_flow_run_id", mock_payload)
 
     mock_prefect_post.assert_called_once_with(
-        "flow_runs/valid_flow_run_id/set_state", payload=mock_payload
+        "flow_runs/valid_flow_run_id/set_state", payload=mock_payload.model_dump()
     )
 
 
 @patch("proxy.service.prefect_get")
 @patch("proxy.service.prefect_post")
-def test_cannot_cancel_non_queued_run(mock_prefect_post, mock_prefect_get, mock_payload):
+def test_cannot_cancel_non_queued_run(
+    mock_prefect_post, mock_prefect_get, mock_payload: PayloadModel
+):
     """Test that cancellation fails if the flow run is not PENDING or SCHEDULED."""
     mock_prefect_get.return_value = {"state_type": "RUNNING"}
 

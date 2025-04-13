@@ -17,6 +17,9 @@ def backup_one_rds(rds_to_backup):
 
     secret_block = Secret.load(rds_to_backup)
     secret_value = secret_block.get()
+    # prefect 2 returns a string, prefect 3 returns a dict
+    if isinstance(secret_value, str):
+        secret_value = json.loads(secret_value)
     secret_env = json.loads(secret_value)
 
     # Run the script with the secret as an environment variable
