@@ -610,7 +610,7 @@ async def update_target_configs_schema(dbt_blockname: str, target_configs_schema
 
 
 # ================================================================================================
-def post_deployment_v1(payload: DeploymentCreate2) -> dict:
+async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     """
     create a deployment from a flow and a schedule
     can also optionally pass in the name of the work queue and work pool
@@ -626,7 +626,7 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
 
     try:
         source = GitRepository(url="https://github.com/DalgoT4D/prefect-proxy.git", branch="main")
-        deployment_id = flow.from_source(
+        deployment_id = await flow.from_source(
             source=source, entrypoint="proxy/prefect_flows.py:deployment_schedule_flow_v4"
         ).deploy(
             name=payload.deployment_name,
