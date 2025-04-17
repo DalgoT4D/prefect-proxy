@@ -5,6 +5,7 @@ everything under here is incremented by a version compared to flows.py
 """
 
 import os
+import asyncio
 from datetime import datetime
 from prefect import flow, task
 from prefect.blocks.system import Secret
@@ -297,12 +298,14 @@ async def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unus
     elif task_config["slug"] == "generate-edr":  # DDP_backend:constants.TASK_GENERATE_EDR
         # commands = ["edr send-report --bucket-file-path reports/{orgname}.TODAYS_DATE.html --profiles-dir elementary_profiles"]
         # env = {"PATH": /path/to/dbt/venv, "shell": "/bin/bash"}
-        secret_block_aws_access_key = "edr-aws-access-key"
-        aws_access_key = await Secret.load(secret_block_aws_access_key).get()
-        secret_block_aws_access_secret = "edr-aws-access-secret"
-        aws_access_secret = await Secret.load(secret_block_aws_access_secret).get()
-        secret_block_s3_bucket = "edr-s3-bucket"
-        edr_s3_bucket = await Secret.load(secret_block_s3_bucket).get()
+        aws_access_key_block, aws_access_secret_block, bucket_block = await asyncio.gather(
+            Secret.load("edr-aws-access-key"),
+            Secret.load("edr-aws-access-secret"),
+            Secret.load("edr-s3-bucket"),
+        )
+        aws_access_key = aws_access_key_block.get()
+        aws_access_secret = aws_access_secret_block.get()
+        edr_s3_bucket = bucket_block.get()
         # object key for the report
         todays_date = datetime.today().strftime("%Y-%m-%d")
         task_config["commands"][0] = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
@@ -341,10 +344,15 @@ async def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unus
 # }
 @flow
 async def deployment_schedule_flow_v4(
-    config: dict, dbt_blocks: list = [], airbyte_blocks: list = []
+    config: dict,
+    dbt_blocks: list | None = None,
+    airbyte_blocks: list | None = None,
 ):
     # pylint: disable=broad-exception-caught
     """modification so dbt test failures are not propagated as flow failures"""
+    dbt_blocks = dbt_blocks or []
+    airbyte_blocks = airbyte_blocks or []
+
     config["tasks"].sort(key=lambda blk: blk["seq"])
 
     try:

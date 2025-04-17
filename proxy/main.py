@@ -146,6 +146,8 @@ def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
 async def dbtrun_v1(task_config: RunDbtCoreOperation):
     """Run a dbt core flow"""
 
+    if not isinstance(task_config, RunDbtCoreOperation):
+        raise TypeError("invalid task config")
     logger.info("dbt core operation running %s", task_config.slug)
     flow = run_dbtcore_flow_v1
     if task_config.flow_name:

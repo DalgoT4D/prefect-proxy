@@ -626,7 +626,7 @@ async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
 
     try:
         source = GitRepository(url="https://github.com/DalgoT4D/prefect-proxy.git", branch="main")
-        deployment_id = await flow.from_source(
+        deployment = await flow.from_source(
             source=source, entrypoint="proxy/prefect_flows.py:deployment_schedule_flow_v4"
         ).deploy(
             name=payload.deployment_name,
@@ -646,7 +646,7 @@ async def post_deployment_v1(payload: DeploymentCreate2) -> dict:
         raise PrefectException("failed to create deployment") from error
 
     return {
-        "id": deployment_id,
+        "id": deployment.id,
         "name": payload.deployment_name,
         "params": payload.deployment_params,
     }
