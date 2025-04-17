@@ -143,7 +143,7 @@ def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
         raise
 
 
-def dbtrun_v1(task_config: RunDbtCoreOperation):
+async def dbtrun_v1(task_config: RunDbtCoreOperation):
     """Run a dbt core flow"""
 
     logger.info("dbt core operation running %s", task_config.slug)
@@ -154,7 +154,7 @@ def dbtrun_v1(task_config: RunDbtCoreOperation):
         flow = flow.with_options(flow_run_name=task_config.flow_run_name)
 
     try:
-        result = flow(task_config.model_dump())
+        result = await flow(task_config.model_dump())
         return result
     except Exception as error:
         logger.exception(error)
@@ -163,7 +163,7 @@ def dbtrun_v1(task_config: RunDbtCoreOperation):
         ) from error
 
 
-def shelloprun(task_config: RunShellOperation):
+async def shelloprun(task_config: RunShellOperation):
     """Run a shell operation flow"""
     if not isinstance(task_config, RunShellOperation):
         raise TypeError("invalid task config")
@@ -175,7 +175,7 @@ def shelloprun(task_config: RunShellOperation):
         flow = flow.with_options(flow_run_name=task_config.flow_run_name)
 
     try:
-        result = flow(task_config.model_dump())
+        result = await flow(task_config.model_dump())
         return result
     except Exception as error:
         logger.exception(error)
@@ -473,7 +473,7 @@ async def sync_dbtcore_flow_v1(payload: RunDbtCoreOperation):
 
     logger.info("running dbtcore-run for dbt-core-op %s", payload.slug)
     try:
-        result = dbtrun_v1(payload)
+        result = await dbtrun_v1(payload)
         logger.info(result)
         return {"status": "success", "result": result}
     except Exception as error:
@@ -490,7 +490,7 @@ async def sync_shellop_flow(payload: RunShellOperation):
 
     logger.info("running shell operation")
     try:
-        result = shelloprun(payload)
+        result = await shelloprun(payload)
         logger.info(result)
         return {"status": "success", "result": result}
     except Exception as error:
