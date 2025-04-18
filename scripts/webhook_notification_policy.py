@@ -1,11 +1,15 @@
 """this script creates a custom webhook block document and a webhook notification policy
 this would be used to notify about dalgo backend on various flow run events"""
 
+import os
 import requests
 import prefect
+from dotenv import load_dotenv
 
 
-def main():
+def create_notification(
+    prefect_api_url: str, django_webhook_url: str, django_webhook_api_key: str, is_active: bool
+):
     """main function"""
     try:
         print(f"Prefect version: {prefect.__version__}")
@@ -16,9 +20,7 @@ def main():
                 "block_capabilities": {"all_": ["notify"]},
             },
         }
-        res = requests.post(
-            "http://localhost:4200/api/block_types/filter", json=payload, timeout=15
-        )
+        res = requests.post(f"{prefect_api_url}/block_types/filter", json=payload, timeout=15)
         res.raise_for_status()
 
         custom_webhook_type = [
@@ -39,9 +41,7 @@ def main():
                 "version": {"any_": [prefect.__version__]},
             },
         }
-        res = requests.post(
-            "http://localhost:4200/api/block_schemas/filter", json=payload, timeout=15
-        )
+        res = requests.post(f"{prefect_api_url}/block_schemas/filter", json=payload, timeout=15)
         res.raise_for_status()
 
         custom_webhook_block_schema = [
@@ -66,16 +66,16 @@ def main():
             "name": "dalgo-custom-webhook-block",
             "is_anonymous": False,
             "data": {
-                "url": "http://localhost:8002/webhooks/v1/notification/",  # update this to the dalgo backend url
+                "url": django_webhook_url,
                 "name": "Dalgo webhook",
                 "headers": {
-                    "X-Notification-Key": "dev123"
-                },  # update the api key as per the dalgo backend config
+                    "X-Notification-Key": django_webhook_api_key,
+                },
                 "json_data": {"body": "{{body}}"},
                 "timeout": 30,
             },
         }
-        res = requests.post("http://localhost:4200/api/block_documents/", json=payload, timeout=15)
+        res = requests.post(f"{prefect_api_url}/block_documents/", json=payload, timeout=15)
         res.raise_for_status()
 
         custom_webhook_block_document = res.json()
@@ -85,7 +85,7 @@ def main():
 
         # create the webhook notification policy
         payload = {
-            "is_active": False,  # toggle this if you want an active one or you can do it from the UI
+            "is_active": is_active,  # toggle this if you want an active one or you can do it from the UI
             "state_names": [
                 "Completed",
                 "Cancelled",
@@ -100,20 +100,36 @@ def main():
             "message_template": "Flow run {flow_run_name} with id {flow_run_id} entered state {flow_run_state_name}",
         }
         res = requests.post(
-            "http://localhost:4200/api/flow_run_notification_policies/", json=payload, timeout=15
+            f"{prefect_api_url}/flow_run_notification_policies/", json=payload, timeout=15
         )
         res.raise_for_status()
 
         webhook_notification_policy = res.json()
         print(f"Created webhook notification policy with id {webhook_notification_policy['id']}")
+        print("Webhook is currenty active" if is_active else "Webhook is currently inactive")
 
     except requests.exceptions.HTTPError as http_err:
         print(f"HTTP error occurred: {http_err}")
-        print(f"Response status code: {res.status_code}")
-        print(f"Response content: {res.text}")
+        if "res" in locals():
+            print(f"Response status code: {res.status_code}")
+            print(f"Response content: {res.text}")
     except Exception as err:
         print(f"An error occurred: {err}")
 
 
 if __name__ == "__main__":
-    main()
+    load_dotenv(".env.webhook_notification_policy")
+
+    prefect_api_url_param = os.getenv("PREFECT_API_URL")
+    django_webhook_url_param = os.getenv("DJANGO_WEBHOOK_URL")
+    django_webhook_api_key_param = os.getenv("DJANGO_WEBHOOK_API_KEY")
+
+    if prefect_api_url_param and django_webhook_url_param and django_webhook_api_key_param:
+        create_notification(
+            prefect_api_url_param, django_webhook_url_param, django_webhook_api_key_param, False
+        )
+    else:
+        print(
+            "Please set the environment variables PREFECT_API_URL, DJANGO_WEBHOOK_URL, "
+            "and DJANGO_WEBHOOK_API_KEY in the .env.webhook_notification_policy file."
+        )
