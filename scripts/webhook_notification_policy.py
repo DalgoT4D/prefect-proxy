@@ -66,7 +66,7 @@ def main():
             "name": "dalgo-custom-webhook-block",
             "is_anonymous": False,
             "data": {
-                "url": "http://localhost:8002/webhooks/v1/notification/",
+                "url": "http://localhost:8002/webhooks/v1/notification/",  # update this to the dalgo backend url
                 "name": "Dalgo webhook",
                 "headers": {
                     "X-Notification-Key": "dev123"
