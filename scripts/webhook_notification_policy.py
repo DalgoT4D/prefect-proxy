@@ -1,4 +1,5 @@
-"""set the allow_field_overrides flag in postgres profiles' target configs"""
+"""this script creates a custom webhook block document and a webhook notification policy
+this would be used to notify about dalgo backend on various flow run events"""
 
 import requests
 import prefect
