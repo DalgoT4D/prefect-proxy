@@ -103,6 +103,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.webhook_notification_policy
 .venv
 env/
 venv/
