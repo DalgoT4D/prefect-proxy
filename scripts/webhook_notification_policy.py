@@ -1,5 +1,7 @@
-"""this script creates a custom webhook block document and a webhook notification policy
-this would be used to notify about dalgo backend on various flow run events"""
+"""
+this script creates a custom webhook block document and a webhook notification policy
+this would be used to notify about dalgo backend on various flow run events
+"""
 
 import os
 import requests
@@ -29,10 +31,8 @@ def create_notification(
         if not custom_webhook_type:
             print("No block types with slug 'custom-webhook' found.")
             return
-        else:
-            print(
-                f"Found block type with slug 'custom-webhook' and id: {custom_webhook_type[0]['id']}"
-            )
+
+        print(f"Found block type with slug 'custom-webhook' and id: {custom_webhook_type[0]['id']}")
 
         # get schema for the block
         payload = {
@@ -54,10 +54,11 @@ def create_notification(
                 f"No block schema for block type 'custom-webhook' with version {prefect.__version__} found."
             )
             return
-        else:
-            print(
-                f"Found block schema for block type 'custom-webhook' with version {prefect.__version__} and id : {custom_webhook_block_schema[0]['id']}"
-            )
+
+        print(
+            f"Found block schema for block type 'custom-webhook' with version {prefect.__version__} "
+            "and id : {custom_webhook_block_schema[0]['id']}"
+        )
 
         # create the custom webhook block document
         payload = {
@@ -97,7 +98,8 @@ def create_notification(
             ],
             "tags": [],
             "block_document_id": custom_webhook_block_document["id"],
-            "message_template": "Flow run {flow_run_name} with id {flow_run_id} entered state {flow_run_state_name}",
+            "message_template": "Flow run {flow_run_name} with id {flow_run_id} "
+            "entered state {flow_run_state_name}",
         }
         res = requests.post(
             f"{prefect_api_url}/flow_run_notification_policies/", json=payload, timeout=15
