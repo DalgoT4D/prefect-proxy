@@ -501,14 +501,14 @@ async def sync_shellop_flow(payload: RunShellOperation):
 
 
 @app.post("/proxy/v1/deployments/")
-async def post_dataflow_v1(payload: DeploymentCreate2):
+def post_dataflow_v1(payload: DeploymentCreate2):
     """Create a deployment from an existing flow"""
     if not isinstance(payload, DeploymentCreate2):
         raise TypeError("payload is invalid")
 
     logger.info(payload)
     try:
-        deployment = await post_deployment_v1(payload)
+        deployment = post_deployment_v1(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(status_code=400, detail="failed to create deployment") from error
