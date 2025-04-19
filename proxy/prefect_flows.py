@@ -20,9 +20,9 @@ from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_airbyte.connections import ResetStream
 from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
 from prefect_dbt.cli import DbtCliProfile
+from proxy.helpers import CustomLogger
 from prefect_dbt.cloud import DbtCloudCredentials
 from prefect_dbt.cloud.jobs import trigger_dbt_cloud_job_run
-from proxy.helpers import CustomLogger
 
 logger = CustomLogger("prefect-proxy")
 
