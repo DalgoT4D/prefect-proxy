@@ -33,7 +33,7 @@ from proxy.main import (
     post_deployment_set_schedule,
     post_deployments,
     sync_shellop_flow,
-    sync_dbtcore_flow_v1,
+    post_run_dbtcore_flow_v1,
     post_dataflow_v1,
     put_dataflow_v1,
     get_long_running_flows,
@@ -151,11 +151,11 @@ def test_dbtrun_v1():
         commands=[],
         cli_profile_block="block-name",
     )
-    with patch("proxy.main.run_dbtcore_flow_v1") as mock_run_dbtcore_flow_v1:
-        mock_run_dbtcore_flow_v1.return_value = {"result": "example_result"}
+    with patch("proxy.main.post_run_dbtcore_flow_v1") as mock_post_run_dbtcore_flow_v1:
+        mock_post_run_dbtcore_flow_v1.return_value = {"result": "example_result"}
         result = dbtrun_v1(task_config)
         assert result == {"result": "example_result"}
-        mock_run_dbtcore_flow_v1.assert_called_once_with(task_config.model_dump())
+        mock_post_run_dbtcore_flow_v1.assert_called_once_with(task_config.model_dump())
 
 
 def test_shelloprun_success():
@@ -622,8 +622,8 @@ async def test_sync_shellop_flow_invalid_payload():
 
 
 @pytest.mark.asyncio
-async def test_sync_dbtcore_flow_v1():
-    """tests sync_dbtcore_flow_v1"""
+async def test_post_run_dbtcore_flow_v1():
+    """tests post_run_dbtcore_flow_v1"""
     payload = RunDbtCoreOperation(
         slug="slug",
         type="dbtrun",
@@ -638,7 +638,7 @@ async def test_sync_dbtcore_flow_v1():
     )
     with patch("proxy.main.dbtrun_v1") as mock_dbtrun_v1:
         mock_dbtrun_v1.return_value = "test result"
-        result = await sync_dbtcore_flow_v1(payload)
+        result = await post_run_dbtcore_flow_v1(payload)
         assert result == {"status": "success", "result": "test result"}
 
 

@@ -143,7 +143,7 @@ def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
         raise
 
 
-async def dbtrun_v1(task_config: RunDbtCoreOperation):
+def dbtrun_v1(task_config: RunDbtCoreOperation):
     """Run a dbt core flow"""
 
     if not isinstance(task_config, RunDbtCoreOperation):
@@ -156,7 +156,7 @@ async def dbtrun_v1(task_config: RunDbtCoreOperation):
         flow = flow.with_options(flow_run_name=task_config.flow_run_name)
 
     try:
-        result = await flow(task_config.model_dump())
+        result = flow(task_config.model_dump())
         return result
     except Exception as error:
         logger.exception(error)
@@ -165,7 +165,7 @@ async def dbtrun_v1(task_config: RunDbtCoreOperation):
         ) from error
 
 
-async def shelloprun(task_config: RunShellOperation):
+def shelloprun(task_config: RunShellOperation):
     """Run a shell operation flow"""
     if not isinstance(task_config, RunShellOperation):
         raise TypeError("invalid task config")
@@ -177,7 +177,7 @@ async def shelloprun(task_config: RunShellOperation):
         flow = flow.with_options(flow_run_name=task_config.flow_run_name)
 
     try:
-        result = await flow(task_config.model_dump())
+        result = flow(task_config.model_dump())
         return result
     except Exception as error:
         logger.exception(error)
@@ -467,7 +467,7 @@ async def delete_block(block_id):
 
 # =============================================================================
 @app.post("/proxy/v1/flows/dbtcore/run/")
-async def sync_dbtcore_flow_v1(payload: RunDbtCoreOperation):
+def post_run_dbtcore_flow_v1(payload: RunDbtCoreOperation):
     """Prefect flow to run dbt"""
     logger.info(payload)
     if not isinstance(payload, RunDbtCoreOperation):
@@ -475,7 +475,7 @@ async def sync_dbtcore_flow_v1(payload: RunDbtCoreOperation):
 
     logger.info("running dbtcore-run for dbt-core-op %s", payload.slug)
     try:
-        result = await dbtrun_v1(payload)
+        result = dbtrun_v1(payload)
         logger.info(result)
         return {"status": "success", "result": result}
     except Exception as error:
