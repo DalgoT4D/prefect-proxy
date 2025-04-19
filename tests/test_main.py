@@ -151,11 +151,11 @@ def test_dbtrun_v1():
         commands=[],
         cli_profile_block="block-name",
     )
-    with patch("proxy.main.post_run_dbtcore_flow_v1") as mock_post_run_dbtcore_flow_v1:
-        mock_post_run_dbtcore_flow_v1.return_value = {"result": "example_result"}
+    with patch("proxy.main.run_dbtcore_flow_v1") as mock_run_dbtcore_flow_v1:
+        mock_run_dbtcore_flow_v1.return_value = {"result": "example_result"}
         result = dbtrun_v1(task_config)
         assert result == {"result": "example_result"}
-        mock_post_run_dbtcore_flow_v1.assert_called_once_with(task_config.model_dump())
+        mock_run_dbtcore_flow_v1.assert_called_once_with(task_config.model_dump())
 
 
 def test_shelloprun_success():
@@ -598,7 +598,7 @@ async def test_delete_block_invalid_blockid():
 
 
 @pytest.mark.asyncio
-async def test_post_run_shellop_flow_success():
+def test_post_run_shellop_flow_success():
     payload = RunShellOperation(
         type="Shell operation",
         slug="test-op",
@@ -609,7 +609,7 @@ async def test_post_run_shellop_flow_success():
         flow_run_name="shell_test_flow",
     )
     with patch("proxy.main.shelloprun", return_value="test result"):
-        response = await post_run_shellop_flow(payload)
+        response = post_run_shellop_flow(payload)
         assert response == {"status": "success", "result": "test result"}
 
 
@@ -622,7 +622,7 @@ async def test_post_run_shellop_flow_invalid_payload():
 
 
 @pytest.mark.asyncio
-async def test_post_run_dbtcore_flow_v1():
+def test_post_run_dbtcore_flow_v1():
     """tests post_run_dbtcore_flow_v1"""
     payload = RunDbtCoreOperation(
         slug="slug",
@@ -638,7 +638,7 @@ async def test_post_run_dbtcore_flow_v1():
     )
     with patch("proxy.main.dbtrun_v1") as mock_dbtrun_v1:
         mock_dbtrun_v1.return_value = "test result"
-        result = await post_run_dbtcore_flow_v1(payload)
+        result = post_run_dbtcore_flow_v1(payload)
         assert result == {"status": "success", "result": "test result"}
 
 

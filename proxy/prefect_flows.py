@@ -163,7 +163,7 @@ def run_shell_operation_flow(payload: dict):
 
 
 @flow
-def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
+async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
     # pylint: disable=broad-exception-caught
     # """Prefect flow to run refresh schema"""
     try:
@@ -174,7 +174,7 @@ def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
             connection_id=payload["connection_id"],
             timeout=max(payload.get("timeout", 0), 100),
         )
-        update_connection_schema(connection_block, catalog_diff=catalog_diff)
+        await update_connection_schema(connection_block, catalog_diff=catalog_diff)
         return True
     except Exception as error:  # skipcq PYL-W0703
         logger.error(str(error))  # "Job <num> failed."
