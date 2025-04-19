@@ -5,7 +5,6 @@ everything under here is incremented by a version compared to flows.py
 """
 
 import os
-import asyncio
 from datetime import datetime
 from prefect import flow, task
 from prefect.blocks.system import Secret
