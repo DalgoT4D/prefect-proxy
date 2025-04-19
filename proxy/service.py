@@ -61,6 +61,9 @@ FLOW_RUN_SCHEDULED = "SCHEDULED"
 
 logger = CustomLogger("prefect-proxy")
 
+PREFECT_API_TIMEOUT = int(os.getenv("PREFECT_API_TIMEOUT", "30"))
+PREFECT_API_RETRY = os.getenv("PREFECT_API_RETRY", "false").lower() in ["true", "1", "yes", "y"]
+
 
 def prefect_post(endpoint: str, payload: dict) -> dict:
     """POST request to prefect server"""
@@ -70,17 +73,18 @@ def prefect_post(endpoint: str, payload: dict) -> dict:
         raise TypeError("payload must be a dictionary")
 
     root = os.getenv("PREFECT_API_URL")
-    res = requests.post(f"{root}/{endpoint}", timeout=30, json=payload)
 
-    try:
-        res.raise_for_status()
-        return res.json()
-    except Exception as error:  # pylint:disable=broad-exception-caught
-        logger.exception(error)
-        # try again
-        sleep(3)
+    if PREFECT_API_RETRY:
+        res = requests.post(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT, json=payload)
+        try:
+            res.raise_for_status()
+            return res.json()
+        except Exception as error:  # pylint:disable=broad-exception-caught
+            logger.exception(error)
+            # try again
+            sleep(3)
 
-    res = requests.post(f"{root}/{endpoint}", timeout=30, json=payload)
+    res = requests.post(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT, json=payload)
     try:
         res.raise_for_status()
         return res.json()
@@ -97,20 +101,21 @@ def prefect_patch(endpoint: str, payload: dict) -> dict:
         raise TypeError("payload must be a dictionary")
 
     root = os.getenv("PREFECT_API_URL")
-    res = requests.patch(f"{root}/{endpoint}", timeout=30, json=payload)
 
-    try:
-        res.raise_for_status()
-        # no content
-        if res.status_code == 204:
-            return {}
-        return res.json()
-    except Exception as error:  # pylint:disable=broad-exception-caught
-        logger.exception(error)
-        # try again
-        sleep(3)
+    if PREFECT_API_RETRY:
+        res = requests.patch(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT, json=payload)
+        try:
+            res.raise_for_status()
+            # no content
+            if res.status_code == 204:
+                return {}
+            return res.json()
+        except Exception as error:  # pylint:disable=broad-exception-caught
+            logger.exception(error)
+            # try again
+            sleep(3)
 
-    res = requests.patch(f"{root}/{endpoint}", timeout=30, json=payload)
+    res = requests.patch(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT, json=payload)
     try:
         res.raise_for_status()
         # no content
@@ -128,16 +133,17 @@ def prefect_get(endpoint: str) -> dict:
         raise TypeError("endpoint must be a string")
 
     root = os.getenv("PREFECT_API_URL")
-    res = requests.get(f"{root}/{endpoint}", timeout=30)
-    try:
-        res.raise_for_status()
-        return res.json()
-    except Exception as error:  # pylint:disable=broad-exception-caught
-        logger.exception(error)
-        # try again
-        sleep(3)
+    if PREFECT_API_RETRY:
+        res = requests.get(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT)
+        try:
+            res.raise_for_status()
+            return res.json()
+        except Exception as error:  # pylint:disable=broad-exception-caught
+            logger.exception(error)
+            # try again
+            sleep(3)
 
-    res = requests.get(f"{root}/{endpoint}", timeout=30)
+    res = requests.get(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT)
     try:
         res.raise_for_status()
         return res.json()
@@ -152,18 +158,19 @@ def prefect_delete(endpoint: str) -> dict:
         raise TypeError("endpoint must be a string")
 
     root = os.getenv("PREFECT_API_URL")
-    res = requests.delete(f"{root}/{endpoint}", timeout=30)
-    try:
-        res.raise_for_status()
-        # no content
-        if res.status_code == 204:
-            return {}
-        return res.json()
-    except Exception as error:  # pylint:disable=broad-exception-caught
-        logger.exception(error)
-        sleep(3)
+    if PREFECT_API_RETRY:
+        res = requests.delete(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT)
+        try:
+            res.raise_for_status()
+            # no content
+            if res.status_code == 204:
+                return {}
+            return res.json()
+        except Exception as error:  # pylint:disable=broad-exception-caught
+            logger.exception(error)
+            sleep(3)
 
-    res = requests.delete(f"{root}/{endpoint}", timeout=30)
+    res = requests.delete(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT)
     try:
         res.raise_for_status()
         # no content
