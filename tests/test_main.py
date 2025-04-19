@@ -32,7 +32,7 @@ from proxy.main import (
     put_secret_block,
     post_deployment_set_schedule,
     post_deployments,
-    sync_shellop_flow,
+    post_run_shellop_flow,
     post_run_dbtcore_flow_v1,
     post_dataflow_v1,
     put_dataflow_v1,
@@ -598,7 +598,7 @@ async def test_delete_block_invalid_blockid():
 
 
 @pytest.mark.asyncio
-async def test_sync_shellop_flow_success():
+async def test_post_run_shellop_flow_success():
     payload = RunShellOperation(
         type="Shell operation",
         slug="test-op",
@@ -609,15 +609,15 @@ async def test_sync_shellop_flow_success():
         flow_run_name="shell_test_flow",
     )
     with patch("proxy.main.shelloprun", return_value="test result"):
-        response = await sync_shellop_flow(payload)
+        response = await post_run_shellop_flow(payload)
         assert response == {"status": "success", "result": "test result"}
 
 
 @pytest.mark.asyncio
-async def test_sync_shellop_flow_invalid_payload():
+async def test_post_run_shellop_flow_invalid_payload():
     payload = None
     with pytest.raises(TypeError) as excinfo:
-        await sync_shellop_flow(payload)
+        await post_run_shellop_flow(payload)
     assert excinfo.value.args[0] == "payload is invalid"
 
 

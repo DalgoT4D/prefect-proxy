@@ -484,7 +484,7 @@ def post_run_dbtcore_flow_v1(payload: RunDbtCoreOperation):
 
 
 @app.post("/proxy/flows/shell/run/")
-def sync_shellop_flow(payload: RunShellOperation):
+def post_run_shellop_flow(payload: RunShellOperation):
     """Prefect flow to run dbt"""
     logger.info(payload)
     if not isinstance(payload, RunShellOperation):
