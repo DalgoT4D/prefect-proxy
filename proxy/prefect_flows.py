@@ -46,17 +46,17 @@ DBTCLOUD = "dbt Cloud Job"
 #     timeout: int
 # }
 @flow
-async def run_airbyte_connection_flow_v1(payload: dict):
+def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
     try:
         airbyte_server_block = payload["airbyte_server_block"]
-        serverblock = await AirbyteServer.load(airbyte_server_block)
+        serverblock = AirbyteServer.load(airbyte_server_block)
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
             timeout=payload["timeout"] or 15,
         )
-        result = await run_connection_sync(connection_block)
+        result = run_connection_sync(connection_block)
         logger.info("airbyte connection sync result=")
         logger.info(result)
         return result
@@ -74,17 +74,17 @@ async def run_airbyte_connection_flow_v1(payload: dict):
 #     timeout: int
 # }
 @flow
-async def run_airbyte_conn_reset(payload: dict):
+def run_airbyte_conn_reset(payload: dict):
     """reset an airbyte connection"""
     try:
         airbyte_server_block = payload["airbyte_server_block"]
-        serverblock = await AirbyteServer.load(airbyte_server_block)
+        serverblock = AirbyteServer.load(airbyte_server_block)
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
             timeout=payload["timeout"] or 15,
         )
-        result = await reset_connection(connection_block)
+        result = reset_connection(connection_block)
         logger.info("airbyte connection reset result=")
         logger.info(result)
         return result
@@ -102,17 +102,17 @@ async def run_airbyte_conn_reset(payload: dict):
 #     timeout: int
 # }
 @flow
-async def run_airbyte_conn_clear(payload: dict):
+def run_airbyte_conn_clear(payload: dict):
     """reset an airbyte connection"""
     try:
         airbyte_server_block = payload["airbyte_server_block"]
-        serverblock = await AirbyteServer.load(airbyte_server_block)
+        serverblock = AirbyteServer.load(airbyte_server_block)
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
             timeout=payload["timeout"] or 15,
         )
-        result = await clear_connection(connection_block)
+        result = clear_connection(connection_block)
         logger.info("airbyte connection clear result=")
         logger.info(result)
         return result
@@ -130,17 +130,17 @@ async def run_airbyte_conn_clear(payload: dict):
 #     timeout: int
 # }
 @flow
-async def run_airbyte_reset_streams_for_conn(payload: dict, streams: list[ResetStream]):
+def run_airbyte_reset_streams_for_conn(payload: dict, streams: list[ResetStream]):
     """reset an airbyte connection"""
     try:
         airbyte_server_block = payload["airbyte_server_block"]
-        serverblock = await AirbyteServer.load(airbyte_server_block)
+        serverblock = AirbyteServer.load(airbyte_server_block)
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
             timeout=payload["timeout"] or 15,
         )
-        result = await reset_connection_streams(connection_block, streams)
+        result = reset_connection_streams(connection_block, streams)
         logger.info("airbyte connection reset result=")
         logger.info(result)
         return result
@@ -164,18 +164,18 @@ def run_shell_operation_flow(payload: dict):
 
 
 @flow
-async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
+def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
     # pylint: disable=broad-exception-caught
     # """Prefect flow to run refresh schema"""
     try:
         airbyte_server_block = payload["airbyte_server_block"]
-        serverblock = await AirbyteServer.load(airbyte_server_block)
+        serverblock = AirbyteServer.load(airbyte_server_block)
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
             timeout=max(payload.get("timeout", 0), 100),
         )
-        await update_connection_schema(connection_block, catalog_diff=catalog_diff)
+        update_connection_schema(connection_block, catalog_diff=catalog_diff)
         return True
     except Exception as error:  # skipcq PYL-W0703
         logger.error(str(error))  # "Job <num> failed."
