@@ -340,46 +340,43 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 #     }
 # }
 @flow
-async def deployment_schedule_flow_v4(
+def deployment_schedule_flow_v4(
     config: dict,
-    dbt_blocks: list | None = None,
-    airbyte_blocks: list | None = None,
+    dbt_blocks: list | None = None,  # pylint: disable=unused-argument
+    airbyte_blocks: list | None = None,  # pylint: disable=unused-argument
 ):
     # pylint: disable=broad-exception-caught
     """modification so dbt test failures are not propagated as flow failures"""
-    dbt_blocks = dbt_blocks or []
-    airbyte_blocks = airbyte_blocks or []
-
     config["tasks"].sort(key=lambda blk: blk["seq"])
 
     try:
         for task_config in config["tasks"]:
             if task_config["type"] == DBTCORE:
-                await dbtjob_v1(task_config, task_config["slug"])
+                dbtjob_v1(task_config, task_config["slug"])
 
             elif task_config["type"] == DBTCLOUD:
-                await dbtcloudjob_v1(task_config, task_config["slug"])
+                dbtcloudjob_v1(task_config, task_config["slug"])
 
             elif task_config["type"] == SHELLOPERATION:
-                await shellopjob(task_config, task_config["slug"])
+                shellopjob(task_config, task_config["slug"])
 
             elif task_config["type"] == AIRBYTECONNECTION:
                 if task_config["slug"] == "airbyte-reset":
                     if task_config.get("streams") and len(task_config["streams"]) > 0:
                         # run reset for streams
                         streams = [ResetStream(**stream) for stream in task_config["streams"]]
-                        await run_airbyte_reset_streams_for_conn(task_config, streams)
+                        run_airbyte_reset_streams_for_conn(task_config, streams)
                     else:
                         # run full reset of all streams
-                        await run_airbyte_conn_reset(task_config)
+                        run_airbyte_conn_reset(task_config)
                 elif task_config["slug"] == "airbyte-sync":
-                    await run_airbyte_connection_flow_v1(task_config)
+                    run_airbyte_connection_flow_v1(task_config)
 
                 elif task_config["slug"] == "airbyte-clear":
-                    await run_airbyte_conn_clear(task_config)
+                    run_airbyte_conn_clear(task_config)
 
                 elif task_config["slug"] == "update-schema":
-                    await run_refresh_schema_flow(
+                    run_refresh_schema_flow(
                         task_config, catalog_diff=task_config.get("catalog_diff", {})
                     )
             else:
