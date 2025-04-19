@@ -614,10 +614,10 @@ def test_post_run_shellop_flow_success():
 
 
 @pytest.mark.asyncio
-async def test_post_run_shellop_flow_invalid_payload():
+def test_post_run_shellop_flow_invalid_payload():
     payload = None
     with pytest.raises(TypeError) as excinfo:
-        await post_run_shellop_flow(payload)
+        post_run_shellop_flow(payload)
     assert excinfo.value.args[0] == "payload is invalid"
 
 
