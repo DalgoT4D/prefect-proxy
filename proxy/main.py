@@ -484,7 +484,7 @@ def post_run_dbtcore_flow_v1(payload: RunDbtCoreOperation):
 
 
 @app.post("/proxy/flows/shell/run/")
-async def sync_shellop_flow(payload: RunShellOperation):
+def sync_shellop_flow(payload: RunShellOperation):
     """Prefect flow to run dbt"""
     logger.info(payload)
     if not isinstance(payload, RunShellOperation):
@@ -492,7 +492,7 @@ async def sync_shellop_flow(payload: RunShellOperation):
 
     logger.info("running shell operation")
     try:
-        result = await shelloprun(payload)
+        result = shelloprun(payload)
         logger.info(result)
         return {"status": "success", "result": result}
     except Exception as error:
