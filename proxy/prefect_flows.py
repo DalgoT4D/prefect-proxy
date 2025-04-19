@@ -201,7 +201,7 @@ async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
 #     flow_run_name: str
 # }
 @task(name="dbtjob_v1", task_run_name="dbtjob-{task_slug}")
-async def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
+def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     # pylint: disable=broad-exception-caught
     """
     each dbt op will run as a task within the parent flow
@@ -209,7 +209,7 @@ async def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unuse
     """
 
     # load the cli block first
-    cli_profile_block = await DbtCliProfile.load(task_config["cli_profile_block"])
+    cli_profile_block = DbtCliProfile.load(task_config["cli_profile_block"])
 
     dbt_op: DbtCoreOperation = DbtCoreOperation(
         commands=task_config["commands"],
@@ -225,7 +225,7 @@ async def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unuse
         os.unlink(dbt_op.profiles_dir / "profiles.yml")
 
     try:
-        return await dbt_op.run()
+        return dbt_op.run()
     except Exception:  # skipcq PYL-W0703
         if task_config["slug"] == "dbt-test":
             return State(
