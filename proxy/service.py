@@ -63,6 +63,7 @@ logger = CustomLogger("prefect-proxy")
 
 PREFECT_API_TIMEOUT = int(os.getenv("PREFECT_API_TIMEOUT", "30"))
 PREFECT_API_RETRY = os.getenv("PREFECT_API_RETRY", "false").lower() in ["true", "1", "yes", "y"]
+PREFECT_API_RETRY_DELAY = float(os.getenv("PREFECT_API_RETRY_DELAY", "3.0"))
 
 
 def prefect_post(endpoint: str, payload: dict) -> dict:
@@ -82,7 +83,8 @@ def prefect_post(endpoint: str, payload: dict) -> dict:
         except Exception as error:  # pylint:disable=broad-exception-caught
             logger.exception(error)
             # try again
-            sleep(3)
+            logger.info("Retrying prefect_post request to %s", endpoint)
+            sleep(PREFECT_API_RETRY_DELAY)
 
     res = requests.post(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT, json=payload)
     try:
@@ -113,7 +115,8 @@ def prefect_patch(endpoint: str, payload: dict) -> dict:
         except Exception as error:  # pylint:disable=broad-exception-caught
             logger.exception(error)
             # try again
-            sleep(3)
+            logger.info("Retrying prefect_patch request to %s", endpoint)
+            sleep(PREFECT_API_RETRY_DELAY)
 
     res = requests.patch(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT, json=payload)
     try:
@@ -141,7 +144,8 @@ def prefect_get(endpoint: str) -> dict:
         except Exception as error:  # pylint:disable=broad-exception-caught
             logger.exception(error)
             # try again
-            sleep(3)
+            logger.info("Retrying prefect_get request to %s", endpoint)
+            sleep(PREFECT_API_RETRY_DELAY)
 
     res = requests.get(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT)
     try:
@@ -168,7 +172,8 @@ def prefect_delete(endpoint: str) -> dict:
             return res.json()
         except Exception as error:  # pylint:disable=broad-exception-caught
             logger.exception(error)
-            sleep(3)
+            logger.info("Retrying prefect_delete request to %s", endpoint)
+            sleep(PREFECT_API_RETRY_DELAY)
 
     res = requests.delete(f"{root}/{endpoint}", timeout=PREFECT_API_TIMEOUT)
     try:
