@@ -260,7 +260,7 @@ async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=
     """Create a dbt Cloud Credentials block and a dbt Cloud Job block"""
     try:
         # load the cloud credentials
-        dbt_cloud_creds = await DbtCloudCredentials.load(task_config["dbt_cloud_creds_block"])
+        dbt_cloud_creds = await DbtCloudCredentials.aload(task_config["dbt_cloud_creds_block"])
 
         result = await trigger_dbt_cloud_job_run(dbt_cloud_creds, task_config["dbt_cloud_job_id"])
 
@@ -356,7 +356,7 @@ def deployment_schedule_flow_v4(
                 dbtjob_v1(task_config, task_config["slug"])
 
             elif task_config["type"] == DBTCLOUD:
-                dbtcloudjob_v1(task_config, task_config["slug"])
+                asyncio.run(dbtcloudjob_v1(task_config, task_config["slug"]))
 
             elif task_config["type"] == SHELLOPERATION:
                 shellopjob(task_config, task_config["slug"])
