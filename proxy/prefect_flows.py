@@ -5,6 +5,7 @@ everything under here is incremented by a version compared to flows.py
 """
 
 import os
+import asyncio
 from datetime import datetime
 from prefect import flow, task
 from prefect.blocks.system import Secret
@@ -168,7 +169,7 @@ async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
     # """Prefect flow to run refresh schema"""
     try:
         airbyte_server_block = payload["airbyte_server_block"]
-        serverblock = AirbyteServer.load(airbyte_server_block)
+        serverblock = await AirbyteServer.aload(airbyte_server_block)
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
@@ -376,9 +377,12 @@ def deployment_schedule_flow_v4(
                     run_airbyte_conn_clear(task_config)
 
                 elif task_config["slug"] == "update-schema":
-                    run_refresh_schema_flow(
-                        task_config, catalog_diff=task_config.get("catalog_diff", {})
+                    asyncio.run(
+                        run_refresh_schema_flow(
+                            task_config, catalog_diff=task_config.get("catalog_diff", {})
+                        )
                     )
+
             else:
                 raise Exception(f"Unknown task type: {task_config['type']}")
 
