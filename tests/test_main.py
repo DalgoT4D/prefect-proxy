@@ -72,7 +72,7 @@ def test_airbytesync_success():
     inner_result = {"status": "success", "result": "example_result"}
     expected_result = {"status": "success", "result": inner_result}
 
-    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
+    with patch("proxy.main.run_airbyte_connection_flow_v1") as mock_run_airbyte_connection_flow:
         with patch.object(
             mock_run_airbyte_connection_flow.with_options.return_value, "with_options"
         ) as mock_with_options:
@@ -88,7 +88,7 @@ def test_airbytesync_failure():
     inner_result = {"status": "failed", "result": "example_failure_result"}
     expected_result = {"status": "success", "result": inner_result}
 
-    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
+    with patch("proxy.main.run_airbyte_connection_flow_v1") as mock_run_airbyte_connection_flow:
         with patch.object(
             mock_run_airbyte_connection_flow.with_options.return_value, "with_options"
         ) as mock_with_options:
@@ -102,7 +102,7 @@ def test_airbytesync_http_exception():
     flow_name = ""
     flow_run_name = ""
 
-    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
+    with patch("proxy.main.run_airbyte_connection_flow_v1") as mock_run_airbyte_connection_flow:
         mock_run_airbyte_connection_flow.side_effect = HTTPException(
             status_code=400, detail="Job 12345 failed."
         )
