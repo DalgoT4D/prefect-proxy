@@ -32,8 +32,8 @@ from proxy.main import (
     put_secret_block,
     post_deployment_set_schedule,
     post_deployments,
-    sync_shellop_flow,
-    sync_dbtcore_flow_v1,
+    post_run_shellop_flow,
+    post_run_dbtcore_flow_v1,
     post_dataflow_v1,
     put_dataflow_v1,
     get_long_running_flows,
@@ -72,7 +72,7 @@ def test_airbytesync_success():
     inner_result = {"status": "success", "result": "example_result"}
     expected_result = {"status": "success", "result": inner_result}
 
-    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
+    with patch("proxy.main.run_airbyte_connection_flow_v1") as mock_run_airbyte_connection_flow:
         with patch.object(
             mock_run_airbyte_connection_flow.with_options.return_value, "with_options"
         ) as mock_with_options:
@@ -88,7 +88,7 @@ def test_airbytesync_failure():
     inner_result = {"status": "failed", "result": "example_failure_result"}
     expected_result = {"status": "success", "result": inner_result}
 
-    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
+    with patch("proxy.main.run_airbyte_connection_flow_v1") as mock_run_airbyte_connection_flow:
         with patch.object(
             mock_run_airbyte_connection_flow.with_options.return_value, "with_options"
         ) as mock_with_options:
@@ -102,7 +102,7 @@ def test_airbytesync_http_exception():
     flow_name = ""
     flow_run_name = ""
 
-    with patch("proxy.main.run_airbyte_connection_flow") as mock_run_airbyte_connection_flow:
+    with patch("proxy.main.run_airbyte_connection_flow_v1") as mock_run_airbyte_connection_flow:
         mock_run_airbyte_connection_flow.side_effect = HTTPException(
             status_code=400, detail="Job 12345 failed."
         )
@@ -598,7 +598,7 @@ async def test_delete_block_invalid_blockid():
 
 
 @pytest.mark.asyncio
-async def test_sync_shellop_flow_success():
+def test_post_run_shellop_flow_success():
     payload = RunShellOperation(
         type="Shell operation",
         slug="test-op",
@@ -609,21 +609,21 @@ async def test_sync_shellop_flow_success():
         flow_run_name="shell_test_flow",
     )
     with patch("proxy.main.shelloprun", return_value="test result"):
-        response = await sync_shellop_flow(payload)
+        response = post_run_shellop_flow(payload)
         assert response == {"status": "success", "result": "test result"}
 
 
 @pytest.mark.asyncio
-async def test_sync_shellop_flow_invalid_payload():
+def test_post_run_shellop_flow_invalid_payload():
     payload = None
     with pytest.raises(TypeError) as excinfo:
-        await sync_shellop_flow(payload)
+        post_run_shellop_flow(payload)
     assert excinfo.value.args[0] == "payload is invalid"
 
 
 @pytest.mark.asyncio
-async def test_sync_dbtcore_flow_v1():
-    """tests sync_dbtcore_flow_v1"""
+def test_post_run_dbtcore_flow_v1():
+    """tests post_run_dbtcore_flow_v1"""
     payload = RunDbtCoreOperation(
         slug="slug",
         type="dbtrun",
@@ -638,7 +638,7 @@ async def test_sync_dbtcore_flow_v1():
     )
     with patch("proxy.main.dbtrun_v1") as mock_dbtrun_v1:
         mock_dbtrun_v1.return_value = "test result"
-        result = await sync_dbtcore_flow_v1(payload)
+        result = post_run_dbtcore_flow_v1(payload)
         assert result == {"status": "success", "result": "test result"}
 
 

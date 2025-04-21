@@ -5,6 +5,7 @@ everything under here is incremented by a version compared to flows.py
 """
 
 import os
+import asyncio
 from datetime import datetime
 from prefect import flow, task
 from prefect.blocks.system import Secret
@@ -163,18 +164,18 @@ def run_shell_operation_flow(payload: dict):
 
 
 @flow
-def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
+async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
     # pylint: disable=broad-exception-caught
     # """Prefect flow to run refresh schema"""
     try:
         airbyte_server_block = payload["airbyte_server_block"]
-        serverblock = AirbyteServer.load(airbyte_server_block)
+        serverblock = await AirbyteServer.aload(airbyte_server_block)
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
             timeout=max(payload.get("timeout", 0), 100),
         )
-        update_connection_schema(connection_block, catalog_diff=catalog_diff)
+        await update_connection_schema(connection_block, catalog_diff=catalog_diff)
         return True
     except Exception as error:  # skipcq PYL-W0703
         logger.error(str(error))  # "Job <num> failed."
@@ -255,13 +256,13 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
 #     flow_run_name: str
 # }
 @task(name="dbtcloudjob_v1", task_run_name="dbtcloudjob-{task_slug}")
-def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
+async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """Create a dbt Cloud Credentials block and a dbt Cloud Job block"""
     try:
         # load the cloud credentials
-        dbt_cloud_creds = DbtCloudCredentials.load(task_config["dbt_cloud_creds_block"])
+        dbt_cloud_creds = await DbtCloudCredentials.aload(task_config["dbt_cloud_creds_block"])
 
-        result = trigger_dbt_cloud_job_run(dbt_cloud_creds, task_config["dbt_cloud_job_id"])
+        result = await trigger_dbt_cloud_job_run(dbt_cloud_creds, task_config["dbt_cloud_job_id"])
 
         return result
     except Exception as error:  # skipcq PYL-W0703
@@ -340,7 +341,11 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 #     }
 # }
 @flow
-def deployment_schedule_flow_v4(config: dict, dbt_blocks: list = [], airbyte_blocks: list = []):
+def deployment_schedule_flow_v4(
+    config: dict,
+    dbt_blocks: list | None = None,  # pylint: disable=unused-argument
+    airbyte_blocks: list | None = None,  # pylint: disable=unused-argument
+):
     # pylint: disable=broad-exception-caught
     """modification so dbt test failures are not propagated as flow failures"""
     config["tasks"].sort(key=lambda blk: blk["seq"])
@@ -351,7 +356,7 @@ def deployment_schedule_flow_v4(config: dict, dbt_blocks: list = [], airbyte_blo
                 dbtjob_v1(task_config, task_config["slug"])
 
             elif task_config["type"] == DBTCLOUD:
-                dbtcloudjob_v1(task_config, task_config["slug"])
+                asyncio.run(dbtcloudjob_v1(task_config, task_config["slug"]))
 
             elif task_config["type"] == SHELLOPERATION:
                 shellopjob(task_config, task_config["slug"])
@@ -372,9 +377,12 @@ def deployment_schedule_flow_v4(config: dict, dbt_blocks: list = [], airbyte_blo
                     run_airbyte_conn_clear(task_config)
 
                 elif task_config["slug"] == "update-schema":
-                    run_refresh_schema_flow(
-                        task_config, catalog_diff=task_config.get("catalog_diff", {})
+                    asyncio.run(
+                        run_refresh_schema_flow(
+                            task_config, catalog_diff=task_config.get("catalog_diff", {})
+                        )
                     )
+
             else:
                 raise Exception(f"Unknown task type: {task_config['type']}")
 

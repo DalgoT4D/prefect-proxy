@@ -70,12 +70,12 @@ from proxy.schemas import (
     FilterLateFlowRuns,
     FilterPrefectWorkers,
 )
-from proxy.flows import run_airbyte_connection_flow
 
 from proxy.prefect_flows import (
     run_shell_operation_flow,
     run_dbtcore_flow_v1,
     run_airbyte_conn_reset,
+    run_airbyte_connection_flow_v1,
 )
 
 
@@ -113,7 +113,7 @@ def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
         raise TypeError("flow_run_name must be a string")
 
     logger.info("airbytesync %s %s %s", block_name, flow_name, flow_run_name)
-    flow = run_airbyte_connection_flow
+    flow = run_airbyte_connection_flow_v1
     if flow_name:
         flow = flow.with_options(name=flow_name)
     if flow_run_name:
@@ -146,6 +146,8 @@ def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
 def dbtrun_v1(task_config: RunDbtCoreOperation):
     """Run a dbt core flow"""
 
+    if not isinstance(task_config, RunDbtCoreOperation):
+        raise TypeError("invalid task config")
     logger.info("dbt core operation running %s", task_config.slug)
     flow = run_dbtcore_flow_v1
     if task_config.flow_name:
@@ -465,7 +467,7 @@ async def delete_block(block_id):
 
 # =============================================================================
 @app.post("/proxy/v1/flows/dbtcore/run/")
-async def sync_dbtcore_flow_v1(payload: RunDbtCoreOperation):
+def post_run_dbtcore_flow_v1(payload: RunDbtCoreOperation):
     """Prefect flow to run dbt"""
     logger.info(payload)
     if not isinstance(payload, RunDbtCoreOperation):
@@ -482,7 +484,7 @@ async def sync_dbtcore_flow_v1(payload: RunDbtCoreOperation):
 
 
 @app.post("/proxy/flows/shell/run/")
-async def sync_shellop_flow(payload: RunShellOperation):
+def post_run_shellop_flow(payload: RunShellOperation):
     """Prefect flow to run dbt"""
     logger.info(payload)
     if not isinstance(payload, RunShellOperation):
