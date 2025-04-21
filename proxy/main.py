@@ -70,12 +70,12 @@ from proxy.schemas import (
     FilterLateFlowRuns,
     FilterPrefectWorkers,
 )
-from proxy.flows import run_airbyte_connection_flow
 
 from proxy.prefect_flows import (
     run_shell_operation_flow,
     run_dbtcore_flow_v1,
     run_airbyte_conn_reset,
+    run_airbyte_connection_flow_v1,
 )
 
 
@@ -113,7 +113,7 @@ def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
         raise TypeError("flow_run_name must be a string")
 
     logger.info("airbytesync %s %s %s", block_name, flow_name, flow_run_name)
-    flow = run_airbyte_connection_flow
+    flow = run_airbyte_connection_flow_v1
     if flow_name:
         flow = flow.with_options(name=flow_name)
     if flow_run_name:
