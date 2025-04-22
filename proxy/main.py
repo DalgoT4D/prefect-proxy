@@ -599,6 +599,23 @@ def get_flow_run_by_id(flow_run_id):
     return flow_run
 
 
+@app.get("/proxy/flow_runs/{flow_run_id}/poll")
+def get_flow_run_by_id_poll(flow_run_id):
+    """Lightweight api that can be used in polling to figure out flow run state"""
+    if not isinstance(flow_run_id, str):
+        raise TypeError("Flow run id must be a string")
+
+    try:
+        flow_run = get_flow_run(flow_run_id=flow_run_id, update_state_from_task_runs=False)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch flow_run " + flow_run_id
+        ) from error
+
+    return flow_run
+
+
 @app.delete("/proxy/flow_runs/{flow_run_id}")
 def delete_deployment_flow_run(flow_run_id):
     """Get a flow run"""
