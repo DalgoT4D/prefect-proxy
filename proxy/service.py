@@ -647,10 +647,12 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
             tags=[payload.org_slug],
             parameters=payload.deployment_params,
             schedules=(
-                [{"schedule": CronSchedule(cron=payload.cron), "active": True}]
+                [{"schedule": CronSchedule(cron=payload.cron).model_dump(), "active": True}]
                 if payload.cron
                 else []
             ),
+            build=False,
+            push=False,
         )
 
     except Exception as error:
