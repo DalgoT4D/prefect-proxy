@@ -1107,12 +1107,13 @@ def get_flow_runs_by_name(flow_run_name: str) -> dict:
     return flow_runs
 
 
-def get_flow_run(flow_run_id: str) -> dict:
+def get_flow_run(flow_run_id: str, update_state_from_task_runs=True) -> dict:
     """Get a flow run by its id"""
     try:
         flow_run = prefect_get(f"flow_runs/{flow_run_id}")
-        updated_flow_run = update_flow_run_final_state(flow_run)
-        return updated_flow_run
+        if update_state_from_task_runs:
+            flow_run = update_flow_run_final_state(flow_run)
+        return flow_run
     except Exception as err:
         logger.exception(err)
         raise PrefectException("failed to fetch a flow-run") from err
