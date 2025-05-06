@@ -112,7 +112,7 @@ dependencies = [
   "pluggy==1.5.0",
   "pre-commit==4.2.0",
   "prefect==3.1.15",
-  "prefect-airbyte @ git+https://github.com/Ishankoradia/prefect-airbyte.git",
+  "prefect-airbyte",
   "prefect-dbt==0.6.6",
   "prefect-gcp==0.6.4",
   "prefect-github==0.3.1",
@@ -214,3 +214,6 @@ omit = [
   "tests/*",
   "logger.py"
 ]
+
+[tool.uv.sources]
+prefect-airbyte = { git = "https://github.com/Ishankoradia/prefect-airbyte.git" }

@@ -2015,8 +2015,8 @@ wheels = [
 
 [[package]]
 name = "prefect-airbyte"
-version = "0.2+8.g45cf887"
-source = { git = "https://github.com/Ishankoradia/prefect-airbyte.git#45cf8870bb3a68f04fbbdcec359e47beb81cde7f" }
+version = "0.3+3.g6b0fa81"
+source = { git = "https://github.com/Ishankoradia/prefect-airbyte.git#6b0fa81e8f38890097de0cac0cfd7ce0f144e280" }
 dependencies = [
     { name = "prefect" },
     { name = "tenacity" },
