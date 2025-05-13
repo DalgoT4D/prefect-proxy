@@ -1,5 +1,6 @@
 """script to set project_dir for a deployment / all deployments"""
 
+import sys
 import argparse
 import requests
 
@@ -19,7 +20,13 @@ else:
 
 while True:
     r = requests.post(f"{BASE_URL}/deployments/filter", json=payload, timeout=20)
-    r.raise_for_status()
+    try:
+        r.raise_for_status()
+    except Exception:
+        print("could not fetch deployments using filter payload")
+        print(payload)
+        sys.exit(1)
+
     deployments = r.json()
 
     for deployment in deployments:
@@ -27,72 +34,40 @@ while True:
 
         changed = False
         show = False
+        tasks = deployment.get("parameters", {}).get("config", {}).get("tasks", [])
 
-        if (
-            deployment.get("parameters")
-            and deployment["parameters"].get("config")
-            and deployment["parameters"]["config"].get("tasks")
-        ):
-
-            for task in deployment["parameters"]["config"]["tasks"]:
-
-                if task.get("project_dir") and "/home/ddp/clientdbts" in task.get("project_dir"):
-                    if args.show:
-                        show = True
-                    else:
-                        task["project_dir"] = task["project_dir"].replace(
-                            "/home/ddp/clientdbts", "/mnt/appdata/clientdbts"
-                        )
-                        changed = True
-                if task.get("working_dir") and "/home/ddp/clientdbts" in task.get("working_dir"):
-                    if args.show:
-                        show = True
-                    else:
-                        task["working_dir"] = task["working_dir"].replace(
-                            "/home/ddp/clientdbts", "/mnt/appdata/clientdbts"
-                        )
-                        changed = True
-                if task.get("profiles_dir") and "/home/ddp/clientdbts" in task.get("profiles_dir"):
-                    if args.show:
-                        show = True
-                    else:
-                        task["profiles_dir"] = task["profiles_dir"].replace(
-                            "/home/ddp/clientdbts", "/mnt/appdata/clientdbts"
-                        )
-                        changed = True
-
+        for task in tasks:
             if show:
-                print(deployment["id"])
+                break
+            for field in ["project_dir", "working_dir", "profiles_dir"]:
+                if task.get(field) and "/home/ddp/clientdbts" in task.get(field):
+                    if args.show:
+                        show = True
+                        break
+                    task[field] = task[field].replace(
+                        "/home/ddp/clientdbts", "/mnt/appdata/clientdbts"
+                    )
+                    changed = True
 
-            elif changed:
-                del deployment["id"]
-                del deployment["created"]
-                del deployment["updated"]
-                del deployment["name"]
-                del deployment["flow_id"]
-                del deployment["global_concurrency_limit"]
-                del deployment["labels"]
-                del deployment["last_polled"]
-                del deployment["parameter_openapi_schema"]
-                del deployment["pull_steps"]
-                del deployment["created_by"]
-                del deployment["updated_by"]
-                del deployment["status"]
-                del deployment["schedules"]
-                print(deployment)
-                print("=" * 40)
-                response = requests.patch(
-                    f"{BASE_URL}/deployments/{deployment_id}",
-                    json=deployment,
-                    timeout=20,
-                )
-                try:
-                    response.raise_for_status()
-                except Exception:
-                    print(response.json())
-                    break
-            else:
-                print(f"no change to {deployment_id}")
+        if show:
+            print(deployment["id"])
+
+        elif changed:
+            update_payload = {"parameters": deployment["parameters"]}
+            print(update_payload)
+            print("=" * 40)
+            response = requests.patch(
+                f"{BASE_URL}/deployments/{deployment_id}",
+                json=update_payload,
+                timeout=20,
+            )
+            try:
+                response.raise_for_status()
+            except Exception:
+                print(response.json())
+                break
+        else:
+            print(f"no change to {deployment_id}")
 
     if "offset" in payload and len(deployments) > 0:
         payload["offset"] += payload["limit"]
