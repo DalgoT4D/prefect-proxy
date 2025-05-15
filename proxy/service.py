@@ -352,7 +352,7 @@ async def _create_dbt_cli_profile(
         extras["user"] = extras["username"]
         target_configs = TargetConfigs(
             type="postgres",
-            schema=payload.profile.target_configs_schema,
+            schema_=payload.profile.target_configs_schema,
             extras=extras,
             allow_field_overrides=True,
         )
@@ -361,7 +361,7 @@ async def _create_dbt_cli_profile(
         dbcredentials = GcpCredentials(service_account_info=payload.credentials)
         target_configs = BigQueryTargetConfigs(
             credentials=dbcredentials,
-            schema=payload.profile.target_configs_schema,
+            schema_=payload.profile.target_configs_schema,
             extras={
                 "location": payload.bqlocation,
             },
@@ -404,7 +404,7 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
     try:
         # schema
         if payload.profile and payload.profile.target_configs_schema:
-            dbtcli_block.target_configs.schema = payload.profile.target_configs_schema
+            dbtcli_block.target_configs.schema_ = payload.profile.target_configs_schema
             dbtcli_block.target = (
                 payload.profile.target_configs_schema
             )  # by default output(s) target in profiles.yml will be target_configs_schema
@@ -546,7 +546,7 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
 
     block.dbt_cli_profile.target_configs = TargetConfigs(
         type=block.dbt_cli_profile.target_configs.type,
-        schema=block.dbt_cli_profile.target_configs.model_dump()["schema"],
+        schema_=block.dbt_cli_profile.target_configs.model_dump()["schema"],
         extras=cleaned_extras,
     )
 
@@ -575,7 +575,7 @@ async def update_bigquery_credentials(dbt_blockname: str, credentials: dict):
 
     block.dbt_cli_profile.target_configs = BigQueryTargetConfigs(
         credentials=dbcredentials,
-        schema=block.dbt_cli_profile.target_configs.model_dump()["schema_"],
+        schema_=block.dbt_cli_profile.target_configs.model_dump()["schema_"],
         extras=block.dbt_cli_profile.target_configs.model_dump()["extras"],
     )
 
@@ -597,7 +597,7 @@ async def update_target_configs_schema(dbt_blockname: str, target_configs_schema
     except Exception as error:
         raise PrefectException("no dbt core op block named " + dbt_blockname) from error
 
-    block.dbt_cli_profile.target_configs.schema = target_configs_schema
+    block.dbt_cli_profile.target_configs.schema_ = target_configs_schema
     block.dbt_cli_profile.target = target_configs_schema
 
     # update the dbt command "dbt <command> --target <target>"
