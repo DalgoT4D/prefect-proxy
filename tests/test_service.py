@@ -922,7 +922,7 @@ async def test_update_postgres_credentials_success(mock_load):
                             "user": "old_user",
                             "password": "old_password",
                         },
-                        "schema": "old_schema",
+                        "schema_": "old_schema",
                     }
                 ),
                 model_dump=Mock(
@@ -933,7 +933,7 @@ async def test_update_postgres_credentials_success(mock_load):
                             "user": "old_user",
                             "password": "old_password",
                         },
-                        "schema": "old_schema",
+                        "schema_": "old_schema",
                     }
                 ),
             ),
