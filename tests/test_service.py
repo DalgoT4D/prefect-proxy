@@ -675,7 +675,7 @@ async def test_update_dbt_cli_profile_postgres(mock_load: AsyncMock):
         wtype="postgres",
     )
     mock_load.return_value = Mock(
-        target_configs=Mock(schema="old-schema"),
+        target_configs=Mock(schema_="old-schema"),
         save=AsyncMock(),
         dict=Mock(return_value={"_block_document_id": "_block_document_id"}),
         model_dump=Mock(return_value={"_block_document_id": "_block_document_id"}),
@@ -683,7 +683,7 @@ async def test_update_dbt_cli_profile_postgres(mock_load: AsyncMock):
     block, block_id, block_name = await update_dbt_cli_profile(payload)
     assert block_name == "block-name"
     assert block_id == "_block_document_id"
-    assert block.target_configs.schema == "new_schema"
+    assert block.target_configs.schema_ == "new_schema"
     assert block.target == "new_schema"
     assert block.name == "profile-name"
     assert block.target_configs.extras["host"] == "new_host"
@@ -1046,7 +1046,7 @@ async def test_update_target_configs_schema(mock_load):
     dbt_coreop_block.dbt_cli_profile.save.assert_called_once_with(name="block-name", overwrite=True)
     dbt_coreop_block.save.assert_called_once_with("block-name", overwrite=True)
 
-    assert dbt_coreop_block.dbt_cli_profile.target_configs.schema == "newtarget"
+    assert dbt_coreop_block.dbt_cli_profile.target_configs.schema_ == "newtarget"
     assert dbt_coreop_block.dbt_cli_profile.target == "newtarget"
     assert dbt_coreop_block.commands[0] == "dbt run --target newtarget"
 
