@@ -546,7 +546,7 @@ async def update_postgres_credentials(dbt_blockname, new_extras):
 
     block.dbt_cli_profile.target_configs = TargetConfigs(
         type=block.dbt_cli_profile.target_configs.type,
-        schema_=block.dbt_cli_profile.target_configs.model_dump()["schema"],
+        schema_=block.dbt_cli_profile.target_configs.model_dump()["_schema"],
         extras=cleaned_extras,
     )
 
