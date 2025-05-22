@@ -467,7 +467,16 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
 
-    dbt_cli_profile, _, _ = await _create_dbt_cli_profile(payload)
+    cli_profile_block_payload = DbtCliProfileBlockCreate(
+        cli_profile_block_name=payload.cli_profile_block_name,
+        profile=payload.profile,
+        wtype=payload.wtype,
+        credentials=payload.credentials,
+        bqlocation=payload.bqlocation,
+        priority=payload.priority,
+    )
+
+    dbt_cli_profile, _, _ = await _create_dbt_cli_profile(cli_profile_block_payload)
     dbt_core_operation = DbtCoreOperation(
         commands=payload.commands,
         env=payload.env,
@@ -476,14 +485,14 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         project_dir=payload.project_dir,
         dbt_cli_profile=dbt_cli_profile,
     )
-    cleaned_blockname = cleaned_name_for_prefectblock(payload.blockName)
+    cleaned_blockname = cleaned_name_for_prefectblock(payload.dbt_core_block_name)
     try:
         await dbt_core_operation.save(cleaned_blockname, overwrite=True)
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create dbt core op block") from error
 
-    logger.info("created dbt core operation block %s", payload.blockName)
+    logger.info("created dbt core operation block %s", payload.dbt_core_block_name)
 
     return _block_id(dbt_core_operation), cleaned_blockname
 

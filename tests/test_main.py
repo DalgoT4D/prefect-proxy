@@ -306,7 +306,7 @@ async def test_put_airbyte_server_success():
 @pytest.mark.asyncio
 async def test_post_dbtcore_success():
     payload = DbtCoreCreate(
-        blockName="test_dbt",
+        dbt_core_block_name="test_dbt",
         profile=DbtProfileCreate(
             name="test_profile",
             target="test_target",
@@ -329,7 +329,7 @@ async def test_post_dbtcore_success():
 @pytest.mark.asyncio
 async def test_post_dbtcore_failure():
     payload = DbtCoreCreate(
-        blockName="test_dbt",
+        dbt_core_block_name="test_dbt",
         profile=DbtProfileCreate(
             name="test_profile",
             target="test_target",
