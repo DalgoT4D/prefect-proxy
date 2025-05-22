@@ -65,13 +65,14 @@ class DbtProfileCreate(BaseModel):
 class DbtCoreCreate(BaseModel):
     """payload to create a dbt core command block"""
 
-    blockName: str
+    dbt_core_block_name: str
 
+    cli_profile_block_name: str
     profile: DbtProfileCreate
     wtype: str
-    bqlocation: Optional[str] = None
     credentials: dict
-    cli_profile_block_name: str
+    bqlocation: Optional[str] = None
+    priority: Optional[str] = None
 
     commands: list
     env: dict
@@ -86,8 +87,9 @@ class DbtCliProfileBlockCreate(BaseModel):
     cli_profile_block_name: str
     profile: DbtProfileCreate
     wtype: str
-    bqlocation: Optional[str] = None
     credentials: dict
+    bqlocation: Optional[str] = None
+    priority: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
 
@@ -114,6 +116,7 @@ class DbtCliProfileBlockUpdate(BaseModel):
     profile: Optional[DbtProfileUpdate] = None
     credentials: Optional[dict] = None
     bqlocation: Optional[str] = None
+    priority: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
 

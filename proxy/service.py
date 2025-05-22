@@ -339,10 +339,10 @@ async def get_dbt_cli_profile(cli_profile_block_name: str) -> dict:
 
 
 async def _create_dbt_cli_profile(
-    payload: DbtCliProfileBlockCreate | DbtCoreCreate,
+    payload: DbtCliProfileBlockCreate,
 ) -> DbtCliProfile:
     """credentials are decrypted by now"""
-    if not (isinstance(payload, DbtCliProfileBlockCreate) or isinstance(payload, DbtCoreCreate)):
+    if not isinstance(payload, DbtCliProfileBlockCreate):
         raise TypeError("payload is of wrong type")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
@@ -362,9 +362,7 @@ async def _create_dbt_cli_profile(
         target_configs = BigQueryTargetConfigs(
             credentials=dbcredentials,
             schema_=payload.profile.target_configs_schema,
-            extras={
-                "location": payload.bqlocation,
-            },
+            extras={"location": payload.bqlocation, "priority": payload.priority},
         )
     else:
         raise PrefectException("unknown wtype: " + payload.wtype)
@@ -418,25 +416,37 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
             dbtcli_block.name = payload.profile.name
 
         # update credentials
-        if payload.credentials:
-            if payload.wtype is None:
-                raise TypeError("wtype is required")
-            if payload.wtype == "postgres":
+        if payload.wtype is None:
+            raise TypeError("wtype is required")
+        if payload.wtype == "postgres":
+            if payload.credentials:
                 dbtcli_block.target_configs.extras = payload.credentials
-                dbtcli_block.target_configs.extras["user"] = dbtcli_block.target_configs.extras[
-                    "username"
-                ]
-                if "schema" in dbtcli_block.target_configs.extras:
-                    del dbtcli_block.target_configs.extras["schema"]
 
-            elif payload.wtype == "bigquery":
+            dbtcli_block.target_configs.extras["user"] = dbtcli_block.target_configs.extras[
+                "username"
+            ]
+            if "schema" in dbtcli_block.target_configs.extras:
+                del dbtcli_block.target_configs.extras["schema"]
+
+        elif payload.wtype == "bigquery":
+            if payload.credentials:
                 dbcredentials = GcpCredentials(service_account_info=payload.credentials)
                 dbtcli_block.target_configs.credentials = dbcredentials
-                dbtcli_block.target_configs.extras = {
-                    "location": payload.bqlocation,
-                }
-            else:
-                raise PrefectException("unknown wtype: " + payload.wtype)
+
+            extras = {}
+            if payload.bqlocation:
+                extras["location"] = payload.bqlocation
+
+            if payload.priority:
+                extras["priority"] = payload.priority
+
+            if len(extras.keys()) > 0:
+                # merge
+                dbtcli_block.target_configs.extras = (
+                    dbtcli_block.target_configs.extras or {} | extras
+                )
+        else:
+            raise PrefectException("unknown wtype: " + payload.wtype)
 
         # block names are not editable in prefect
         # using a different name while saving just creates a new block instead of editing the old one
@@ -457,7 +467,16 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         raise TypeError("payload must be a DbtCoreCreate")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
 
-    dbt_cli_profile, _, _ = await _create_dbt_cli_profile(payload)
+    cli_profile_block_payload = DbtCliProfileBlockCreate(
+        cli_profile_block_name=payload.cli_profile_block_name,
+        profile=payload.profile,
+        wtype=payload.wtype,
+        credentials=payload.credentials,
+        bqlocation=payload.bqlocation,
+        priority=payload.priority,
+    )
+
+    dbt_cli_profile, _, _ = await _create_dbt_cli_profile(cli_profile_block_payload)
     dbt_core_operation = DbtCoreOperation(
         commands=payload.commands,
         env=payload.env,
@@ -466,14 +485,14 @@ async def create_dbt_core_block(payload: DbtCoreCreate):
         project_dir=payload.project_dir,
         dbt_cli_profile=dbt_cli_profile,
     )
-    cleaned_blockname = cleaned_name_for_prefectblock(payload.blockName)
+    cleaned_blockname = cleaned_name_for_prefectblock(payload.dbt_core_block_name)
     try:
         await dbt_core_operation.save(cleaned_blockname, overwrite=True)
     except Exception as error:
         logger.exception(error)
         raise PrefectException("failed to create dbt core op block") from error
 
-    logger.info("created dbt core operation block %s", payload.blockName)
+    logger.info("created dbt core operation block %s", payload.dbt_core_block_name)
 
     return _block_id(dbt_core_operation), cleaned_blockname
 

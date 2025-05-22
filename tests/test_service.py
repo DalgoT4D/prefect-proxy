@@ -15,6 +15,7 @@ from proxy.schemas import (
     DbtProfileCreate,
     DbtProfileUpdate,
     DbtCliProfileBlockUpdate,
+    DbtCliProfileBlockCreate,
     DeploymentCreate2,
     DeploymentUpdate2,
     PrefectSecretBlockCreate,
@@ -519,46 +520,16 @@ class MockBlock:
         return {"_block_document_id": "expected_block_id"}
 
 
-# @pytest.mark.asyncio
-# @patch("proxy.service.DbtCliProfile.save", new_callable=AsyncMock)
-# async def test_create_dbt_cli_profile(mock_save):
-#     payload = DbtCoreCreate(
-#         blockName="test_block_name",
-#         profile=DbtProfileCreate(
-#             name="test_name",
-#             target_configs_schema="test_outputs_path",
-#         ),
-#         wtype="postgres",
-#         credentials={
-#             "username": "test_username",
-#             "password": "test_password",
-#             "database": "test_database",
-#             "host": "test_host",
-#             "port": "test_port",
-#         },
-#         commands=["test_command"],
-#         env={"test_key": "test_value"},
-#         working_dir="test_working_dir",
-#         profiles_dir="test_profiles_dir",
-#         project_dir="test_project_dir",
-#     )
-
-#     result = await _create_dbt_cli_profile(payload)
-
-#     assert result.name == payload.profile.name
-#     assert result.target == payload.profile.target_configs_schema
-
-
 @pytest.mark.asyncio
 async def test_create_dbt_cli_profile_failure():
     # Create a DbtCoreCreate object with an invalid wtype value
-    payload = DbtCoreCreate(
-        blockName="test_block_name",
+    payload = DbtCliProfileBlockCreate(
+        cli_profile_block_name="test_cli_profile",
         profile=DbtProfileCreate(
             name="test_name",
             target_configs_schema="test_outputs_path",
         ),
-        wtype="invalid_wtype",  # Use an invalid wtype value
+        wtype="invalid_wtype",
         credentials={
             "username": "test_username",
             "password": "test_password",
@@ -566,12 +537,8 @@ async def test_create_dbt_cli_profile_failure():
             "host": "test_host",
             "port": "test_port",
         },
-        cli_profile_block_name="test_cli_profile",
-        commands=["test_command"],
-        env={"test_key": "test_value"},
-        working_dir="test_working_dir",
-        profiles_dir="test_profiles_dir",
-        project_dir="test_project_dir",
+        bqlocation=None,
+        priority=None,
     )
 
     # Call the function with the payload and assert that it raises a PrefectException
@@ -597,8 +564,8 @@ async def test_create_dbt_cli_profile_with_invalid_payload():
 async def test_create_dbt_cli_profile_exception(mock_save):
     mock_save.side_effect = Exception("test exception")
 
-    payload = DbtCoreCreate(
-        blockName="test_block_name",
+    payload = DbtCliProfileBlockCreate(
+        cli_profile_block_name="test_cli_profile",
         profile=DbtProfileCreate(
             name="test_name",
             target_configs_schema="test_outputs_path",
@@ -611,12 +578,8 @@ async def test_create_dbt_cli_profile_exception(mock_save):
             "host": "test_host",
             "port": "test_port",
         },
-        cli_profile_block_name="test_cli_profile",
-        commands=["test_command"],
-        env={"test_key": "test_value"},
-        working_dir="test_working_dir",
-        profiles_dir="test_profiles_dir",
-        project_dir="test_project_dir",
+        bqlocation=None,
+        priority=None,
     )
 
     with pytest.raises(PrefectException) as excinfo:
@@ -739,9 +702,10 @@ async def test_update_dbt_cli_profile_bigquery(mock_load: AsyncMock):
         credentials=service_account_info,
         wtype="bigquery",
         bqlocation="bq-location",
+        priority="batch",
     )
     mock_load.return_value = Mock(
-        target_configs=Mock(schema="old-schema"),
+        target_configs=Mock(schema="old-schema", extras={}),
         save=AsyncMock(),
         dict=Mock(return_value={"_block_document_id": "_block_document_id"}),
         model_dump=Mock(return_value={"_block_document_id": "_block_document_id"}),
@@ -749,7 +713,7 @@ async def test_update_dbt_cli_profile_bigquery(mock_load: AsyncMock):
     block, block_id, block_name = await update_dbt_cli_profile(payload)
     assert block_name == "block-name"
     assert block_id == "_block_document_id"
-    assert block.target_configs.extras == {"location": "bq-location"}
+    assert block.target_configs.extras == {"location": "bq-location", "priority": "batch"}
     assert block.target == "new_schema"
     assert block.name == "profile-name"
 
@@ -764,7 +728,7 @@ async def test_create_dbt_core_block_success(
 ):
     with tempfile.TemporaryDirectory() as tempdir:
         payload = DbtCoreCreate(
-            blockName="test_block_name",
+            dbt_core_block_name="test_block_name",
             profile=DbtProfileCreate(
                 name="test_name",
                 target_configs_schema="test_outputs_path",
@@ -777,6 +741,8 @@ async def test_create_dbt_core_block_success(
                 "host": "test_host",
                 "port": "test_port",
             },
+            bqlocation=None,
+            priority=None,
             cli_profile_block_name="test_cli_profile",
             commands=["run"],
             env={"test_key": "test_value"},
@@ -810,7 +776,7 @@ async def test_create_dbt_core_block_exception(
 ):
     with tempfile.TemporaryDirectory() as tempdir:
         payload = DbtCoreCreate(
-            blockName="test_block_name",
+            dbt_core_block_name="test_block_name",
             profile=DbtProfileCreate(
                 name="test_name",
                 target_configs_schema="test_outputs_path",
