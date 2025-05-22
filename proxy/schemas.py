@@ -86,8 +86,9 @@ class DbtCliProfileBlockCreate(BaseModel):
     cli_profile_block_name: str
     profile: DbtProfileCreate
     wtype: str
-    bqlocation: Optional[str] = None
     credentials: dict
+    bqlocation: Optional[str] = None
+    priority: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
 
@@ -114,6 +115,7 @@ class DbtCliProfileBlockUpdate(BaseModel):
     profile: Optional[DbtProfileUpdate] = None
     credentials: Optional[dict] = None
     bqlocation: Optional[str] = None
+    priority: Optional[str] = None
 
     model_config = ConfigDict(extra="allow")
 

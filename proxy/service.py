@@ -339,10 +339,10 @@ async def get_dbt_cli_profile(cli_profile_block_name: str) -> dict:
 
 
 async def _create_dbt_cli_profile(
-    payload: DbtCliProfileBlockCreate | DbtCoreCreate,
+    payload: DbtCliProfileBlockCreate,
 ) -> DbtCliProfile:
     """credentials are decrypted by now"""
-    if not (isinstance(payload, DbtCliProfileBlockCreate) or isinstance(payload, DbtCoreCreate)):
+    if not isinstance(payload, DbtCliProfileBlockCreate):
         raise TypeError("payload is of wrong type")
     # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
     if payload.wtype == "postgres":
@@ -362,9 +362,7 @@ async def _create_dbt_cli_profile(
         target_configs = BigQueryTargetConfigs(
             credentials=dbcredentials,
             schema_=payload.profile.target_configs_schema,
-            extras={
-                "location": payload.bqlocation,
-            },
+            extras={"location": payload.bqlocation, "priority": payload.priority},
         )
     else:
         raise PrefectException("unknown wtype: " + payload.wtype)
@@ -418,25 +416,37 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
             dbtcli_block.name = payload.profile.name
 
         # update credentials
-        if payload.credentials:
-            if payload.wtype is None:
-                raise TypeError("wtype is required")
-            if payload.wtype == "postgres":
+        if payload.wtype is None:
+            raise TypeError("wtype is required")
+        if payload.wtype == "postgres":
+            if payload.credentials:
                 dbtcli_block.target_configs.extras = payload.credentials
-                dbtcli_block.target_configs.extras["user"] = dbtcli_block.target_configs.extras[
-                    "username"
-                ]
-                if "schema" in dbtcli_block.target_configs.extras:
-                    del dbtcli_block.target_configs.extras["schema"]
 
-            elif payload.wtype == "bigquery":
+            dbtcli_block.target_configs.extras["user"] = dbtcli_block.target_configs.extras[
+                "username"
+            ]
+            if "schema" in dbtcli_block.target_configs.extras:
+                del dbtcli_block.target_configs.extras["schema"]
+
+        elif payload.wtype == "bigquery":
+            if payload.credentials:
                 dbcredentials = GcpCredentials(service_account_info=payload.credentials)
                 dbtcli_block.target_configs.credentials = dbcredentials
-                dbtcli_block.target_configs.extras = {
-                    "location": payload.bqlocation,
-                }
-            else:
-                raise PrefectException("unknown wtype: " + payload.wtype)
+
+            extras = {}
+            if payload.bqlocation:
+                extras["location"] = payload.bqlocation
+
+            if payload.priority:
+                extras["priority"] = payload.priority
+
+            if len(extras.keys()) > 0:
+                # merge
+                dbtcli_block.target_configs.extras = (
+                    dbtcli_block.target_configs.extras or {} | extras
+                )
+        else:
+            raise PrefectException("unknown wtype: " + payload.wtype)
 
         # block names are not editable in prefect
         # using a different name while saving just creates a new block instead of editing the old one
