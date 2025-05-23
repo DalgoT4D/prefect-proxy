@@ -443,8 +443,8 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
             if len(extras.keys()) > 0:
                 # merge
                 dbtcli_block.target_configs.extras = (
-                    dbtcli_block.target_configs.extras or {} | extras
-                )
+                    dbtcli_block.target_configs.extras or {}
+                ) | extras
         else:
             raise PrefectException("unknown wtype: " + payload.wtype)
 
