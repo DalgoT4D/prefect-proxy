@@ -919,7 +919,7 @@ async def post_deployment_flow_run(
             parameters=run_params,
             scheduled_time=scheduled_time,
         )
-        return {"flow_run_id": flow_run.id}
+        return {"flow_run_id": flow_run.id, "name": flow_run.name}
     except Exception as exc:
         logger.exception(exc)
         raise PrefectException("Failed to create deployment flow run") from exc
