@@ -1,7 +1,6 @@
 """Route handlers"""
 
 import os
-import re
 import base64
 import requests
 from fastapi import FastAPI, HTTPException
@@ -75,7 +74,6 @@ from proxy.prefect_flows import (
     run_shell_operation_flow,
     run_dbtcore_flow_v1,
     run_airbyte_conn_reset,
-    run_airbyte_connection_flow_v1,
 )
 
 
@@ -103,52 +101,13 @@ async def trigger_error():
 
 
 # =============================================================================
-def airbytesync(block_name: str, flow_name: str, flow_run_name: str):
-    """Run an Airbyte Connection sync"""
-    if not isinstance(block_name, str):
-        raise TypeError("block_name must be a string")
-    if not isinstance(flow_name, str):
-        raise TypeError("flow_name must be a string")
-    if not isinstance(flow_run_name, str):
-        raise TypeError("flow_run_name must be a string")
-
-    logger.info("airbytesync %s %s %s", block_name, flow_name, flow_run_name)
-    flow = run_airbyte_connection_flow_v1
-    if flow_name:
-        flow = flow.with_options(name=flow_name)
-    if flow_run_name:
-        flow = flow.with_options(flow_run_name=flow_run_name)
-
-    try:
-        logger.info("START")
-        result = flow(block_name)
-        logger.info("END")
-        logger.info(result)
-        return {"status": "success", "result": result}
-
-    except HTTPException as error:
-        logger.info("ERR-1")
-        # the error message may contain "Job <num> failed."
-        errormessage = error.detail
-        logger.error("celery task caught exception %s", errormessage)
-        pattern = re.compile(r"Job (\d+) failed.")
-        match = pattern.match(errormessage)
-        if match:
-            airbyte_job_num = match.groups()[0]
-            return {"status": "failed", "airbyte_job_num": airbyte_job_num}
-        raise
-
-    except Exception as error:
-        logger.exception(error)
-        raise
-
-
 def dbtrun_v1(task_config: RunDbtCoreOperation):
     """Run a dbt core flow"""
 
     if not isinstance(task_config, RunDbtCoreOperation):
         raise TypeError("invalid task config")
     logger.info("dbt core operation running %s", task_config.slug)
+
     flow = run_dbtcore_flow_v1
     if task_config.flow_name:
         flow = flow.with_options(name=task_config.flow_name)
@@ -916,12 +875,11 @@ def cancel_queued_flow_run(flow_run_id: str, payload: CancelQueuedManualJob):
 
 @app.post("/proxy/workers/filter/")
 def post_filter_prefect_workers(payload: FilterPrefectWorkers):
+    """Fetch workers"""
     try:
         count = filter_prefect_workers(payload)
         logger.info(f"Found {count} workers")
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to fetch dbt cloud creds block"
-        ) from error
+        raise HTTPException(status_code=400, detail="failed to fetch prefect workers") from error
     return {"count": count}
