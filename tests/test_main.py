@@ -6,7 +6,6 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from proxy.main import (
-    airbytesync,
     app,
     dbtrun_v1,
     shelloprun,
@@ -63,78 +62,6 @@ from proxy.schemas import (
 
 app = FastAPI()
 client = TestClient(app)
-
-
-def test_airbytesync_success():
-    block_name = "example_block"
-    flow_name = "example_flow"
-    flow_run_name = "example_flow_run"
-    inner_result = {"status": "success", "result": "example_result"}
-    expected_result = {"status": "success", "result": inner_result}
-
-    with patch("proxy.main.run_airbyte_connection_flow_v1") as mock_run_airbyte_connection_flow:
-        with patch.object(
-            mock_run_airbyte_connection_flow.with_options.return_value, "with_options"
-        ) as mock_with_options:
-            mock_with_options.return_value = lambda x: inner_result
-            result = airbytesync(block_name, flow_name, flow_run_name)
-            assert result == expected_result
-
-
-def test_airbytesync_failure():
-    block_name = "example_block"
-    flow_name = "example_flow"
-    flow_run_name = "example_flow_run"
-    inner_result = {"status": "failed", "result": "example_failure_result"}
-    expected_result = {"status": "success", "result": inner_result}
-
-    with patch("proxy.main.run_airbyte_connection_flow_v1") as mock_run_airbyte_connection_flow:
-        with patch.object(
-            mock_run_airbyte_connection_flow.with_options.return_value, "with_options"
-        ) as mock_with_options:
-            mock_with_options.return_value = lambda x: inner_result
-            result = airbytesync(block_name, flow_name, flow_run_name)
-            assert result == expected_result
-
-
-def test_airbytesync_http_exception():
-    block_name = "example_block"
-    flow_name = ""
-    flow_run_name = ""
-
-    with patch("proxy.main.run_airbyte_connection_flow_v1") as mock_run_airbyte_connection_flow:
-        mock_run_airbyte_connection_flow.side_effect = HTTPException(
-            status_code=400, detail="Job 12345 failed."
-        )
-        result = airbytesync(block_name, flow_name, flow_run_name)
-        assert result == {"status": "failed", "airbyte_job_num": "12345"}
-
-
-def test_airbyte_sync_with_invalid_block_name():
-    invalid_block_name = None
-    flow_name = "example_flow"
-    flow_run_name = "example_flow_run"
-
-    with pytest.raises(Exception):
-        airbytesync(invalid_block_name, flow_name, flow_run_name)
-
-
-def test_airbyte_sync_invalid_flow_name():
-    block_name = "example_block"
-    invalid_flow_name = None
-    flow_run_name = "example_flow_run"
-
-    with pytest.raises(Exception):
-        airbytesync(block_name, invalid_flow_name, flow_run_name)
-
-
-def test_airbyte_sync_invalid_flow_run_name():
-    block_name = "example_block"
-    flow_name = "example_flow"
-    invalid_flow_run_name = None
-
-    with pytest.raises(Exception):
-        airbytesync(block_name, flow_name, invalid_flow_run_name)
 
 
 def test_dbtrun_v1():
