@@ -92,34 +92,6 @@ def run_airbyte_conn_clear(payload: dict):
         raise
 
 
-# task config for a airbyte reset operation
-# {
-#     type AIRBYTECONNECTION,
-#     slug: "airbyte-reset"
-#     airbyte_server_block:  str
-#     connection_id: str
-#     timeout: int
-# }
-@flow
-def run_airbyte_reset_streams_for_conn(payload: dict, streams: list[ResetStream]):
-    """reset an airbyte connection"""
-    try:
-        airbyte_server_block = payload["airbyte_server_block"]
-        serverblock = AirbyteServer.load(airbyte_server_block)
-        connection_block = AirbyteConnection(
-            airbyte_server=serverblock,
-            connection_id=payload["connection_id"],
-            timeout=payload["timeout"] or 15,
-        )
-        result = reset_connection_streams(connection_block, streams)
-        logger.info("airbyte connection reset result=")
-        logger.info(result)
-        return result
-    except Exception as error:  # skipcq PYL-W0703
-        logger.error(str(error))  # "Job <num> failed."
-        raise
-
-
 @flow
 def run_dbtcore_flow_v1(payload: dict):
     # pylint: disable=broad-exception-caught
@@ -346,8 +318,10 @@ def deployment_schedule_flow_v4(
                         )
                     )
 
+                else:
+                    raise ValueError(f"Unsupported AIRBYTECONNECTION slug: {task_config['slug']}")
             else:
-                raise Exception(f"Unknown task type: {task_config['type']}")
+                raise ValueError(f"Unknown task type: {task_config['type']}")
 
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
