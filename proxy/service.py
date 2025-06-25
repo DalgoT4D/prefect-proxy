@@ -725,6 +725,19 @@ def get_deployment(deployment_id: str) -> dict:
     return res
 
 
+def get_deployment_scheduled_flow_runs(deployment_id: str) -> dict:
+    """fetch scheduled flow-runs for a deployment"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    res = prefect_post(
+        "deployments/get_scheduled_flow_runs",
+        {
+            "deployment_ids": [deployment_id],
+        },
+    )
+    return res
+
+
 def update_flow_run_final_state(flow_run: dict) -> dict:
     """
     fetch tasks of the flow_run & checks for the custom flow_run state

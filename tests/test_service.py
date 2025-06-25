@@ -52,6 +52,7 @@ from proxy.service import (
     post_deployment_v1,
     put_deployment_v1,
     get_deployment,
+    get_deployment_scheduled_flow_runs,
     CronSchedule,
     post_deployment_flow_run,
     create_secret_block,
@@ -1089,6 +1090,19 @@ def test_get_deployment(mock_get: Mock):
     response = get_deployment("deployment-id")
     mock_get.assert_called_once_with(f"deployments/deployment-id")
     assert response == "retval"
+
+
+@patch("proxy.service.prefect_post")
+def test_get_deployment_scheduled_flow_runs(mock_post: Mock):
+    mock_post.return_value = [{"id": "flow_run_id"}]
+    response = get_deployment_scheduled_flow_runs("deployment-id")
+    mock_post.assert_called_once_with(
+        "deployments/get_scheduled_flow_runs",
+        {
+            "deployment_ids": ["deployment-id"],
+        },
+    )
+    assert response == [{"id": "flow_run_id"}]
 
 
 def test_get_flow_runs_by_deployment_id_type_error():
