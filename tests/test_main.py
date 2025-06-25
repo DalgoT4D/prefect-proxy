@@ -35,6 +35,7 @@ from proxy.main import (
     post_run_dbtcore_flow_v1,
     post_dataflow_v1,
     put_dataflow_v1,
+    get_dataflow_scheduled_flow_runs,
     get_long_running_flows,
     patch_dbt_cloud_creds,
     get_dbt_cloud_creds,
@@ -586,6 +587,15 @@ def test_put_dataflow_v1_success():
         payload = DeploymentUpdate2(deployment_params={})
         result = put_dataflow_v1("deployment-id", payload)
         assert result == {"success": 1}
+
+
+def test_get_dataflow_scheduled_flow_runs():
+    with patch(
+        "proxy.main.get_deployment_scheduled_flow_runs"
+    ) as mock_get_deployment_scheduled_flow_runs:
+        mock_get_deployment_scheduled_flow_runs.return_value = [{"id": "flow_run_id"}]
+        result = get_dataflow_scheduled_flow_runs("deployment-id")
+        assert result == {"flow_runs": [{"id": "flow_run_id"}]}
 
 
 def test_get_flow_run_by_id_badparams():

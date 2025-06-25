@@ -28,6 +28,7 @@ from proxy.service import (
     get_flow_runs_by_name,
     set_deployment_schedule,
     get_deployment,
+    get_deployment_scheduled_flow_runs,
     get_flow_run,
     retry_flow_run,
     create_secret_block,
@@ -487,6 +488,19 @@ def put_dataflow_v1(deployment_id, payload: DeploymentUpdate2):
         raise HTTPException(status_code=400, detail="failed to update the deployment") from error
     logger.info("Updated the deployment: %s", deployment_id)
     return {"success": 1}
+
+
+@app.get("/proxy/v1/deployments/get_scheduled_flow_runs")
+def get_dataflow_scheduled_flow_runs(deployment_id: str):
+    """updates a deployment"""
+    try:
+        res = get_deployment_scheduled_flow_runs(deployment_id)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to fetch scheduled flow-runs for deployment"
+        ) from error
+    return {"flow_runs": res}
 
 
 @app.post("/proxy/flow_run/")
