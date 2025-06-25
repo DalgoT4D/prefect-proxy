@@ -492,7 +492,9 @@ def put_dataflow_v1(deployment_id, payload: DeploymentUpdate2):
 
 @app.get("/proxy/v1/deployments/get_scheduled_flow_runs")
 def get_dataflow_scheduled_flow_runs(deployment_id: str):
-    """updates a deployment"""
+    """fetch scheduled flow-runs for a deployment"""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
     try:
         res = get_deployment_scheduled_flow_runs(deployment_id)
     except Exception as error:

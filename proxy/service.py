@@ -726,7 +726,7 @@ def get_deployment(deployment_id: str) -> dict:
 
 
 def get_deployment_scheduled_flow_runs(deployment_id: str) -> dict:
-    """Fetch deployment and its details"""
+    """fetch scheduled flow-runs for a deployment"""
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     res = prefect_post(
