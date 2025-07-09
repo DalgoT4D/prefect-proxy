@@ -216,4 +216,4 @@ omit = [
 ]
 
 [tool.uv.sources]
-prefect-airbyte = { git = "https://github.com/Ishankoradia/prefect-airbyte.git", rev = "v0.4" }
+prefect-airbyte = { git = "https://github.com/Ishankoradia/prefect-airbyte.git", rev = "v0.5" }
