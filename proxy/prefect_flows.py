@@ -15,6 +15,7 @@ from prefect_airbyte.flows import (
     reset_connection_streams,
     update_connection_schema,
     clear_connection,
+    cancel_job,
 )
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_airbyte.connections import ResetStream
@@ -89,6 +90,33 @@ def run_airbyte_conn_clear(payload: dict):
         return result
     except Exception as error:  # skipcq PYL-W0703
         logger.error(str(error))  # "Job <num> failed."
+        raise
+
+
+# task config for cancelling a running airbyte job
+# {
+#     type AIRBYTECONNECTION,
+#     slug: "airbyte-cancel"
+#     airbyte_server_block:  str
+#     connection_id: str
+#     job_id: str
+# }
+@flow
+def run_airbyte_cancel_job(payload: dict):
+    """cancel a running airbyte job"""
+    try:
+        airbyte_server_block = payload["airbyte_server_block"]
+        serverblock = AirbyteServer.load(airbyte_server_block)
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=payload["connection_id"],
+        )
+        result = cancel_job(connection_block, payload["job_id"])
+        logger.info("airbyte job cancel result=")
+        logger.info(result)
+        return result
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job cancel failed."
         raise
 
 
@@ -310,6 +338,9 @@ def deployment_schedule_flow_v4(
 
                 elif task_config["slug"] == "airbyte-clear":
                     run_airbyte_conn_clear(task_config)
+
+                elif task_config["slug"] == "airbyte-cancel":
+                    run_airbyte_cancel_job(task_config)
 
                 elif task_config["slug"] == "update-schema":
                     asyncio.run(
