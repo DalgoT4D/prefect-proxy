@@ -15,7 +15,7 @@ from prefect_airbyte.flows import (
     reset_connection_streams,
     update_connection_schema,
     clear_connection,
-    cancel_connection_job,
+    cancel_job,
 )
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_airbyte.connections import ResetStream
@@ -111,7 +111,7 @@ def run_airbyte_cancel_job(payload: dict):
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
         )
-        result = cancel_connection_job(connection_block, payload["job_id"])
+        result = cancel_job(connection_block, payload["job_id"])
         logger.info("airbyte job cancel result=")
         logger.info(result)
         return result
