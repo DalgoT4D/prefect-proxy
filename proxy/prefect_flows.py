@@ -84,10 +84,9 @@ def run_airbyte_conn_clear(payload: dict):
             connection_id=payload["connection_id"],
             timeout=payload["timeout"] or 15,
         )
-        
         result = None
         if "streams" in payload and payload["streams"]:
-            streams=[{"streamName": name} for name in payload["streams"]]
+            streams = [{"streamName": name} for name in payload["streams"]]
             result = clear_connection_streams(connection_block, streams)
         else:
             result = clear_connection(connection_block)
