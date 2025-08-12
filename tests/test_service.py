@@ -1518,7 +1518,7 @@ def test_set_deployment_schedule_result_1():
         set_deployment_schedule(deployment_id, "active")
         mock_patch.assert_called_once_with(
             f"deployments/{deployment_id}",
-            {"schedules": [{"schedule": {"cron": "0 0 * * *"}, "active": True}]},
+            {"schedules": [{"schedule": {"cron": "0 0 * * *"}, "active": True}], "paused": False},
         )
 
 
@@ -1542,7 +1542,7 @@ def test_set_deployment_schedule_result_2():
         set_deployment_schedule(deployment_id, "inactive")
         mock_patch.assert_called_once_with(
             f"deployments/{deployment_id}",
-            {"schedules": [{"schedule": {"cron": "0 0 * * *"}, "active": False}]},
+            {"schedules": [{"schedule": {"cron": "0 0 * * *"}, "active": False}], "paused": True},
         )
 
 
