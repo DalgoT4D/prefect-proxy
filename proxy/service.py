@@ -1164,7 +1164,11 @@ def set_deployment_schedule(deployment_id: str, status: str) -> None:
         del schedule["updated"]
         del schedule["deployment_id"]
         schedule["active"] = status == "active"
-        prefect_patch(f"deployments/{deployment_id}", {"schedules": [schedule]})
+
+        prefect_patch(
+            f"deployments/{deployment_id}",
+            {"schedules": [schedule], "paused": status == "inactive"},
+        )
 
     return None
 
