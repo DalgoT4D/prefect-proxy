@@ -5,7 +5,7 @@ everything under here is incremented by a version compared to flows.py
 """
 
 import os
-import sleep
+from time import sleep
 import asyncio
 from datetime import datetime
 from prefect import flow, task
