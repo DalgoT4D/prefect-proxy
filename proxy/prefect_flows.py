@@ -5,6 +5,7 @@ everything under here is incremented by a version compared to flows.py
 """
 
 import os
+import sleep
 import asyncio
 from datetime import datetime
 from prefect import flow, task
@@ -327,8 +328,11 @@ def deployment_schedule_flow_v4(
 
                 else:
                     raise ValueError(f"Unsupported AIRBYTECONNECTION slug: {task_config['slug']}")
+
             else:
                 raise ValueError(f"Unknown task type: {task_config['type']}")
+
+            sleep(30)  # wait for 30 seconds after airbyte task
 
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
