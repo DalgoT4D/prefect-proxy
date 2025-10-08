@@ -291,7 +291,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 #         ]
 #     }
 # }
-@flow(retries=1, retry_delay_seconds=300)
+@flow(retries=1, retry_delay_seconds=600)
 def deployment_schedule_flow_v4(
     config: dict,
     dbt_blocks: list | None = None,  # pylint: disable=unused-argument
