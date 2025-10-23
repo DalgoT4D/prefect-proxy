@@ -16,7 +16,7 @@ from prefect_airbyte.flows import (
     reset_connection_streams,
     update_connection_schema,
     clear_connection,
-    clear_connection_streams
+    clear_connection_streams,
 )
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_airbyte.connections import ResetStream
