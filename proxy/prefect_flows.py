@@ -87,14 +87,7 @@ def run_airbyte_conn_clear(payload: dict):
         )
         result = None
         if "streams" in payload and payload["streams"]:
-            # only add the namespace key if it exists and is not None
-            streams = []
-            for stream in payload["streams"]:
-                if "streamNamespace" in stream and stream["streamNamespace"] is not None:
-                    streams.append({"streamName": stream["streamName"], "streamNamespace": stream["streamNamespace"]})
-                else:
-                    streams.append({"streamName": stream["streamName"]})
-            result = clear_connection_streams(connection_block, streams)
+            result = clear_connection_streams(connection_block, payload["streams"])
         else:
             result = clear_connection(connection_block)
 
