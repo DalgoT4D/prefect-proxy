@@ -16,7 +16,7 @@ from prefect_airbyte.flows import (
     reset_connection_streams,
     update_connection_schema,
     clear_connection,
-    clear_connection_streams1,
+    clear_connection_streams
 )
 from prefect_airbyte import AirbyteConnection, AirbyteServer
 from prefect_airbyte.connections import ResetStream
@@ -88,7 +88,7 @@ def run_airbyte_conn_clear(payload: dict):
         result = None
         logger.info("payload streams=", payload.get("streams"))
         if "streams" in payload and payload["streams"]:
-            result = clear_connection_streams1(connection_block, payload["streams"])
+            result = clear_connection_streams(connection_block, payload["streams"])
         else:
             result = clear_connection(connection_block)
 
