@@ -86,7 +86,6 @@ def run_airbyte_conn_clear(payload: dict):
             timeout=payload["timeout"] or 15,
         )
         result = None
-        logger.info("payload streams=", payload.get("streams"))
         if "streams" in payload and payload["streams"]:
             result = clear_connection_streams(connection_block, payload["streams"])
         else:
