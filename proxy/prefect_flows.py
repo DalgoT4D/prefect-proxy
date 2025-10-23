@@ -87,7 +87,7 @@ def run_airbyte_conn_clear(payload: dict):
         )
         result = None
         if "streams" in payload and payload["streams"]:
-            result = clear_connection_streams(connection_block, [{"streamName": "sheet1", "streamNamespace": None}])
+            result = clear_connection_streams(connection_block, payload["streams"])
         else:
             result = clear_connection(connection_block)
 
