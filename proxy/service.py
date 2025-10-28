@@ -1069,6 +1069,8 @@ def get_flow_run_tasks(flow_run_id: str) -> dict:
             "state_name": run_obj["state_name"],
             "start_time": run["start_time"],
             "end_time": run["end_time"],
+            "total_run_time": run_obj.get("total_run_time", 0),
+            "estimated_run_time": run_obj.get("estimated_run_time", 0),
         }
         if "parameters" in run_obj and "payload" in run_obj["parameters"]:
             info_obj["parameters"] = run_obj["parameters"]["payload"]
