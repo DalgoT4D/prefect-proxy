@@ -777,7 +777,7 @@ def test_get_read_deployment_success():
         "id": deployment_id,
         "tags": ["tag1", "tag2"],
         "schedule": {"cron": "* * * * *"},
-        "parameters": {"airbyte_blocks": []},
+        "parameters": {"config": []},
     }
     with patch("proxy.main.get_deployment") as mock_get_deployment:
         mock_get_deployment.return_value = mock_deployment_data
