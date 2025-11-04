@@ -9,7 +9,6 @@ from proxy.schemas import (
     AirbyteServerCreate,
     DbtCoreBlockResponse,
     DbtCoreCreate,
-    DeploymentCreate,
     FlowRunsResponse,
     PostDeploymentResponse,
 )
