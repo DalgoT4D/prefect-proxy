@@ -211,17 +211,6 @@ class FlowRunsResponse(BaseModel):
     flow_runs: list
 
 
-class DeploymentCreate(BaseModel):
-    """parameters to create a deployment from a flow"""
-
-    flow_name: str
-    deployment_name: str
-    org_slug: str
-    connection_blocks: list
-    dbt_blocks: list
-    cron: Optional[str] = None
-
-
 class DeploymentCreate2(BaseModel):
     """parameters to create a deployment from a flow; going away with blocks"""
 

@@ -713,11 +713,6 @@ def get_read_deployment(deployment_id):
 
     res = deployment_to_json(deployment)
 
-    if "airbyte_blocks" in res["parameters"]:
-        for airbyte_block in res["parameters"]["airbyte_blocks"]:
-            block = AirbyteConnection.load(airbyte_block["blockName"])
-            airbyte_block["connectionId"] = block.connection_id
-
     return res
 
 
