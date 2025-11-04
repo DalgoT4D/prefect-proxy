@@ -291,7 +291,11 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 #     }
 # }
 @flow(retries=1, retry_delay_seconds=600)
-def deployment_schedule_flow_v4(config: dict):
+def deployment_schedule_flow_v4(
+    config: dict,
+    dbt_blocks: list | None = None,  # pylint: disable=unused-argument
+    airbyte_blocks: list | None = None,  # pylint: disable=unused-argument
+):
     # pylint: disable=broad-exception-caught
     """modification so dbt test failures are not propagated as flow failures"""
     config["tasks"].sort(key=lambda blk: blk["seq"])
