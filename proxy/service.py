@@ -355,6 +355,7 @@ async def _create_dbt_cli_profile(
             schema_=payload.profile.target_configs_schema,
             extras=extras,
             allow_field_overrides=True,
+            threads=payload.threads if payload.threads else 4,
         )
 
     elif payload.wtype == "bigquery":
@@ -363,6 +364,7 @@ async def _create_dbt_cli_profile(
             credentials=dbcredentials,
             schema_=payload.profile.target_configs_schema,
             extras={"location": payload.bqlocation, "priority": payload.priority},
+            threads=payload.threads if payload.threads else 4,
         )
     else:
         raise PrefectException("unknown wtype: " + payload.wtype)
@@ -414,6 +416,10 @@ async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
         # profile name present in profiles.yml; should be the same as dbt_project.yml
         if payload.profile and payload.profile.name:
             dbtcli_block.name = payload.profile.name
+
+        # threads
+        if payload.threads:
+            dbtcli_block.target_configs.threads = payload.threads
 
         # update credentials
         if payload.wtype is None:
