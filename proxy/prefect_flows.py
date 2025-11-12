@@ -46,7 +46,7 @@ DBTCLOUD = "dbt Cloud Job"
 #     connection_id: str
 #     timeout: int
 # }
-@flow
+@flow(retries=1, retry_delay_seconds=120)
 def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
     try:
@@ -74,7 +74,7 @@ def run_airbyte_connection_flow_v1(payload: dict):
 #     connection_id: str
 #     timeout: int
 # }
-@flow
+@flow(retries=1, retry_delay_seconds=120)
 def run_airbyte_conn_clear(payload: dict):
     """reset an airbyte connection"""
     try:
@@ -113,7 +113,7 @@ def run_shell_operation_flow(payload: dict):
     return shellopjob(payload, payload["slug"])
 
 
-@flow
+@flow(retries=1, retry_delay_seconds=120)
 async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
     # pylint: disable=broad-exception-caught
     # """Prefect flow to run refresh schema"""
@@ -150,7 +150,7 @@ async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
 #     flow_name: str
 #     flow_run_name: str
 # }
-@task(name="dbtjob_v1", task_run_name="dbtjob-{task_slug}")
+@task(name="dbtjob_v1", task_run_name="dbtjob-{task_slug}", retries=1, retry_delay_seconds=60)
 def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     # pylint: disable=broad-exception-caught
     """
@@ -205,7 +205,12 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
 #     flow_name: str
 #     flow_run_name: str
 # }
-@task(name="dbtcloudjob_v1", task_run_name="dbtcloudjob-{task_slug}")
+@task(
+    name="dbtcloudjob_v1",
+    task_run_name="dbtcloudjob-{task_slug}",
+    retries=1,
+    retry_delay_seconds=60,
+)
 async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """Create a dbt Cloud Credentials block and a dbt Cloud Job block"""
     try:
@@ -229,7 +234,7 @@ async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=
 #     env: {},
 #     workingDir: ""
 # }
-@task(name="shellopjob", task_run_name="shellop-{task_slug}")
+@task(name="shellopjob", task_run_name="shellop-{task_slug}", retries=1, retry_delay_seconds=60)
 def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     # pylint: disable=broad-exception-caught
     """loads and runs the shell operation"""
@@ -290,7 +295,6 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 #         ]
 #     }
 # }
-@flow(retries=1, retry_delay_seconds=600)
 def deployment_schedule_flow_v4(
     config: dict,
     dbt_blocks: list | None = None,  # pylint: disable=unused-argument
