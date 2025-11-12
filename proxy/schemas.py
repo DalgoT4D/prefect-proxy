@@ -88,6 +88,7 @@ class DbtCliProfileBlockCreate(BaseModel):
     profile: DbtProfileCreate
     wtype: str
     credentials: dict
+    threads: Optional[int] = None
     bqlocation: Optional[str] = None
     priority: Optional[str] = None
 
@@ -112,6 +113,7 @@ class DbtCliProfileBlockUpdate(BaseModel):
     """update a dbt cli profile block's warehouse credentials, schema and target"""
 
     cli_profile_block_name: str
+    threads: Optional[int] = None
     wtype: Optional[str] = None
     profile: Optional[DbtProfileUpdate] = None
     credentials: Optional[dict] = None
