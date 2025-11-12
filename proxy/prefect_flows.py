@@ -74,7 +74,7 @@ def run_airbyte_connection_flow_v1(payload: dict):
 #     connection_id: str
 #     timeout: int
 # }
-@flow(retries=1, retry_delay_seconds=120)
+@flow
 def run_airbyte_conn_clear(payload: dict):
     """reset an airbyte connection"""
     try:
@@ -113,7 +113,7 @@ def run_shell_operation_flow(payload: dict):
     return shellopjob(payload, payload["slug"])
 
 
-@flow(retries=1, retry_delay_seconds=120)
+@flow
 async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
     # pylint: disable=broad-exception-caught
     # """Prefect flow to run refresh schema"""
@@ -229,7 +229,7 @@ async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=
 #     env: {},
 #     workingDir: ""
 # }
-@task(name="shellopjob", task_run_name="shellop-{task_slug}", retries=1, retry_delay_seconds=60)
+@task(name="shellopjob", task_run_name="shellop-{task_slug}")
 def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     # pylint: disable=broad-exception-caught
     """loads and runs the shell operation"""
