@@ -46,7 +46,7 @@ DBTCLOUD = "dbt Cloud Job"
 #     connection_id: str
 #     timeout: int
 # }
-@flow
+@flow(retries=1, retry_delay_seconds=120)
 def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
     try:
@@ -150,7 +150,7 @@ async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
 #     flow_name: str
 #     flow_run_name: str
 # }
-@task(name="dbtjob_v1", task_run_name="dbtjob-{task_slug}")
+@task(name="dbtjob_v1", task_run_name="dbtjob-{task_slug}", retries=1, retry_delay_seconds=60)
 def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     # pylint: disable=broad-exception-caught
     """
@@ -290,7 +290,6 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 #         ]
 #     }
 # }
-@flow(retries=1, retry_delay_seconds=600)
 def deployment_schedule_flow_v4(
     config: dict,
     dbt_blocks: list | None = None,  # pylint: disable=unused-argument
