@@ -205,12 +205,7 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
 #     flow_name: str
 #     flow_run_name: str
 # }
-@task(
-    name="dbtcloudjob_v1",
-    task_run_name="dbtcloudjob-{task_slug}",
-    retries=1,
-    retry_delay_seconds=60,
-)
+@task(name="dbtcloudjob_v1", task_run_name="dbtcloudjob-{task_slug}")
 async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """Create a dbt Cloud Credentials block and a dbt Cloud Job block"""
     try:
