@@ -2015,8 +2015,8 @@ wheels = [
 
 [[package]]
 name = "prefect-airbyte"
-version = "0.84"
-source = { git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=v0.84#9bb8a9ceb33e4ec299c3ec79389303023c5f0c11" }
+version = "0.85"
+source = { git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=v0.85#cbcb035b5f4831f1b64c975237da384efc31b46b" }
 dependencies = [
     { name = "prefect" },
     { name = "tenacity" },
@@ -2362,7 +2362,7 @@ requires-dist = [
     { name = "pluggy", specifier = "==1.5.0" },
     { name = "pre-commit", specifier = "==4.2.0" },
     { name = "prefect", specifier = "==3.1.15" },
-    { name = "prefect-airbyte", git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=v0.84" },
+    { name = "prefect-airbyte", git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=v0.85" },
     { name = "prefect-dbt", specifier = "==0.6.6" },
     { name = "prefect-gcp", specifier = "==0.6.4" },
     { name = "prefect-github", specifier = "==0.3.1" },
