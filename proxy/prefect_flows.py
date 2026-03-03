@@ -257,13 +257,15 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         # object key for the report
         todays_date = datetime.today().strftime("%Y-%m-%d")
         task_config["commands"][0] = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
+        # prepend the binary for edr cli
+        task_config["commands"][0] = task_config["env"]["PATH"] + "/" + task_config["commands"][0]
+        # append the aws credentials and bucket name to the command
         task_config["commands"][
             0
         ] += f" --aws-access-key-id {aws_access_key} --aws-secret-access-key {aws_access_secret} --s3-bucket-name {edr_s3_bucket}"
 
     shell_op = ShellOperation(
         commands=task_config["commands"],
-        env=task_config["env"],
         working_dir=task_config["working_dir"],
         shell=(task_config["env"]["shell"] if "shell" in task_config["env"] else "/bin/bash"),
     )
