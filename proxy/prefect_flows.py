@@ -235,7 +235,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
     """loads and runs the shell operation"""
 
     if task_config["slug"] == "git-pull":  # DDP_backend:constants.TASK_GITPULL
-        secret_block_name = task_config["env"]["secret-git-pull-url-block"]
+        secret_block_name = task_config["env"].get("secret-git-pull-url-block", "")
         git_repo_endpoint = ""
         if secret_block_name and len(secret_block_name) > 0:
             secret_blk = Secret.load(secret_block_name)
@@ -243,6 +243,22 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 
         commands = task_config["commands"]
         updated_cmds = [f"{cmd} {git_repo_endpoint}" for cmd in commands]
+        task_config["commands"] = updated_cmds
+
+    elif task_config["slug"] == "git-clone":  # DDP_backend:constants.TASK_GITCLONE
+        # working directory should be the org directory for this task
+        secret_block_name = task_config["env"].get("secret-git-pull-url-block", "")
+
+        # clone in the project_directory if provided, else in the working directory
+        project_dir = task_config["env"].get("project_dir", "")
+
+        git_repo_endpoint = ""
+        if secret_block_name and len(secret_block_name) > 0:
+            secret_blk = Secret.load(secret_block_name)
+            git_repo_endpoint = secret_blk.get()
+
+        commands = task_config["commands"]
+        updated_cmds = [f"{cmd} {git_repo_endpoint} {project_dir}" for cmd in commands]
         task_config["commands"] = updated_cmds
 
     elif task_config["slug"] == "generate-edr":  # DDP_backend:constants.TASK_GENERATE_EDR
