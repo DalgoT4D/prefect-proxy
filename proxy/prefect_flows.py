@@ -161,6 +161,16 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
     # load the cli block first
     cli_profile_block = DbtCliProfile.load(task_config["cli_profile_block"])
 
+    # if the block has an SSL cert stored in extras, write it to disk before running dbt
+    extras = getattr(cli_profile_block.target_configs, "extras", None)
+    if extras and extras.get("sslrootcert_content"):
+        cert_content = extras.pop("sslrootcert_content")
+        cert_path = extras["sslrootcert"]
+        os.makedirs(os.path.dirname(cert_path), exist_ok=True)
+        with open(cert_path, "w", encoding="utf-8") as f:
+            f.write(cert_content)
+        logger.info("SSL cert written to %s", cert_path)
+
     dbt_op: DbtCoreOperation = DbtCoreOperation(
         commands=task_config["commands"],
         env=task_config["env"],
@@ -169,8 +179,6 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
         project_dir=task_config["project_dir"],
         dbt_cli_profile=cli_profile_block,
     )
-    logger.info("running dbtjob with DBT_TEST_FAILED update")
-
     if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
         os.unlink(dbt_op.profiles_dir / "profiles.yml")
 
