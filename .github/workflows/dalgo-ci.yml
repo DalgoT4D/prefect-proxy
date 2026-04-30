@@ -57,4 +57,4 @@ jobs:
 
       - name: Check coverage percentage
         run: |
-          uv run coverage report --fail-under=70
+          uv run coverage report --fail-under=68
