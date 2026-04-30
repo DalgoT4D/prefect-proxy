@@ -101,3 +101,41 @@ def test_dbtjob_v1_no_extras(mock_dbt_cli_profile, mock_dbt_core_op, tmp_path):
     result = dbtjob_v1.fn(task_config, "dbt-run")
 
     assert result == "success"
+
+
+@patch("proxy.prefect_flows.DbtCoreOperation")
+@patch("proxy.prefect_flows.DbtCliProfile")
+def test_dbtjob_v1_ssl_cert_fallback_to_org_project_dir(mock_dbt_cli_profile, mock_dbt_core_op, tmp_path):
+    """When sslrootcert_content exists but sslrootcert path is missing,
+    should fall back to {project_dir}/../sslrootcert.pem"""
+    cert_content = "-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----"
+    project_dir = str(tmp_path / "org" / "dbtrepo")
+    os.makedirs(project_dir, exist_ok=True)
+
+    mock_block = MagicMock()
+    mock_block.target_configs.extras = {
+        "host": "localhost",
+        "sslmode": "verify-ca",
+        "sslrootcert_content": cert_content,
+    }
+    mock_dbt_cli_profile.load.return_value = mock_block
+
+    mock_op = MagicMock()
+    mock_op.profiles_dir.__truediv__ = lambda self, x: tmp_path / x
+    mock_op.run.return_value = "success"
+    mock_dbt_core_op.return_value = mock_op
+
+    task_config = _make_task_config(project_dir=project_dir)
+    result = dbtjob_v1.fn(task_config, "dbt-run")
+
+    # cert should be written to parent of project_dir
+    expected_path = os.path.join(project_dir, "..", "sslrootcert.pem")
+    assert os.path.exists(expected_path)
+    with open(expected_path) as f:
+        assert f.read() == cert_content
+
+    # extras should have sslrootcert set to the fallback path
+    assert mock_block.target_configs.extras["sslrootcert"] == expected_path
+    assert "sslrootcert_content" not in mock_block.target_configs.extras
+
+    assert result == "success"

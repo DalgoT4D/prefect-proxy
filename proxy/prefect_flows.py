@@ -165,7 +165,10 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
     extras = getattr(cli_profile_block.target_configs, "extras", None)
     if extras and extras.get("sslrootcert_content"):
         cert_content = extras.pop("sslrootcert_content")
-        cert_path = extras["sslrootcert"]
+        cert_path = extras.get("sslrootcert")
+        if not cert_path:
+            cert_path = os.path.join(task_config["project_dir"], "..", "sslrootcert.pem")
+            extras["sslrootcert"] = cert_path
         os.makedirs(os.path.dirname(cert_path), exist_ok=True)
         with open(cert_path, "w", encoding="utf-8") as f:
             f.write(cert_content)
