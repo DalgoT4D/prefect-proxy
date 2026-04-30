@@ -252,10 +252,15 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         # clone in the project_directory if provided, else in the working directory
         project_dir = task_config["env"].get("project_dir", "")
 
-        git_repo_endpoint = ""
+        git_repo_endpoint = task_config["env"].get("gitrepo_url", "")
         if secret_block_name and len(secret_block_name) > 0:
             secret_blk = Secret.load(secret_block_name)
             git_repo_endpoint = secret_blk.get()
+
+        if not git_repo_endpoint:
+            raise ValueError(
+                "Git repository endpoint is not provided in the environment variables or secret block."
+            )
 
         commands = task_config["commands"]
         updated_cmds = [f"{cmd} {git_repo_endpoint} {project_dir}" for cmd in commands]
