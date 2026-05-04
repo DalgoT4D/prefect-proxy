@@ -105,7 +105,9 @@ def test_dbtjob_v1_no_extras(mock_dbt_cli_profile, mock_dbt_core_op, tmp_path):
 
 @patch("proxy.prefect_flows.DbtCoreOperation")
 @patch("proxy.prefect_flows.DbtCliProfile")
-def test_dbtjob_v1_ssl_cert_fallback_to_org_project_dir(mock_dbt_cli_profile, mock_dbt_core_op, tmp_path):
+def test_dbtjob_v1_ssl_cert_fallback_to_org_project_dir(
+    mock_dbt_cli_profile, mock_dbt_core_op, tmp_path
+):
     """When sslrootcert_content exists but sslrootcert path is missing,
     should fall back to {project_dir}/../sslrootcert.pem"""
     cert_content = "-----BEGIN CERTIFICATE-----\nTEST\n-----END CERTIFICATE-----"
