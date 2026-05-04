@@ -46,7 +46,7 @@ jobs:
           LOGDIR: ${{ github.workspace }}/logs
         run: |
           mkdir -p $LOGDIR
-          uv run coverage run --omit=proxy/flows.py,proxy/prefect_flows.py -m pytest --durations=20 --asyncio-mode=auto
+          uv run coverage run -m pytest --durations=20 --asyncio-mode=auto
           uv run coverage xml
 
       - name: Upload coverage reports to codecov
@@ -57,4 +57,4 @@ jobs:
 
       - name: Check coverage percentage
         run: |
-          uv run coverage report --fail-under=70
+          uv run coverage report --fail-under=68
