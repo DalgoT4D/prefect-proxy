@@ -245,6 +245,7 @@ def test_sync_tolerance_all_syncs_succeed(mock_sleep, mock_run_task):
 @patch("proxy.prefect_flows.sleep")
 def test_sync_tolerance_one_sync_fails_continues_rest(mock_sleep, mock_run_task):
     """First sync fails — second sync should still run, then raise before transforms"""
+
     def side_effect(task_config):
         if task_config.get("connection_id") == "conn-1":
             raise RuntimeError("conn-1 failed")
@@ -288,6 +289,7 @@ def test_sync_tolerance_all_syncs_fail(mock_sleep, mock_run_task):
 @patch("proxy.prefect_flows.sleep")
 def test_sync_tolerance_transform_fails(mock_sleep, mock_run_task):
     """Syncs pass but transform fails — should raise the transform error"""
+
     def side_effect(task_config):
         if task_config["type"] == DBTCORE:
             raise RuntimeError("dbt failed")

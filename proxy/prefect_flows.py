@@ -326,10 +326,7 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 # }
 def _is_airbyte_sync_task(task_config: dict) -> bool:
     """Check if a task is an airbyte sync task"""
-    return (
-        task_config["type"] == AIRBYTECONNECTION
-        and task_config["slug"] == "airbyte-sync"
-    )
+    return task_config["type"] == AIRBYTECONNECTION and task_config["slug"] == "airbyte-sync"
 
 
 def _run_task(task_config: dict):
@@ -402,16 +399,16 @@ def _run_tasks_with_sync_tolerance(tasks: list):
         try:
             _run_task(task_config)
         except Exception as error:  # skipcq PYL-W0703
-            logger.error("Airbyte sync failed for connection %s: %s",
-                         task_config.get("connection_id"), error)
+            logger.error(
+                "Airbyte sync failed for connection %s: %s", task_config.get("connection_id"), error
+            )
             sync_errors.append(error)
         sleep(30)
 
     # if any sync failed, raise before running transforms
     if sync_errors:
         raise RuntimeError(
-            f"{len(sync_errors)} airbyte sync(s) failed: "
-            + "; ".join(str(e) for e in sync_errors)
+            f"{len(sync_errors)} airbyte sync(s) failed: " + "; ".join(str(e) for e in sync_errors)
         )
 
     # run remaining tasks sequentially, fail fast
