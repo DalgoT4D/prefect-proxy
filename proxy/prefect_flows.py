@@ -324,6 +324,46 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 #         ]
 #     }
 # }
+def _is_airbyte_sync_task(task_config: dict) -> bool:
+    """Check if a task is an airbyte sync task"""
+    return (
+        task_config["type"] == AIRBYTECONNECTION
+        and task_config["slug"] == "airbyte-sync"
+    )
+
+
+def _run_task(task_config: dict):
+    """Execute a single task based on its type and slug"""
+    if task_config["type"] == DBTCORE:
+        dbtjob_v1(task_config, task_config["slug"])
+
+    elif task_config["type"] == DBTCLOUD:
+        asyncio.run(dbtcloudjob_v1(task_config, task_config["slug"]))
+
+    elif task_config["type"] == SHELLOPERATION:
+        shellopjob(task_config, task_config["slug"])
+
+    elif task_config["type"] == AIRBYTECONNECTION:
+        if task_config["slug"] == "airbyte-sync":
+            run_airbyte_connection_flow_v1(task_config)
+
+        elif task_config["slug"] == "airbyte-clear":
+            run_airbyte_conn_clear(task_config)
+
+        elif task_config["slug"] == "update-schema":
+            asyncio.run(
+                run_refresh_schema_flow(
+                    task_config, catalog_diff=task_config.get("catalog_diff", {})
+                )
+            )
+
+        else:
+            raise ValueError(f"Unsupported AIRBYTECONNECTION slug: {task_config['slug']}")
+
+    else:
+        raise ValueError(f"Unknown task type: {task_config['type']}")
+
+
 @flow
 def deployment_schedule_flow_v4(
     config: dict,
@@ -334,39 +374,51 @@ def deployment_schedule_flow_v4(
     """modification so dbt test failures are not propagated as flow failures"""
     config["tasks"].sort(key=lambda blk: blk["seq"])
 
+    if config.get("continue_on_sync_failure"):
+        _run_tasks_with_sync_tolerance(config["tasks"])
+    else:
+        _run_tasks_sequentially(config["tasks"])
+
+
+def _run_tasks_sequentially(tasks: list):
+    """Original behavior: run all tasks sequentially, fail fast on any error"""
     try:
-        for task_config in config["tasks"]:
-            if task_config["type"] == DBTCORE:
-                dbtjob_v1(task_config, task_config["slug"])
+        for task_config in tasks:
+            _run_task(task_config)
+            sleep(30)
+    except Exception as error:  # skipcq PYL-W0703
+        logger.exception(error)
+        raise
 
-            elif task_config["type"] == DBTCLOUD:
-                asyncio.run(dbtcloudjob_v1(task_config, task_config["slug"]))
 
-            elif task_config["type"] == SHELLOPERATION:
-                shellopjob(task_config, task_config["slug"])
+def _run_tasks_with_sync_tolerance(tasks: list):
+    """Run all airbyte syncs first (collecting errors), then run the rest sequentially"""
+    sync_tasks = [t for t in tasks if _is_airbyte_sync_task(t)]
+    other_tasks = [t for t in tasks if not _is_airbyte_sync_task(t)]
 
-            elif task_config["type"] == AIRBYTECONNECTION:
-                if task_config["slug"] == "airbyte-sync":
-                    run_airbyte_connection_flow_v1(task_config)
+    # run all airbyte syncs, collecting errors
+    sync_errors = []
+    for task_config in sync_tasks:
+        try:
+            _run_task(task_config)
+        except Exception as error:  # skipcq PYL-W0703
+            logger.error("Airbyte sync failed for connection %s: %s",
+                         task_config.get("connection_id"), error)
+            sync_errors.append(error)
+        sleep(30)
 
-                elif task_config["slug"] == "airbyte-clear":
-                    run_airbyte_conn_clear(task_config)
+    # if any sync failed, raise before running transforms
+    if sync_errors:
+        raise RuntimeError(
+            f"{len(sync_errors)} airbyte sync(s) failed: "
+            + "; ".join(str(e) for e in sync_errors)
+        )
 
-                elif task_config["slug"] == "update-schema":
-                    asyncio.run(
-                        run_refresh_schema_flow(
-                            task_config, catalog_diff=task_config.get("catalog_diff", {})
-                        )
-                    )
-
-                else:
-                    raise ValueError(f"Unsupported AIRBYTECONNECTION slug: {task_config['slug']}")
-
-            else:
-                raise ValueError(f"Unknown task type: {task_config['type']}")
-
-            sleep(30)  # wait for 30 seconds after airbyte task
-
+    # run remaining tasks sequentially, fail fast
+    try:
+        for task_config in other_tasks:
+            _run_task(task_config)
+            sleep(30)
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
         raise
