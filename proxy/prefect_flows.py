@@ -136,7 +136,7 @@ async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
 # tasks
 # task config for a dbt core operation
 # {
-#     type: DBTCORE,
+# type: DBTCORE,
 #     slug: str
 #     profiles_dir: str
 #     project_dir: str
@@ -202,7 +202,7 @@ def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argu
 # tasks
 # task config for a dbt cloud operation
 # {
-#     type: DBTCORE,
+# type: DBTCORE,
 #     slug: str
 #     profiles_dir: str | None
 #     project_dir: str | None
@@ -234,7 +234,7 @@ async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=
 # =============================================================================
 # task config for a shell operation
 # {
-#     type: SHELLOPERATION,
+# type: SHELLOPERATION,
 #     slug: str,
 #     commands: [],
 #     env: {},
@@ -361,22 +361,6 @@ def _run_task(task_config: dict):
         raise ValueError(f"Unknown task type: {task_config['type']}")
 
 
-@flow
-def deployment_schedule_flow_v4(
-    config: dict,
-    dbt_blocks: list | None = None,  # pylint: disable=unused-argument
-    airbyte_blocks: list | None = None,  # pylint: disable=unused-argument
-):
-    # pylint: disable=broad-exception-caught
-    """modification so dbt test failures are not propagated as flow failures"""
-    config["tasks"].sort(key=lambda blk: blk["seq"])
-
-    if config.get("continue_on_sync_failure"):
-        _run_tasks_with_sync_tolerance(config["tasks"])
-    else:
-        _run_tasks_sequentially(config["tasks"])
-
-
 def _run_tasks_sequentially(tasks: list):
     """Original behavior: run all tasks sequentially, fail fast on any error"""
     try:
@@ -419,3 +403,19 @@ def _run_tasks_with_sync_tolerance(tasks: list):
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
         raise
+
+
+@flow
+def deployment_schedule_flow_v4(
+    config: dict,
+    dbt_blocks: list | None = None,  # pylint: disable=unused-argument
+    airbyte_blocks: list | None = None,  # pylint: disable=unused-argument
+):
+    # pylint: disable=broad-exception-caught
+    """modification so dbt test failures are not propagated as flow failures"""
+    config["tasks"].sort(key=lambda blk: blk["seq"])
+
+    if config.get("continue_on_sync_failure"):
+        _run_tasks_with_sync_tolerance(config["tasks"])
+    else:
+        _run_tasks_sequentially(config["tasks"])
