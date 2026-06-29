@@ -158,13 +158,13 @@ async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
 DBT_RETRY_IF_FAILED_WITHIN = timedelta(minutes=5)
 
 
-def _retry_if_short_runtime(task: Task, task_run: TaskRun, state: State) -> bool:  # pylint: disable=unused-argument
+def _retry_if_short_runtime(
+    task: Task, task_run: TaskRun, state: State
+) -> bool:  # pylint: disable=unused-argument
     start = task_run.start_time
     end = state.timestamp
     if start is None or end is None:
-        logger.info(
-            "retry-check %s: missing start/end timestamp, not retrying", task_run.name
-        )
+        logger.info("retry-check %s: missing start/end timestamp, not retrying", task_run.name)
         return False
     runtime = end - start
     should_retry = runtime < DBT_RETRY_IF_FAILED_WITHIN
