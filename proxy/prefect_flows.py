@@ -7,10 +7,12 @@ everything under here is incremented by a version compared to flows.py
 import os
 from time import sleep
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from prefect import flow, task
 from prefect.blocks.system import Secret
+from prefect.client.schemas.objects import TaskRun
 from prefect.states import State, StateType
+from prefect.tasks import Task
 from prefect_airbyte.flows import (
     run_connection_sync,
     reset_connection_streams,
@@ -150,7 +152,39 @@ async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
 #     flow_name: str
 #     flow_run_name: str
 # }
-@task(name="dbtjob_v1", task_run_name="dbtjob-{task_slug}", retries=1, retry_delay_seconds=60)
+# Only retry dbt failures that occur early in the run — late failures are
+# almost always real SQL/model errors that won't be fixed by retrying, and
+# retrying a multi-hour run wastes warehouse time.
+DBT_RETRY_IF_FAILED_WITHIN = timedelta(minutes=5)
+
+
+def _retry_if_short_runtime(
+    task: Task, task_run: TaskRun, state: State
+) -> bool:  # pylint: disable=unused-argument
+    start = task_run.start_time
+    end = state.timestamp
+    if start is None or end is None:
+        logger.info("retry-check %s: missing start/end timestamp, not retrying", task_run.name)
+        return False
+    runtime = end - start
+    should_retry = runtime < DBT_RETRY_IF_FAILED_WITHIN
+    logger.info(
+        "retry-check %s: ran for %.1fs (limit %.1fs) -> %s",
+        task_run.name,
+        runtime.total_seconds(),
+        DBT_RETRY_IF_FAILED_WITHIN.total_seconds(),
+        "retrying" if should_retry else "not retrying",
+    )
+    return should_retry
+
+
+@task(
+    name="dbtjob_v1",
+    task_run_name="dbtjob-{task_slug}",
+    retries=1,
+    retry_delay_seconds=60,
+    retry_condition_fn=_retry_if_short_runtime,
+)
 def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     # pylint: disable=broad-exception-caught
     """

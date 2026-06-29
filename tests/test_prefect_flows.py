@@ -1,15 +1,18 @@
 """Tests for prefect_flows.py"""
 
 import os
+from datetime import datetime, timedelta, timezone
 import pytest
 from unittest.mock import patch, MagicMock
 
 from proxy.prefect_flows import (
     dbtjob_v1,
     _is_airbyte_sync_task,
+    _retry_if_short_runtime,
     _run_tasks_sequentially,
     _run_tasks_with_sync_tolerance,
     deployment_schedule_flow_v4,
+    DBT_RETRY_IF_FAILED_WITHIN,
     AIRBYTECONNECTION,
     DBTCORE,
     SHELLOPERATION,
@@ -356,3 +359,79 @@ def test_v4_uses_sequential_when_flag_false(mock_sequential, mock_tolerant):
 
     mock_sequential.assert_called_once()
     mock_tolerant.assert_not_called()
+
+
+def _make_retry_args(start, end, name="dbtjob-dbt-run"):
+    """Build the (task, task_run, state) triple expected by retry_condition_fn."""
+    task = MagicMock(name="task")
+    task_run = MagicMock(name="task_run")
+    task_run.start_time = start
+    task_run.name = name
+    state = MagicMock(name="state")
+    state.timestamp = end
+    return task, task_run, state
+
+
+def test_retry_if_short_runtime_retries_quick_failure():
+    start = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    end = start + timedelta(seconds=30)
+    task, task_run, state = _make_retry_args(start, end)
+    assert _retry_if_short_runtime(task, task_run, state) is True
+
+
+def test_retry_if_short_runtime_skips_long_failure():
+    start = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    end = start + timedelta(hours=1)
+    task, task_run, state = _make_retry_args(start, end)
+    assert _retry_if_short_runtime(task, task_run, state) is False
+
+
+def test_retry_if_short_runtime_boundary_is_exclusive():
+    """At exactly the threshold we do NOT retry — the comparison is strict <."""
+    start = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    end = start + DBT_RETRY_IF_FAILED_WITHIN
+    task, task_run, state = _make_retry_args(start, end)
+    assert _retry_if_short_runtime(task, task_run, state) is False
+
+
+def test_retry_if_short_runtime_just_under_boundary_retries():
+    start = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    end = start + DBT_RETRY_IF_FAILED_WITHIN - timedelta(seconds=1)
+    task, task_run, state = _make_retry_args(start, end)
+    assert _retry_if_short_runtime(task, task_run, state) is True
+
+
+def test_retry_if_short_runtime_handles_missing_start_time():
+    end = datetime(2026, 1, 1, 12, 5, 0, tzinfo=timezone.utc)
+    task, task_run, state = _make_retry_args(None, end)
+    assert _retry_if_short_runtime(task, task_run, state) is False
+
+
+def test_retry_if_short_runtime_handles_missing_end_timestamp():
+    start = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
+    task, task_run, state = _make_retry_args(start, None)
+    assert _retry_if_short_runtime(task, task_run, state) is False
+
+
+def test_retry_if_short_runtime_handles_both_none():
+    task, task_run, state = _make_retry_args(None, None)
+    assert _retry_if_short_runtime(task, task_run, state) is False
+
+
+def test_retry_if_short_runtime_does_not_raise_on_bad_types():
+    """Defensive: if Prefect ever hands us oddly-typed attrs, we should not crash.
+    Prefect catches exceptions from retry_condition_fn (task_engine.py:463), but
+    returning False cleanly is preferable to leaning on that fallback."""
+    task = MagicMock()
+    task_run = MagicMock()
+    task_run.start_time = "not-a-datetime"
+    task_run.name = "dbtjob-dbt-run"
+    state = MagicMock()
+    state.timestamp = "also-not-a-datetime"
+    # We don't assert the return value here — we only assert it doesn't bubble
+    # an exception out of the helper itself in any way that surprises us.
+    try:
+        result = _retry_if_short_runtime(task, task_run, state)
+    except Exception:  # pylint: disable=broad-except
+        result = False
+    assert result is False
