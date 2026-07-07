@@ -309,8 +309,6 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 
         commands = task_config["commands"]
         updated_cmds = [f"{cmd} {git_repo_endpoint} {project_dir}" for cmd in commands]
-        if project_dir:
-            updated_cmds = [f"rm -rf {project_dir}"] + updated_cmds
         task_config["commands"] = updated_cmds
 
     elif task_config["slug"] == "generate-edr":  # DDP_backend:constants.TASK_GENERATE_EDR
