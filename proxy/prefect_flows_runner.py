@@ -10,12 +10,16 @@ to
     proxy/prefect_flows_runner.py:deployment_schedule_flow_v5
 Rollback = reverse the rewrite. The old flow file stays intact so rollback is safe.
 
-Only DBTCORE tasks change; airbyte, dbt-cloud, and shell tasks re-import unchanged
-from prefect_flows.
+Airbyte flows are copied verbatim from prefect_flows.py (same function names +
+signatures) with `flow_run_name` added on the decorator so graph labels are
+stable. dbt-cloud and shell tasks are still re-imported from prefect_flows
+until they get the same treatment. The intent is that prefect_flows.py can be
+retired once every task type has moved over.
 """
 
 import asyncio
 import json
+import os
 import shlex
 from pathlib import Path
 from time import sleep
@@ -24,15 +28,19 @@ import yaml
 from prefect import flow
 from prefect.blocks.system import Secret
 from prefect.states import State, StateType
+from prefect_airbyte import AirbyteConnection, AirbyteServer
+from prefect_airbyte.flows import (
+    clear_connection,
+    clear_connection_streams,
+    run_connection_sync,
+    update_connection_schema,
+)
 from prefect_dbt import PrefectDbtRunner, PrefectDbtSettings
 
 from proxy.helpers import CustomLogger
 from proxy.prefect_flows import (
     _is_airbyte_sync_task,
     dbtcloudjob_v1,
-    run_airbyte_conn_clear,
-    run_airbyte_connection_flow_v1,
-    run_refresh_schema_flow,
     shellopjob,
     AIRBYTECONNECTION,
     DBTCLOUD,
@@ -41,6 +49,77 @@ from proxy.prefect_flows import (
 )
 
 logger = CustomLogger("prefect-proxy")
+
+
+# =============================================================================
+# Airbyte flows
+# =============================================================================
+# Copied from prefect_flows.py. Same function names/signatures/bodies. Only
+# difference: `flow_run_name` set on the decorator so the graph label is stable
+# (Prefect's default is a random <adj>-<animal>).
+
+
+@flow(flow_run_name="airbyte-sync", retries=1, retry_delay_seconds=120)
+def run_airbyte_connection_flow_v1(payload: dict):
+    """run an airbyte sync"""
+    try:
+        serverblock = AirbyteServer.load(payload["airbyte_server_block"])
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=payload["connection_id"],
+            timeout=payload["timeout"] or 15,
+        )
+        result = run_connection_sync(connection_block)
+        logger.info("airbyte connection sync result=")
+        logger.info(result)
+        return result
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        logger.error(str(error))
+        raise
+
+
+@flow(flow_run_name="airbyte-clear")
+def run_airbyte_conn_clear(payload: dict):
+    """reset an airbyte connection"""
+    try:
+        serverblock = AirbyteServer.load(payload["airbyte_server_block"])
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=payload["connection_id"],
+            timeout=payload["timeout"] or 15,
+        )
+        if "streams" in payload and payload["streams"]:
+            result = clear_connection_streams(connection_block, payload["streams"])
+        else:
+            result = clear_connection(connection_block)
+        logger.info("airbyte connection clear result=")
+        logger.info(result)
+        return result
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        logger.error(str(error))
+        raise
+
+
+@flow(flow_run_name="airbyte-update-schema")
+async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
+    """refresh an airbyte connection's schema"""
+    try:
+        serverblock = await AirbyteServer.aload(payload["airbyte_server_block"])
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=payload["connection_id"],
+            timeout=max(payload.get("timeout", 0), 100),
+        )
+        await update_connection_schema(connection_block, catalog_diff=catalog_diff)
+        return True
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        logger.error(str(error))
+        raise
+
+
+# =============================================================================
+# dbt runner flow
+# =============================================================================
 
 # Fixed label used inside profiles.yml. dbt reads `target:` from the profile to
 # pick which output to use — since we write exactly one output, the label is
@@ -104,10 +183,10 @@ def build_profile_dict(
 ) -> dict:
     """Build a complete profiles.yml dict — single profile, single output.
 
-        <profile_name>:
-          target: <target>
-          outputs:
-            <target>: {type, schema, threads, ...creds & extras}
+    <profile_name>:
+      target: <target>
+      outputs:
+        <target>: {type, schema, threads, ...creds & extras}
     """
     return {
         profile_name: {
@@ -157,13 +236,18 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
     profiles_dir = Path(task_config["profiles_dir"])
     profiles_dir.mkdir(parents=True, exist_ok=True)
 
-    # SSL cert content for postgres travels inside creds (matches how it's stored
-    # by the existing CLI-profile-block flow). Write it to disk and rewrite the
-    # output's sslrootcert field to point at it.
+    # SSL cert content for postgres travels inside creds. Match the old
+    # dbtjob_v1 path exactly (prefect_flows.py:200-209): prefer creds["sslrootcert"]
+    # (backend already sets this to <org_project_dir>/sslrootcert.pem), fall back
+    # to <project_dir>/../sslrootcert.pem — same resolved location.
     if env["wtype"] == "postgres" and creds.get("sslrootcert_content"):
-        cert_path = profiles_dir / "sslrootcert.pem"
-        cert_path.write_text(creds["sslrootcert_content"])
-        profile_dict[profile_name]["outputs"][DBT_TARGET]["sslrootcert"] = str(cert_path)
+        cert_path = creds.get("sslrootcert") or os.path.join(
+            task_config["project_dir"], "..", "sslrootcert.pem"
+        )
+        os.makedirs(os.path.dirname(cert_path), exist_ok=True)
+        with open(cert_path, "w", encoding="utf-8") as f:
+            f.write(creds["sslrootcert_content"])
+        profile_dict[profile_name]["outputs"][DBT_TARGET]["sslrootcert"] = cert_path
 
     (profiles_dir / "profiles.yml").write_text(yaml.safe_dump(profile_dict))
 
@@ -194,9 +278,15 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
     return result
 
 
+# =============================================================================
+# dispatcher + deployment entrypoint
+# =============================================================================
+
+
 def _run_task_runner(task_config: dict):
-    """Copy of prefect_flows._run_task with the DBTCORE branch dispatching to
-    dbtjob_v2_runner. Other branches delegate to the originals in prefect_flows.
+    """Copy of prefect_flows._run_task with DBTCORE and AIRBYTECONNECTION
+    branches dispatching to local runner-file versions; DBTCLOUD and
+    SHELLOPERATION still delegate to prefect_flows.
     """
     if task_config["type"] == DBTCORE:
         dbtjob_v2_runner(task_config, task_config["slug"])
@@ -258,8 +348,7 @@ def _run_tasks_with_sync_tolerance(tasks: list):
 
     if sync_errors:
         raise RuntimeError(
-            f"{len(sync_errors)} airbyte sync(s) failed: "
-            + "; ".join(str(e) for e in sync_errors)
+            f"{len(sync_errors)} airbyte sync(s) failed: " + "; ".join(str(e) for e in sync_errors)
         )
 
     try:

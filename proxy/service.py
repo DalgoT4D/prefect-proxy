@@ -1013,6 +1013,12 @@ def traverse_flow_run_graph_v2(flow_run_id: str):
         for node in flow_graph_data["nodes"]:
             run_id, node_data = node
             if current_run_id == run_id:
+                # Prefect hardcodes flow-run labels as `<flow_name> / <flow_run_name>`
+                # server-side (see prefect/server/database/query_components.py:648).
+                # Strip the prefix so subflow labels look like task-run labels — e.g.
+                # `dbtjob-dbt-run` instead of `dbtjob_v2_runner / dbtjob-dbt-run`.
+                if node_data.get("kind") == "flow-run" and " / " in node_data.get("label", ""):
+                    node_data["label"] = node_data["label"].split(" / ", 1)[1]
                 res.append(node_data)
                 for child in node_data["children"]:
                     runs_queue.put(child["id"])
