@@ -59,7 +59,7 @@ logger = CustomLogger("prefect-proxy")
 # (Prefect's default is a random <adj>-<animal>).
 
 
-@flow(flow_run_name="airbyte-sync", retries=1, retry_delay_seconds=120)
+@flow(flow_run_name="airbyte-sync-trigger", retries=1, retry_delay_seconds=120)
 def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
     try:
@@ -69,7 +69,11 @@ def run_airbyte_connection_flow_v1(payload: dict):
             connection_id=payload["connection_id"],
             timeout=payload["timeout"] or 15,
         )
-        result = run_connection_sync(connection_block)
+        # Rename the nested prefect_airbyte subflow so it doesn't show up as a
+        # random <adj>-<animal> in the graph.
+        result = run_connection_sync.with_options(flow_run_name="airbyte-sync")(
+            connection_block
+        )
         logger.info("airbyte connection sync result=")
         logger.info(result)
         return result
@@ -78,7 +82,7 @@ def run_airbyte_connection_flow_v1(payload: dict):
         raise
 
 
-@flow(flow_run_name="airbyte-clear")
+@flow(flow_run_name="airbyte-clear-trigger")
 def run_airbyte_conn_clear(payload: dict):
     """reset an airbyte connection"""
     try:
@@ -89,9 +93,13 @@ def run_airbyte_conn_clear(payload: dict):
             timeout=payload["timeout"] or 15,
         )
         if "streams" in payload and payload["streams"]:
-            result = clear_connection_streams(connection_block, payload["streams"])
+            result = clear_connection_streams.with_options(
+                flow_run_name="airbyte-clear-streams"
+            )(connection_block, payload["streams"])
         else:
-            result = clear_connection(connection_block)
+            result = clear_connection.with_options(flow_run_name="airbyte-clear")(
+                connection_block
+            )
         logger.info("airbyte connection clear result=")
         logger.info(result)
         return result
@@ -100,7 +108,7 @@ def run_airbyte_conn_clear(payload: dict):
         raise
 
 
-@flow(flow_run_name="airbyte-update-schema")
+@flow(flow_run_name="airbyte-update-schema-trigger")
 async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
     """refresh an airbyte connection's schema"""
     try:
@@ -110,7 +118,9 @@ async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
             connection_id=payload["connection_id"],
             timeout=max(payload.get("timeout", 0), 100),
         )
-        await update_connection_schema(connection_block, catalog_diff=catalog_diff)
+        await update_connection_schema.with_options(flow_run_name="airbyte-update-schema")(
+            connection_block, catalog_diff=catalog_diff
+        )
         return True
     except Exception as error:  # pylint: disable=broad-exception-caught
         logger.error(str(error))

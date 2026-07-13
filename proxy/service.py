@@ -664,7 +664,8 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     try:
         source = GitRepository(url="https://github.com/DalgoT4D/prefect-proxy.git", branch="main")
         deployment_id = flow.from_source(
-            source=source, entrypoint="proxy/prefect_flows.py:deployment_schedule_flow_v4"
+            source=source,
+            entrypoint="proxy/prefect_flows_runner.py:deployment_schedule_flow_v5",
         ).deploy(
             name=payload.deployment_name,
             work_queue_name=work_queue_name,
