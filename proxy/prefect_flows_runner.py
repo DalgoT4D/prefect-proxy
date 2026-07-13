@@ -1,8 +1,10 @@
 """
-Runner-based flow file. Migrates DBTCORE execution off the deprecated
-DbtCoreOperation / DbtCliProfile blocks onto PrefectDbtRunner, which uses the
-worker's base-env dbt-core (pinned to 1.10.19 in pyproject.toml and the runner
-Dockerfile).
+Runner-based flow file. Self-contained: no imports from prefect_flows.py so the
+old file can be retired once every deployment has been cut over.
+
+Migrates DBTCORE execution off the deprecated DbtCoreOperation / DbtCliProfile
+blocks onto PrefectDbtRunner, which uses the worker's base-env dbt-core (pinned
+to 1.10.19 in pyproject.toml and the runner Dockerfile).
 
 Cutover per deployment is a Prefect-DB entrypoint rewrite from
     proxy/prefect_flows.py:deployment_schedule_flow_v4
@@ -10,22 +12,23 @@ to
     proxy/prefect_flows_runner.py:deployment_schedule_flow_v5
 Rollback = reverse the rewrite. The old flow file stays intact so rollback is safe.
 
-Airbyte flows are copied verbatim from prefect_flows.py (same function names +
-signatures) with `flow_run_name` added on the decorator so graph labels are
-stable. dbt-cloud and shell tasks are still re-imported from prefect_flows
-until they get the same treatment. The intent is that prefect_flows.py can be
-retired once every task type has moved over.
+Notable differences from prefect_flows.py:
+  - dbt: PrefectDbtRunner + Secret block (was DbtCoreOperation + CLI block)
+  - shell: non-deprecated prefect_shell.commands.ShellOperation
+  - dbt / shell / airbyte tasks are @flow (not @task) so their internal
+    nodes surface as subflows in the graph
 """
 
 import asyncio
 import json
 import os
 import shlex
+from datetime import datetime
 from pathlib import Path
 from time import sleep
 
 import yaml
-from prefect import flow
+from prefect import flow, task
 from prefect.blocks.system import Secret
 from prefect.states import State, StateType
 from prefect_airbyte import AirbyteConnection, AirbyteServer
@@ -36,19 +39,21 @@ from prefect_airbyte.flows import (
     update_connection_schema,
 )
 from prefect_dbt import PrefectDbtRunner, PrefectDbtSettings
+from prefect_dbt.cloud import DbtCloudCredentials
+from prefect_dbt.cloud.jobs import trigger_dbt_cloud_job_run
+from prefect_shell.commands import ShellOperation
 
 from proxy.helpers import CustomLogger
-from proxy.prefect_flows import (
-    _is_airbyte_sync_task,
-    dbtcloudjob_v1,
-    shellopjob,
-    AIRBYTECONNECTION,
-    DBTCLOUD,
-    DBTCORE,
-    SHELLOPERATION,
-)
 
 logger = CustomLogger("prefect-proxy")
+
+
+# Django prefect block-type names (must match backend constants).
+AIRBYTESERVER = "Airbyte Server"
+AIRBYTECONNECTION = "Airbyte Connection"
+SHELLOPERATION = "Shell Operation"
+DBTCORE = "dbt Core Operation"
+DBTCLOUD = "dbt Cloud Job"
 
 
 # =============================================================================
@@ -289,8 +294,102 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
 
 
 # =============================================================================
+# Shell operation flow
+# =============================================================================
+# Copied from prefect_flows.py::shellopjob. Two differences:
+#  - Now a @flow (was @task) — matches dbtjob_v2_runner so all deployment nodes
+#    surface as subflows in the graph.
+#  - Uses non-deprecated `prefect_shell.commands.ShellOperation` instead of the
+#    deprecated `prefect_dbt.cli.commands.ShellOperation`.
+
+
+@flow(name="shellopjob", flow_run_name="shellop-{task_slug}")
+def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
+    """loads and runs the shell operation"""
+
+    if task_config["slug"] == "git-pull":
+        secret_block_name = task_config["env"].get("secret-git-pull-url-block", "")
+        git_repo_endpoint = ""
+        if secret_block_name and len(secret_block_name) > 0:
+            secret_blk = Secret.load(secret_block_name)
+            git_repo_endpoint = secret_blk.get()
+
+        commands = task_config["commands"]
+        updated_cmds = [f"{cmd} {git_repo_endpoint}" for cmd in commands]
+        task_config["commands"] = updated_cmds
+
+    elif task_config["slug"] == "git-clone":
+        secret_block_name = task_config["env"].get("secret-git-pull-url-block", "")
+        project_dir = task_config["env"].get("project_dir", "")
+
+        git_repo_endpoint = task_config["env"].get("gitrepo_url", "")
+        if secret_block_name and len(secret_block_name) > 0:
+            secret_blk = Secret.load(secret_block_name)
+            git_repo_endpoint = secret_blk.get()
+
+        if not git_repo_endpoint:
+            raise ValueError(
+                "Git repository endpoint is not provided in the environment variables or secret block."
+            )
+
+        commands = task_config["commands"]
+        updated_cmds = [f"{cmd} {git_repo_endpoint} {project_dir}" for cmd in commands]
+        task_config["commands"] = updated_cmds
+
+    elif task_config["slug"] == "generate-edr":
+        aws_access_key = Secret.load("edr-aws-access-key").get()
+        aws_access_secret = Secret.load("edr-aws-access-secret").get()
+        edr_s3_bucket = Secret.load("edr-s3-bucket").get()
+        todays_date = datetime.today().strftime("%Y-%m-%d")
+        task_config["commands"][0] = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
+        task_config["commands"][0] = task_config["env"]["PATH"] + "/" + task_config["commands"][0]
+        task_config["commands"][0] += (
+            f" --aws-access-key-id {aws_access_key}"
+            f" --aws-secret-access-key {aws_access_secret}"
+            f" --s3-bucket-name {edr_s3_bucket}"
+        )
+
+    shell_op = ShellOperation(
+        commands=task_config["commands"],
+        working_dir=task_config["working_dir"],
+        shell=(task_config["env"]["shell"] if "shell" in task_config["env"] else "/bin/bash"),
+    )
+    return shell_op.run()
+
+
+# =============================================================================
+# ad-hoc entrypoints
+# =============================================================================
+# For ad-hoc UI Run-button invocations, main.py calls the task flows
+# (`dbtjob_v2_runner`, `shellopjob`) directly — no wrapper subflow, so the
+# graph shows only the actual work, not two nested rows.
+
+
+# =============================================================================
+# dbt cloud task
+# =============================================================================
+
+
+@task(name="dbtcloudjob_v1", task_run_name="dbtcloudjob-{task_slug}")
+async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
+    """trigger a dbt Cloud job run"""
+    try:
+        dbt_cloud_creds = await DbtCloudCredentials.aload(task_config["dbt_cloud_creds_block"])
+        result = await trigger_dbt_cloud_job_run(dbt_cloud_creds, task_config["dbt_cloud_job_id"])
+        return result
+    except Exception as error:  # pylint: disable=broad-exception-caught
+        logger.error(str(error))
+        raise
+
+
+# =============================================================================
 # dispatcher + deployment entrypoint
 # =============================================================================
+
+
+def _is_airbyte_sync_task(task_config: dict) -> bool:
+    """Check if a task is an airbyte sync task"""
+    return task_config["type"] == AIRBYTECONNECTION and task_config["slug"] == "airbyte-sync"
 
 
 def _run_task_runner(task_config: dict):

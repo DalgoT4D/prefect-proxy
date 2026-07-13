@@ -70,10 +70,7 @@ from proxy.schemas import (
     FilterPrefectWorkers,
 )
 
-from proxy.prefect_flows import (
-    run_shell_operation_flow,
-    run_dbtcore_flow_v1,
-)
+from proxy.prefect_flows_runner import dbtjob_v2_runner, shellopjob
 
 
 sentry_sdk.init(
@@ -107,14 +104,11 @@ def dbtrun_v1(task_config: RunDbtCoreOperation):
         raise TypeError("invalid task config")
     logger.info("dbt core operation running %s", task_config.slug)
 
-    flow = run_dbtcore_flow_v1
-    if task_config.flow_name:
-        flow = flow.with_options(name=task_config.flow_name)
-    if task_config.flow_run_name:
-        flow = flow.with_options(flow_run_name=task_config.flow_run_name)
-
+    # Ignore payload.flow_name / payload.flow_run_name — use whatever the
+    # runner decorator declares (name="dbtjob_v2_runner",
+    # flow_run_name="dbtjob-{task_slug}").
     try:
-        result = flow(task_config.model_dump())
+        result = dbtjob_v2_runner(task_config.model_dump(), task_config.slug)
         return result
     except Exception as error:
         logger.exception(error)
@@ -128,14 +122,10 @@ def shelloprun(task_config: RunShellOperation):
     if not isinstance(task_config, RunShellOperation):
         raise TypeError("invalid task config")
 
-    flow = run_shell_operation_flow
-    if task_config.flow_name:
-        flow = flow.with_options(name=task_config.flow_name)
-    if task_config.flow_run_name:
-        flow = flow.with_options(flow_run_name=task_config.flow_run_name)
-
+    # Ignore payload.flow_name / payload.flow_run_name — use the runner
+    # decorator's (name="shellopjob", flow_run_name="shellop-{task_slug}").
     try:
-        result = flow(task_config.model_dump())
+        result = shellopjob(task_config.model_dump(), task_config.slug)
         return result
     except Exception as error:
         logger.exception(error)
