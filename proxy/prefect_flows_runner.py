@@ -21,7 +21,7 @@ from pathlib import Path
 from time import sleep
 
 import yaml
-from prefect import flow, task
+from prefect import flow
 from prefect.blocks.system import Secret
 from prefect.states import State, StateType
 from prefect_dbt import PrefectDbtRunner, PrefectDbtSettings
@@ -29,7 +29,6 @@ from prefect_dbt import PrefectDbtRunner, PrefectDbtSettings
 from proxy.helpers import CustomLogger
 from proxy.prefect_flows import (
     _is_airbyte_sync_task,
-    _retry_if_short_runtime,
     dbtcloudjob_v1,
     run_airbyte_conn_clear,
     run_airbyte_connection_flow_v1,
@@ -118,17 +117,20 @@ def build_profile_dict(
     }
 
 
-@task(
+@flow(
     name="dbtjob_v2_runner",
-    task_run_name="dbtjob-{task_slug}",
+    flow_run_name="dbtjob-{task_slug}",
     retries=1,
     retry_delay_seconds=60,
-    retry_condition_fn=_retry_if_short_runtime,
 )
 def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """Run dbt commands via PrefectDbtRunner. Reads warehouse creds from a Prefect
     Secret block at flow-run start, writes a resolved profiles.yml to the worker's
     filesystem, then invokes each dbt command as argv.
+
+    Runs as a subflow (not a task) so that PrefectDbtRunner's per-node tasks
+    (model / test / seed / snapshot) nest under this subflow in the graph
+    instead of surfacing at the top-level deployment flow.
 
     Postgres SSL cert content (if present in extras.sslrootcert_content) is
     written to disk next to profiles.yml; the output's `sslrootcert` field is
