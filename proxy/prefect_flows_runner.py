@@ -135,7 +135,10 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
     rewritten to point at that path.
     """
     env = task_config["env"]
-    block_value = json.loads(Secret.load(env["warehouse-secret-block-name"]).get())
+    raw = Secret.load(env["warehouse-secret-block-name"]).get()
+    # Prefect stores block values in a JSON column; a JSON-valid string round-trips
+    # back as a dict on .get(). Accept both shapes.
+    block_value = raw if isinstance(raw, dict) else json.loads(raw)
     creds = block_value["creds"]
     extras = block_value.get("extras", {})
 
