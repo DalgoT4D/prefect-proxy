@@ -176,9 +176,7 @@ def test_dbtjob_v2_runner_block_value_as_dict(mock_secret, mock_runner_cls, tmp_
 
 @patch("proxy.prefect_flows_runner.PrefectDbtRunner")
 @patch("proxy.prefect_flows_runner.Secret")
-def test_dbtjob_v2_runner_block_value_as_json_string(
-    mock_secret, mock_runner_cls, tmp_path
-):
+def test_dbtjob_v2_runner_block_value_as_json_string(mock_secret, mock_runner_cls, tmp_path):
     """Same runner path must also work when .get() returns a JSON string."""
     block_value = _make_block_value(wtype="bigquery", schema="warehouse")
     mock_secret.load.return_value.get.return_value = json.dumps(block_value)  # string
@@ -194,9 +192,7 @@ def test_dbtjob_v2_runner_block_value_as_json_string(
 
 @patch("proxy.prefect_flows_runner.PrefectDbtRunner")
 @patch("proxy.prefect_flows_runner.Secret")
-def test_dbtjob_v2_runner_writes_ssl_cert_and_rewrites_path(
-    mock_secret, mock_runner_cls, tmp_path
-):
+def test_dbtjob_v2_runner_writes_ssl_cert_and_rewrites_path(mock_secret, mock_runner_cls, tmp_path):
     """postgres SSL: cert content lives inside creds.sslrootcert_content;
     runner writes it to creds.sslrootcert path, then rewrites the profile
     output's `sslrootcert` field to that path."""
@@ -246,9 +242,7 @@ def test_dbtjob_v2_runner_dbt_test_failure_returns_completed_state(
 
 @patch("proxy.prefect_flows_runner.PrefectDbtRunner")
 @patch("proxy.prefect_flows_runner.Secret")
-def test_dbtjob_v2_runner_non_test_failure_reraises(
-    mock_secret, mock_runner_cls, tmp_path
-):
+def test_dbtjob_v2_runner_non_test_failure_reraises(mock_secret, mock_runner_cls, tmp_path):
     """Non-test failures must propagate — silently swallowing them would hide
     real dbt run/seed/snapshot errors."""
     mock_secret.load.return_value.get.return_value = _make_block_value()

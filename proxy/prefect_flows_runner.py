@@ -78,9 +78,7 @@ def run_airbyte_connection_flow_v1(payload: dict):
         )
         # Rename the nested prefect_airbyte subflow so it doesn't show up as a
         # random <adj>-<animal> in the graph.
-        result = run_connection_sync.with_options(flow_run_name="airbyte-sync")(
-            connection_block
-        )
+        result = run_connection_sync.with_options(flow_run_name="airbyte-sync")(connection_block)
         logger.info("airbyte connection sync result=")
         logger.info(result)
         return result
@@ -100,13 +98,11 @@ def run_airbyte_conn_clear(payload: dict):
             timeout=payload["timeout"] or 15,
         )
         if "streams" in payload and payload["streams"]:
-            result = clear_connection_streams.with_options(
-                flow_run_name="airbyte-clear-streams"
-            )(connection_block, payload["streams"])
-        else:
-            result = clear_connection.with_options(flow_run_name="airbyte-clear")(
-                connection_block
+            result = clear_connection_streams.with_options(flow_run_name="airbyte-clear-streams")(
+                connection_block, payload["streams"]
             )
+        else:
+            result = clear_connection.with_options(flow_run_name="airbyte-clear")(connection_block)
         logger.info("airbyte connection clear result=")
         logger.info(result)
         return result
@@ -516,10 +512,16 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         argv = shlex.split(command)[1:]
 
         subprocess.run(
-            [edr_bin, *argv,
-             "--aws-access-key-id", edr_config["aws_access_key_id"],
-             "--aws-secret-access-key", edr_config["aws_secret_access_key"],
-             "--s3-bucket-name", edr_config["s3_bucket"]],
+            [
+                edr_bin,
+                *argv,
+                "--aws-access-key-id",
+                edr_config["aws_access_key_id"],
+                "--aws-secret-access-key",
+                edr_config["aws_secret_access_key"],
+                "--s3-bucket-name",
+                edr_config["s3_bucket"],
+            ],
             cwd=task_config["working_dir"],
             check=True,
         )
