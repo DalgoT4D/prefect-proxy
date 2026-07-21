@@ -21,6 +21,9 @@ dependencies = [
   "dbt-core==1.10.19",
   "dbt-postgres==1.10.2",
   "dbt-bigquery==1.10.3",
+  # elementary CLI (edr) — installs the `edr` binary and the elementary
+  # macro-runner deps. Version 0.22.0 verified compatible with dbt-core 1.10.19.
+  "elementary-data==0.22.0",
   # runtime libs imported directly by proxy code
   "pydantic",
   "pendulum",

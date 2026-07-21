@@ -23,6 +23,8 @@ import asyncio
 import json
 import os
 import shlex
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from time import sleep
@@ -300,6 +302,152 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
 
 
 # =============================================================================
+# Elementary profile builder (used by generate-edr)
+# =============================================================================
+# Mirrors DDP_backend/ddpui/ddpdbt/elementary_service.py:create_elementary_profile.
+# We reimplement here because the runner runs on Prefect workers (potentially
+# EKS pods) that can't import Django code.
+
+
+def _extract_elementary_profile_from_macro_output(lines: list[str]) -> dict:
+    """The elementary macro emits its YAML profile starting with `elementary:`
+    somewhere in stdout after logging noise. Buffer from that marker onwards
+    and parse. Raises if the marker never appears."""
+    buffer = ""
+    gather = False
+    for line in lines:
+        if line == "elementary:":
+            gather = True
+        if gather:
+            buffer += line + "\n"
+    if not buffer:
+        raise RuntimeError(
+            "elementary.generate_elementary_cli_profile macro returned no profile — "
+            "check that the elementary package is installed (dbt deps ran)."
+        )
+    return yaml.safe_load(buffer)
+
+
+def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name: str) -> None:
+    """Generate <working_dir>/elementary_profiles/profiles.yml at flow-run time.
+
+    Self-contained — does NOT assume any prior task has written profiles.yml
+    or run `dbt deps`. Works for both "EDR at end of pipeline" (safe overwrite)
+    and standalone EDR (regenerate button on a fresh EKS pod).
+
+    Precondition: dbt project on disk at working_dir (git-clone step earlier
+    in the pipeline). Everything else is generated here.
+
+    Flow (mirrors DDP_backend:create_elementary_profile):
+      1. Load dbt-profile Secret block → creds/wtype/default_schema/extras.
+      2. Read dbt_project.yml for the profile name.
+      3. Write <working_dir>/profiles/profiles.yml (same shape as dbtjob_v2_runner).
+      4. `dbt deps` — ensures the elementary dbt package is in dbt_packages/.
+      5. Run `dbt run-operation elementary.generate_elementary_cli_profile`
+         to compute the elementary schema (dbt's schema-generation rules
+         handle target-specific / config-specific quirks).
+      6. Parse macro output → elementary_profile dict with computed schema.
+      7. Build elementary output: copy dbt's warehouse creds, override schema.
+      8. Write <working_dir>/elementary_profiles/profiles.yml.
+    """
+    project_dir = Path(working_dir)
+
+    # 1. Secret block → creds + schema + wtype + extras.
+    raw = Secret.load(dbt_profile_secret_block_name).get()
+    block_value = raw if isinstance(raw, dict) else json.loads(raw)
+    wtype = block_value["wtype"]
+    default_schema = block_value["default_schema"]
+    creds = block_value["creds"]
+    extras = block_value.get("extras", {})
+
+    # 2. Profile name from dbt_project.yml.
+    with open(project_dir / "dbt_project.yml", encoding="utf-8") as f:
+        dbt_project = yaml.safe_load(f)
+    dbt_profile_name = dbt_project["profile"]
+
+    # 3. Write profiles.yml (same shape dbtjob_v2_runner writes).
+    profile_dict = build_profile_dict(
+        profile_name=dbt_profile_name,
+        wtype=wtype,
+        target=DBT_TARGET,
+        schema=default_schema,
+        creds=creds,
+        extras=extras,
+    )
+    # SSL cert content (postgres) — write to disk + rewrite path (parity with
+    # dbtjob_v2_runner). See that function for the cert-path selection logic.
+    if wtype == "postgres" and creds.get("sslrootcert_content"):
+        cert_path = creds.get("sslrootcert") or os.path.join(
+            str(project_dir), "..", "sslrootcert.pem"
+        )
+        os.makedirs(os.path.dirname(cert_path), exist_ok=True)
+        with open(cert_path, "w", encoding="utf-8") as f:
+            f.write(creds["sslrootcert_content"])
+        profile_dict[dbt_profile_name]["outputs"][DBT_TARGET]["sslrootcert"] = cert_path
+
+    profiles_dir = project_dir / "profiles"
+    profiles_dir.mkdir(parents=True, exist_ok=True)
+    (profiles_dir / "profiles.yml").write_text(yaml.safe_dump(profile_dict))
+    logger.info(f"wrote {profiles_dir / 'profiles.yml'}")
+
+    # dbt binary — via the running Python's bin dir. Portable across:
+    #   - EKS runner image (pip installed → /usr/local/bin)
+    #   - local prefect-proxy .venv (uv installed → .venv/bin)
+    dbt_bin = os.path.join(os.path.dirname(sys.executable), "dbt")
+
+    # 4. dbt deps — installs elementary dbt package into dbt_packages/.
+    # Idempotent; safe if already installed. Fails loudly if packages.yml
+    # doesn't declare elementary (surface: user hasn't set up elementary yet).
+    logger.info("running dbt deps")
+    subprocess.run(
+        [dbt_bin, "deps", "--profiles-dir", "profiles"],
+        cwd=str(project_dir),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    # 5. Run the macro.
+    logger.info("running elementary.generate_elementary_cli_profile macro")
+    result = subprocess.run(
+        [
+            dbt_bin,
+            "run-operation",
+            "elementary.generate_elementary_cli_profile",
+            "--profiles-dir",
+            "profiles",
+        ],
+        cwd=str(project_dir),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    # 6. Parse macro output.
+    elementary_profile = _extract_elementary_profile_from_macro_output(result.stdout.splitlines())
+    target = elementary_profile["elementary"].get("target", "default")
+
+    # BQ emits the schema under `dataset` — normalize to `schema`.
+    if elementary_profile["elementary"]["outputs"][target]["type"] == "bigquery":
+        elementary_schema = elementary_profile["elementary"]["outputs"][target]["dataset"]
+    else:
+        elementary_schema = elementary_profile["elementary"]["outputs"][target]["schema"]
+
+    # 7. Build elementary output: dbt's warehouse creds + elementary schema.
+    dbt_output = profile_dict[dbt_profile_name]["outputs"][target]
+    elementary_profile["elementary"]["outputs"][target] = {
+        **dbt_output,
+        "schema": elementary_schema,
+    }
+
+    # 8. Write.
+    elementary_profiles_dir = project_dir / "elementary_profiles"
+    elementary_profiles_dir.mkdir(exist_ok=True)
+    (elementary_profiles_dir / "profiles.yml").write_text(yaml.safe_dump(elementary_profile))
+    logger.info(f"wrote {elementary_profiles_dir / 'profiles.yml'}")
+
+
+# =============================================================================
 # Shell operation flow
 # =============================================================================
 # Copied from prefect_flows.py::shellopjob. Two differences:
@@ -343,22 +491,39 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         task_config["commands"] = updated_cmds
 
     elif task_config["slug"] == "generate-edr":
-        # Single consolidated Secret block replaces the old trio
-        # (edr-aws-access-key / edr-aws-access-secret / edr-s3-bucket).
-        # Backend scaffolds it via `manage.py sync_edr_secret_block`.
+        # Generates profiles.yml + elementary_profiles/profiles.yml on-the-fly
+        # and then runs `edr send-report` directly via subprocess (no shell).
+        # Self-contained: works on EKS pods and local workers as long as the
+        # dbt project is on disk at task_config["working_dir"] (git-clone step
+        # earlier in the pipeline).
+        _prepare_elementary_profile(
+            task_config["working_dir"],
+            task_config["env"]["dbt-profile-secret-block"],
+        )
+
         raw = Secret.load("edr-s3-creds").get()
         edr_config = raw if isinstance(raw, dict) else json.loads(raw)
-        aws_access_key = edr_config["aws_access_key_id"]
-        aws_access_secret = edr_config["aws_secret_access_key"]
-        edr_s3_bucket = edr_config["s3_bucket"]
+
+        # Same binary-resolution as dbt subprocess calls in _prepare_elementary_profile:
+        # <sys.executable's dir>/edr. Works in both EKS (pip global) and local venv.
+        edr_bin = os.path.join(os.path.dirname(sys.executable), "edr")
+
+        # task_config["commands"][0] is: "edr send-report --profiles-dir elementary_profiles ..."
+        # Drop the first token ("edr") — we've resolved the binary — and pass
+        # the rest as argv. Replace TODAYS_DATE and append AWS creds.
         todays_date = datetime.today().strftime("%Y-%m-%d")
-        task_config["commands"][0] = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
-        task_config["commands"][0] = task_config["env"]["PATH"] + "/" + task_config["commands"][0]
-        task_config["commands"][0] += (
-            f" --aws-access-key-id {aws_access_key}"
-            f" --aws-secret-access-key {aws_access_secret}"
-            f" --s3-bucket-name {edr_s3_bucket}"
+        command = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
+        argv = shlex.split(command)[1:]
+
+        subprocess.run(
+            [edr_bin, *argv,
+             "--aws-access-key-id", edr_config["aws_access_key_id"],
+             "--aws-secret-access-key", edr_config["aws_secret_access_key"],
+             "--s3-bucket-name", edr_config["s3_bucket"]],
+            cwd=task_config["working_dir"],
+            check=True,
         )
+        return
 
     shell_op = ShellOperation(
         commands=task_config["commands"],
