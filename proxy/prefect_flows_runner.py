@@ -218,32 +218,38 @@ def build_profile_dict(
     retry_delay_seconds=60,
 )
 def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
-    """Run dbt commands via PrefectDbtRunner. Reads warehouse creds from a Prefect
-    Secret block at flow-run start, writes a resolved profiles.yml to the worker's
-    filesystem, then invokes each dbt command as argv.
+    """Run dbt commands via PrefectDbtRunner. Reads the dbt-profile Secret block
+    at flow-run start, writes a resolved profiles.yml to the worker's filesystem,
+    then invokes each dbt command as argv.
+
+    Block value shape (JSON-encoded):
+      {"wtype": ..., "default_schema": ..., "creds": {...}, "extras": {...}}
 
     Runs as a subflow (not a task) so that PrefectDbtRunner's per-node tasks
     (model / test / seed / snapshot) nest under this subflow in the graph
     instead of surfacing at the top-level deployment flow.
 
-    Postgres SSL cert content (if present in extras.sslrootcert_content) is
-    written to disk next to profiles.yml; the output's `sslrootcert` field is
-    rewritten to point at that path.
+    Postgres SSL cert content (if present in creds.sslrootcert_content) is
+    written to disk at creds.sslrootcert (backend-computed path) or a fallback
+    next to profiles.yml; the output's `sslrootcert` field is rewritten to
+    point at that path.
     """
     env = task_config["env"]
-    raw = Secret.load(env["warehouse-secret-block-name"]).get()
+    raw = Secret.load(env["dbt-profile-secret-block"]).get()
     # Prefect stores block values in a JSON column; a JSON-valid string round-trips
     # back as a dict on .get(). Accept both shapes.
     block_value = raw if isinstance(raw, dict) else json.loads(raw)
+    wtype = block_value["wtype"]
+    default_schema = block_value["default_schema"]
     creds = block_value["creds"]
     extras = block_value.get("extras", {})
 
     profile_name = _read_profile_name(task_config["project_dir"])
     profile_dict = build_profile_dict(
         profile_name=profile_name,
-        wtype=env["wtype"],
+        wtype=wtype,
         target=DBT_TARGET,
-        schema=env["default-schema"],
+        schema=default_schema,
         creds=creds,
         extras=extras,
     )
@@ -255,7 +261,7 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
     # dbtjob_v1 path exactly (prefect_flows.py:200-209): prefer creds["sslrootcert"]
     # (backend already sets this to <org_project_dir>/sslrootcert.pem), fall back
     # to <project_dir>/../sslrootcert.pem — same resolved location.
-    if env["wtype"] == "postgres" and creds.get("sslrootcert_content"):
+    if wtype == "postgres" and creds.get("sslrootcert_content"):
         cert_path = creds.get("sslrootcert") or os.path.join(
             task_config["project_dir"], "..", "sslrootcert.pem"
         )
@@ -337,9 +343,14 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         task_config["commands"] = updated_cmds
 
     elif task_config["slug"] == "generate-edr":
-        aws_access_key = Secret.load("edr-aws-access-key").get()
-        aws_access_secret = Secret.load("edr-aws-access-secret").get()
-        edr_s3_bucket = Secret.load("edr-s3-bucket").get()
+        # Single consolidated Secret block replaces the old trio
+        # (edr-aws-access-key / edr-aws-access-secret / edr-s3-bucket).
+        # Backend scaffolds it via `manage.py sync_edr_secret_block`.
+        raw = Secret.load("edr-s3-creds").get()
+        edr_config = raw if isinstance(raw, dict) else json.loads(raw)
+        aws_access_key = edr_config["aws_access_key_id"]
+        aws_access_secret = edr_config["aws_secret_access_key"]
+        edr_s3_bucket = edr_config["s3_bucket"]
         todays_date = datetime.today().strftime("%Y-%m-%d")
         task_config["commands"][0] = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
         task_config["commands"][0] = task_config["env"]["PATH"] + "/" + task_config["commands"][0]

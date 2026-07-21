@@ -4,6 +4,7 @@ https://docs.prefect.io/2.11.3/concepts/flows/#final-state-determination
 everything under here is incremented by a version compared to flows.py
 """
 
+import json
 import os
 from time import sleep
 import asyncio
@@ -314,12 +315,14 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
     elif task_config["slug"] == "generate-edr":  # DDP_backend:constants.TASK_GENERATE_EDR
         # commands = ["edr send-report --bucket-file-path reports/{orgname}.TODAYS_DATE.html --profiles-dir elementary_profiles"]
         # env = {"PATH": /path/to/dbt/venv, "shell": "/bin/bash"}
-        secret_block_aws_access_key = "edr-aws-access-key"
-        aws_access_key = Secret.load(secret_block_aws_access_key).get()
-        secret_block_aws_access_secret = "edr-aws-access-secret"
-        aws_access_secret = Secret.load(secret_block_aws_access_secret).get()
-        secret_block_s3_bucket = "edr-s3-bucket"
-        edr_s3_bucket = Secret.load(secret_block_s3_bucket).get()
+        # Single consolidated Secret block replaces the old trio
+        # (edr-aws-access-key / edr-aws-access-secret / edr-s3-bucket).
+        # Backend scaffolds it via `manage.py sync_edr_secret_block`.
+        raw = Secret.load("edr-s3-creds").get()
+        edr_config = raw if isinstance(raw, dict) else json.loads(raw)
+        aws_access_key = edr_config["aws_access_key_id"]
+        aws_access_secret = edr_config["aws_secret_access_key"]
+        edr_s3_bucket = edr_config["s3_bucket"]
         # object key for the report
         todays_date = datetime.today().strftime("%Y-%m-%d")
         task_config["commands"][0] = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
