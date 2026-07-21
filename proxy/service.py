@@ -512,6 +512,19 @@ def delete_dbt_core_block(block_id: str) -> dict:
     return prefect_delete(f"block_documents/{block_id}")
 
 
+async def get_secret_block_by_name(blockname: str):
+    """Look up a Secret block by name and return its block_id and cleaned name.
+    Raises PrefectException if not found so the caller (FastAPI route) can map
+    it to a 404."""
+    cleaned_blockname = cleaned_name_for_prefectblock(blockname)
+    try:
+        secret_block: Secret = await Secret.load(cleaned_blockname)
+    except ValueError as error:
+        raise PrefectException(f"no secret block named {cleaned_blockname}") from error
+
+    return {"block_id": _block_id(secret_block), "block_name": cleaned_blockname}
+
+
 async def create_secret_block(payload: PrefectSecretBlockCreate):
     """Create a prefect block of type secret"""
     try:

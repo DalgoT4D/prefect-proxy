@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from prefect_airbyte import AirbyteConnection
 import sentry_sdk
 from proxy.helpers import CustomLogger, deployment_to_json
+from proxy.exception import PrefectException
 
 
 from proxy.service import (
@@ -32,6 +33,7 @@ from proxy.service import (
     get_flow_run,
     retry_flow_run,
     create_secret_block,
+    get_secret_block_by_name,
     upsert_secret_block,
     _create_dbt_cli_profile,
     update_dbt_cli_profile,
@@ -357,6 +359,23 @@ async def put_dbtcore_schema(payload: DbtCoreSchemaUpdate):
 
     logger.info("updated target_configs_schema in dbtcore block %s", payload.blockName)
     return {"success": 1}
+
+
+# =============================================================================
+@app.get("/proxy/blocks/secret/{blockname}")
+async def get_secret_block(blockname: str):
+    """Look up a Secret block by name. Returns {block_id, block_name} or 404
+    if not found."""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname is invalid")
+    try:
+        result = await get_secret_block_by_name(blockname)
+    except PrefectException as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail="failed to fetch secret block") from error
+    return result
 
 
 # =============================================================================
