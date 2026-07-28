@@ -751,6 +751,17 @@ def get_deployment(deployment_id: str) -> dict:
     return res
 
 
+def update_deployment_entrypoint(deployment_id: str, entrypoint: str) -> dict:
+    """PATCH just the `entrypoint` field on a deployment."""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    if not isinstance(entrypoint, str):
+        raise TypeError("entrypoint must be a string")
+    res = prefect_patch(f"deployments/{deployment_id}", {"entrypoint": entrypoint})
+    logger.info("Updated entrypoint for deployment %s → %s", deployment_id, entrypoint)
+    return res
+
+
 def get_deployment_scheduled_flow_runs(deployment_id: str) -> dict:
     """fetch scheduled flow-runs for a deployment"""
     if not isinstance(deployment_id, str):

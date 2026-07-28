@@ -3,43 +3,28 @@ ARG PREFECT_VERSION=3.6.29
 
 FROM prefecthq/prefect:${PREFECT_VERSION}-python3.10-kubernetes
 
-# Re-declare PREFECT_VERSION post-FROM so it's in scope for the RUN below.
-# (ARGs declared before FROM are only available to the FROM line itself.)
-ARG PREFECT_VERSION
-
-# Prefect integration package versions. `prefect` itself comes from the base image
-# above, but we still re-pin it below so pip doesn't upgrade it to a newer minor
-# while resolving the integrations. Bump these alongside PREFECT_VERSION to cut
-# a new image (e.g. image tag 0.1 was prefect 3.1.15, tag 0.2 is prefect 3.6.29).
-ARG PREFECT_DBT_VERSION=0.7.24
-ARG PREFECT_SHELL_VERSION=0.3.5
-ARG PREFECT_AIRBYTE_REF=v0.90
-
 # Shared volume mount point for client dbt project directories.
 ARG CLIENTDBT_ROOT="/mnt/appdata/clientdbts"
 ENV CLIENTDBT_ROOT=${CLIENTDBT_ROOT}
 
-# System deps — git is needed for the prefect-airbyte git install below.
+# System deps — git is needed for the prefect-airbyte git dep pinned in pyproject.toml.
 RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Prefect integration deps. Pin prefect to the base image's version so pip does
-# NOT upgrade it — prefect-dbt only requires `prefect>=3.6.17`, so without this pin pip
-# pulls the latest 3.7.x on top of the base image.
-# dbt-core + adapters are pinned explicitly (not via prefect-dbt's [bigquery,postgres]
-# extras) so prefect-dbt's transitive `dbt-core>=1.7.0` doesn't resolve to whatever's
-# latest at build time. PrefectDbtRunner uses these directly from the worker's Python env.
-# Bump these together with prefect-proxy/pyproject.toml.
-RUN pip install --no-cache-dir \
-    "prefect==${PREFECT_VERSION}" \
-    "prefect-dbt==${PREFECT_DBT_VERSION}" \
-    "prefect-shell==${PREFECT_SHELL_VERSION}" \
-    "prefect-airbyte @ git+https://github.com/Ishankoradia/prefect-airbyte.git@${PREFECT_AIRBYTE_REF}" \
-    "dbt-core==1.10.19" \
-    "dbt-postgres==1.10.2" \
-    "dbt-bigquery==1.10.3" \
-    "elementary-data==0.22.0"
+# Install all runtime deps from prefect-proxy's pyproject.toml + uv.lock. Single
+# source of truth — bumping dbt-core / prefect-dbt / adapters in pyproject flows
+# into the image on the next build with no Dockerfile edit. uv exports the
+# frozen lockfile to requirements.txt so pip installs the resolved-and-locked
+# set into the base image's system Python.
+#
+# Build context is prefect-proxy/ (the parent of docker/) so pyproject.toml
+# and uv.lock are reachable — see docker/README.md.
+COPY pyproject.toml uv.lock ./
+RUN pip install --no-cache-dir uv \
+    && uv export --no-dev --frozen --no-hashes --format requirements-txt --output-file /tmp/req.txt \
+    && pip install --no-cache-dir -r /tmp/req.txt \
+    && rm /tmp/req.txt pyproject.toml uv.lock
 
 # Client dbt projects get mounted here at runtime.
 RUN mkdir -p ${CLIENTDBT_ROOT} && mkdir -p /root/.dbt

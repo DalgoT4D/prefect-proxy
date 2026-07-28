@@ -16,6 +16,7 @@ from proxy.service import (
     create_airbyte_server_block,
     create_dbt_core_block,
     put_deployment_v1,
+    update_deployment_entrypoint,
     update_postgres_credentials,
     update_bigquery_credentials,
     update_target_configs_schema,
@@ -496,6 +497,22 @@ def put_dataflow_v1(deployment_id, payload: DeploymentUpdate2):
         logger.exception(error)
         raise HTTPException(status_code=400, detail="failed to update the deployment") from error
     logger.info("Updated the deployment: %s", deployment_id)
+    return {"success": 1}
+
+
+@app.patch("/proxy/v1/deployments/{deployment_id}/entrypoint")
+def patch_deployment_entrypoint(deployment_id: str, payload: dict):
+    """PATCH a deployment's entrypoint. Used by the runner-flow migration script."""
+    entrypoint = payload.get("entrypoint") if isinstance(payload, dict) else None
+    if not isinstance(entrypoint, str) or not entrypoint:
+        raise HTTPException(status_code=400, detail="entrypoint (string) is required")
+    try:
+        update_deployment_entrypoint(deployment_id, entrypoint)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to update deployment entrypoint"
+        ) from error
     return {"success": 1}
 
 
