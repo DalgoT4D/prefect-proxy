@@ -615,7 +615,7 @@ def _run_tasks_sequentially(tasks: list):
     try:
         for task_config in tasks:
             _run_task_runner(task_config)
-            sleep(30)
+            sleep(10)
     except Exception as error:  # pylint: disable=broad-exception-caught
         logger.exception(error)
         raise
@@ -637,7 +637,7 @@ def _run_tasks_with_sync_tolerance(tasks: list):
                 error,
             )
             sync_errors.append(error)
-        sleep(30)
+        sleep(10)
 
     if sync_errors:
         raise RuntimeError(
@@ -647,7 +647,7 @@ def _run_tasks_with_sync_tolerance(tasks: list):
     try:
         for task_config in other_tasks:
             _run_task_runner(task_config)
-            sleep(30)
+            sleep(10)
     except Exception as error:  # pylint: disable=broad-exception-caught
         logger.exception(error)
         raise

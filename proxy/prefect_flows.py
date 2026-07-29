@@ -403,7 +403,7 @@ def _run_tasks_sequentially(tasks: list):
     try:
         for task_config in tasks:
             _run_task(task_config)
-            sleep(30)
+            sleep(10)
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
         raise
@@ -424,7 +424,7 @@ def _run_tasks_with_sync_tolerance(tasks: list):
                 "Airbyte sync failed for connection %s: %s", task_config.get("connection_id"), error
             )
             sync_errors.append(error)
-        sleep(30)
+        sleep(10)
 
     # if any sync failed, raise before running transforms
     if sync_errors:
@@ -436,7 +436,7 @@ def _run_tasks_with_sync_tolerance(tasks: list):
     try:
         for task_config in other_tasks:
             _run_task(task_config)
-            sleep(30)
+            sleep(10)
     except Exception as error:  # skipcq PYL-W0703
         logger.exception(error)
         raise
