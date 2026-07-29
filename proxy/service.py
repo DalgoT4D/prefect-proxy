@@ -47,7 +47,6 @@ from proxy.schemas import (
     FilterPrefectWorkers,
 )
 
-
 load_dotenv()
 
 # terminal states
@@ -675,12 +674,9 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     work_pool_name = payload.work_pool_name if payload.work_pool_name else "default-agent-pool"
 
     try:
-        # TODO: revert branch back to "main" once feature/prefect-secret-blk merges.
-        # prefect_flows_runner.py + deployment_schedule_flow_v5 only exist on the
-        # feature branch until then.
         source = GitRepository(
             url="https://github.com/DalgoT4D/prefect-proxy.git",
-            branch="feature/prefect-secret-blk",
+            branch="main",
         )
         deployment_id = flow.from_source(
             source=source,
