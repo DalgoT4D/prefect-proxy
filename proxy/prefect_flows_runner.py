@@ -509,23 +509,26 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 
         # task_config["commands"][0] is: "edr send-report --profiles-dir elementary_profiles ..."
         # Drop the first token ("edr") — we've resolved the binary — and pass
-        # the rest as argv. Replace TODAYS_DATE and append AWS creds.
+        # the rest as argv. Replace TODAYS_DATE.
         todays_date = datetime.today().strftime("%Y-%m-%d")
         command = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
         argv = shlex.split(command)[1:]
+
+        # Pass AWS creds via env vars (not CLI args) so they don't appear in
+        # CalledProcessError.cmd if the subprocess fails and Prefect logs it.
+        edr_env = os.environ.copy()
+        edr_env["AWS_ACCESS_KEY_ID"] = edr_config["aws_access_key_id"]
+        edr_env["AWS_SECRET_ACCESS_KEY"] = edr_config["aws_secret_access_key"]
 
         subprocess.run(
             [
                 edr_bin,
                 *argv,
-                "--aws-access-key-id",
-                edr_config["aws_access_key_id"],
-                "--aws-secret-access-key",
-                edr_config["aws_secret_access_key"],
                 "--s3-bucket-name",
                 edr_config["s3_bucket"],
             ],
             cwd=task_config["working_dir"],
+            env=edr_env,
             check=True,
         )
         return
