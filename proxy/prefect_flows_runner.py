@@ -22,6 +22,7 @@ Notable differences from prefect_flows.py:
 import asyncio
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -308,6 +309,13 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
 # EKS pods) that can't import Django code.
 
 
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return _ANSI_ESCAPE_RE.sub("", text)
+
+
 def _extract_elementary_profile_from_macro_output(lines: list[str]) -> dict:
     """The elementary macro emits its YAML profile starting with `elementary:`
     somewhere in stdout after logging noise. Buffer from that marker onwards
@@ -315,10 +323,11 @@ def _extract_elementary_profile_from_macro_output(lines: list[str]) -> dict:
     buffer = ""
     gather = False
     for line in lines:
-        if line == "elementary:":
+        clean = _strip_ansi(line)
+        if clean == "elementary:":
             gather = True
         if gather:
-            buffer += line + "\n"
+            buffer += clean + "\n"
     if not buffer:
         raise RuntimeError(
             "elementary.generate_elementary_cli_profile macro returned no profile — "
