@@ -327,6 +327,10 @@ def _extract_elementary_profile_from_macro_output(lines: list[str]) -> dict:
         if clean == "elementary:":
             gather = True
         if gather:
+            # A non-empty, non-indented line after the first means we've hit
+            # a dbt log/warning line — the YAML block is done.
+            if buffer and clean and not clean[0].isspace():
+                break
             buffer += clean + "\n"
     if not buffer:
         raise RuntimeError(
@@ -424,6 +428,7 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
             "elementary.generate_elementary_cli_profile",
             "--profiles-dir",
             "profiles",
+            "--no-use-colors",
         ],
         cwd=str(project_dir),
         capture_output=True,
