@@ -1018,6 +1018,7 @@ async def test_update_target_configs_schema(mock_load):
     assert dbt_coreop_block.commands[0] == "dbt run --target newtarget"
 
 
+@pytest.mark.asyncio
 async def test_post_deployment_bad_param():
     with pytest.raises(TypeError) as excinfo:
         await post_deployment_v1("deployment-id")
@@ -1547,11 +1548,13 @@ def test_set_deployment_schedule_result_2():
         )
 
 
+@pytest.mark.asyncio
 async def test_cancel_flow_runs_type_error():
     with pytest.raises(TypeError):
         await cancel_flow_run(123)
 
 
+@pytest.mark.asyncio
 async def test_cancel_flow_run_failure():
     with patch("proxy.service.get_client") as mock_cancel:
         mock_cancel.side_effect = Exception("exception")
@@ -1560,6 +1563,7 @@ async def test_cancel_flow_run_failure():
             assert str(excinfo.value) == "failed to cancel flow-run"
 
 
+@pytest.mark.asyncio
 async def test_cancel_flow_run_success():
     with patch("proxy.service.get_client"):
         flow_run_id = "valid_flow_run_id"

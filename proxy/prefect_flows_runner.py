@@ -175,7 +175,7 @@ def _build_output(wtype: str, schema: str, creds: dict, extras: dict, threads: i
             "schema": schema,
             "threads": threads,
             "method": "service-account-json",
-            "project": creds["project_id"],
+            "project": creds.get("project_id"),
             "keyfile_json": creds,
         }
         if "location" in extras:
