@@ -7,6 +7,7 @@ from fastapi import FastAPI, HTTPException
 from prefect_airbyte import AirbyteConnection
 import sentry_sdk
 from proxy.helpers import CustomLogger, deployment_to_json
+from proxy.exception import PrefectException
 
 
 from proxy.service import (
@@ -15,6 +16,7 @@ from proxy.service import (
     create_airbyte_server_block,
     create_dbt_core_block,
     put_deployment_v1,
+    update_deployment_entrypoint,
     update_postgres_credentials,
     update_bigquery_credentials,
     update_target_configs_schema,
@@ -32,6 +34,7 @@ from proxy.service import (
     get_flow_run,
     retry_flow_run,
     create_secret_block,
+    get_secret_block_by_name,
     upsert_secret_block,
     _create_dbt_cli_profile,
     update_dbt_cli_profile,
@@ -70,10 +73,7 @@ from proxy.schemas import (
     FilterPrefectWorkers,
 )
 
-from proxy.prefect_flows import (
-    run_shell_operation_flow,
-    run_dbtcore_flow_v1,
-)
+from proxy.prefect_flows_runner import dbtjob_v2_runner, shellopjob
 
 
 sentry_sdk.init(
@@ -107,14 +107,11 @@ def dbtrun_v1(task_config: RunDbtCoreOperation):
         raise TypeError("invalid task config")
     logger.info("dbt core operation running %s", task_config.slug)
 
-    flow = run_dbtcore_flow_v1
-    if task_config.flow_name:
-        flow = flow.with_options(name=task_config.flow_name)
-    if task_config.flow_run_name:
-        flow = flow.with_options(flow_run_name=task_config.flow_run_name)
-
+    # Ignore payload.flow_name / payload.flow_run_name — use whatever the
+    # runner decorator declares (name="dbtjob_v2_runner",
+    # flow_run_name="dbtjob-{task_slug}").
     try:
-        result = flow(task_config.model_dump())
+        result = dbtjob_v2_runner(task_config.model_dump(), task_config.slug)
         return result
     except Exception as error:
         logger.exception(error)
@@ -128,14 +125,10 @@ def shelloprun(task_config: RunShellOperation):
     if not isinstance(task_config, RunShellOperation):
         raise TypeError("invalid task config")
 
-    flow = run_shell_operation_flow
-    if task_config.flow_name:
-        flow = flow.with_options(name=task_config.flow_name)
-    if task_config.flow_run_name:
-        flow = flow.with_options(flow_run_name=task_config.flow_run_name)
-
+    # Ignore payload.flow_name / payload.flow_run_name — use the runner
+    # decorator's (name="shellopjob", flow_run_name="shellop-{task_slug}").
     try:
-        result = flow(task_config.model_dump())
+        result = shellopjob(task_config.model_dump(), task_config.slug)
         return result
     except Exception as error:
         logger.exception(error)
@@ -370,6 +363,23 @@ async def put_dbtcore_schema(payload: DbtCoreSchemaUpdate):
 
 
 # =============================================================================
+@app.get("/proxy/blocks/secret/{blockname}")
+async def get_secret_block(blockname: str):
+    """Look up a Secret block by name. Returns {block_id, block_name} or 404
+    if not found."""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname is invalid")
+    try:
+        result = await get_secret_block_by_name(blockname)
+    except PrefectException as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail="failed to fetch secret block") from error
+    return result
+
+
+# =============================================================================
 @app.post("/proxy/blocks/secret/")
 async def post_secret_block(payload: PrefectSecretBlockCreate):
     """create a new prefect secret block with this block name to store a secret string"""
@@ -487,6 +497,22 @@ def put_dataflow_v1(deployment_id, payload: DeploymentUpdate2):
         logger.exception(error)
         raise HTTPException(status_code=400, detail="failed to update the deployment") from error
     logger.info("Updated the deployment: %s", deployment_id)
+    return {"success": 1}
+
+
+@app.patch("/proxy/v1/deployments/{deployment_id}/entrypoint")
+def patch_deployment_entrypoint(deployment_id: str, payload: dict):
+    """PATCH a deployment's entrypoint. Used by the runner-flow migration script."""
+    entrypoint = payload.get("entrypoint") if isinstance(payload, dict) else None
+    if not isinstance(entrypoint, str) or not entrypoint:
+        raise HTTPException(status_code=400, detail="entrypoint (string) is required")
+    try:
+        update_deployment_entrypoint(deployment_id, entrypoint)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to update deployment entrypoint"
+        ) from error
     return {"success": 1}
 
 

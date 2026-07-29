@@ -79,11 +79,43 @@ def test_dbtrun_v1():
         commands=[],
         cli_profile_block="block-name",
     )
-    with patch("proxy.main.run_dbtcore_flow_v1") as mock_run_dbtcore_flow_v1:
-        mock_run_dbtcore_flow_v1.return_value = {"result": "example_result"}
+    with patch("proxy.main.dbtjob_v2_runner") as mock_dbtjob_v2_runner:
+        mock_dbtjob_v2_runner.return_value = {"result": "example_result"}
         result = dbtrun_v1(task_config)
         assert result == {"result": "example_result"}
-        mock_run_dbtcore_flow_v1.assert_called_once_with(task_config.model_dump())
+        # Runner is invoked with the serialized payload + slug — the runner
+        # decorator provides its own flow_name/flow_run_name so the caller's
+        # values are intentionally ignored.
+        mock_dbtjob_v2_runner.assert_called_once_with(task_config.model_dump(), task_config.slug)
+
+
+def test_dbtrun_v1_rejects_invalid_payload():
+    """dbtrun_v1 must reject anything that isn't a RunDbtCoreOperation — this
+    is the endpoint's first line of defense against malformed input."""
+    with pytest.raises(TypeError):
+        dbtrun_v1({"not": "a valid payload"})
+
+
+def test_dbtrun_v1_wraps_runner_failure():
+    """When the underlying runner raises, dbtrun_v1 must surface it as a
+    400 HTTPException so the API returns a client error rather than a 500."""
+    task_config = RunDbtCoreOperation(
+        flow_name="",
+        flow_run_name="",
+        type="TYPE",
+        slug="dbt-run",
+        profiles_dir=".",
+        project_dir=".",
+        working_dir=".",
+        env={},
+        commands=[],
+        cli_profile_block="block-name",
+    )
+    with patch("proxy.main.dbtjob_v2_runner", side_effect=RuntimeError("boom")):
+        with pytest.raises(HTTPException) as exc_info:
+            dbtrun_v1(task_config)
+        assert exc_info.value.status_code == 400
+        assert "dbt-run" in exc_info.value.detail
 
 
 def test_shelloprun_success():
@@ -98,17 +130,15 @@ def test_shelloprun_success():
         flow_run_name="example_flow_run",
     )
 
-    with patch("proxy.main.run_shell_operation_flow") as mock_run_shell_operation_flow:
-        with patch.object(
-            mock_run_shell_operation_flow.with_options.return_value, "with_options"
-        ) as mock_with_options:
-            mock_with_options.return_value = lambda x: expected_result
-            result = shelloprun(task_config)
-            assert result == expected_result
+    with patch("proxy.main.shellopjob") as mock_shellopjob:
+        mock_shellopjob.return_value = expected_result
+        result = shelloprun(task_config)
+        assert result == expected_result
+        mock_shellopjob.assert_called_once_with(task_config.model_dump(), task_config.slug)
 
 
 def test_shelloprun_failure():
-    expected_result = {"result": "example_result", "status": "failed"}
+    """When shellopjob raises, shelloprun must convert it to a 400 HTTPException."""
     task_config = RunShellOperation(
         type="Shell operation",
         slug="git-pull",
@@ -119,13 +149,16 @@ def test_shelloprun_failure():
         flow_run_name="example_flow_run",
     )
 
-    with patch("proxy.main.run_shell_operation_flow") as mock_run_shell_operation_flow:
-        with patch.object(
-            mock_run_shell_operation_flow.with_options.return_value, "with_options"
-        ) as mock_with_options:
-            mock_with_options.return_value = lambda x: expected_result
-            result = shelloprun(task_config)
-            assert result == expected_result
+    with patch("proxy.main.shellopjob", side_effect=RuntimeError("boom")):
+        with pytest.raises(HTTPException) as exc_info:
+            shelloprun(task_config)
+        assert exc_info.value.status_code == 400
+
+
+def test_shelloprun_rejects_invalid_payload():
+    """shelloprun must reject anything that isn't a RunShellOperation."""
+    with pytest.raises(TypeError):
+        shelloprun({"not": "a valid payload"})
 
 
 def test_airbyte_sync_invalid_payload_type():

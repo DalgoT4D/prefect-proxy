@@ -512,6 +512,19 @@ def delete_dbt_core_block(block_id: str) -> dict:
     return prefect_delete(f"block_documents/{block_id}")
 
 
+async def get_secret_block_by_name(blockname: str):
+    """Look up a Secret block by name and return its block_id and cleaned name.
+    Raises PrefectException if not found so the caller (FastAPI route) can map
+    it to a 404."""
+    cleaned_blockname = cleaned_name_for_prefectblock(blockname)
+    try:
+        secret_block: Secret = await Secret.load(cleaned_blockname)
+    except ValueError as error:
+        raise PrefectException(f"no secret block named {cleaned_blockname}") from error
+
+    return {"block_id": _block_id(secret_block), "block_name": cleaned_blockname}
+
+
 async def create_secret_block(payload: PrefectSecretBlockCreate):
     """Create a prefect block of type secret"""
     try:
@@ -662,9 +675,16 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     work_pool_name = payload.work_pool_name if payload.work_pool_name else "default-agent-pool"
 
     try:
-        source = GitRepository(url="https://github.com/DalgoT4D/prefect-proxy.git", branch="main")
+        # TODO: revert branch back to "main" once feature/prefect-secret-blk merges.
+        # prefect_flows_runner.py + deployment_schedule_flow_v5 only exist on the
+        # feature branch until then.
+        source = GitRepository(
+            url="https://github.com/DalgoT4D/prefect-proxy.git",
+            branch="feature/prefect-secret-blk",
+        )
         deployment_id = flow.from_source(
-            source=source, entrypoint="proxy/prefect_flows.py:deployment_schedule_flow_v4"
+            source=source,
+            entrypoint="proxy/prefect_flows_runner.py:deployment_schedule_flow_v5",
         ).deploy(
             name=payload.deployment_name,
             work_queue_name=work_queue_name,
@@ -728,6 +748,17 @@ def get_deployment(deployment_id: str) -> dict:
     if not isinstance(deployment_id, str):
         raise TypeError("deployment_id must be a string")
     res = prefect_get(f"deployments/{deployment_id}")
+    return res
+
+
+def update_deployment_entrypoint(deployment_id: str, entrypoint: str) -> dict:
+    """PATCH just the `entrypoint` field on a deployment."""
+    if not isinstance(deployment_id, str):
+        raise TypeError("deployment_id must be a string")
+    if not isinstance(entrypoint, str):
+        raise TypeError("entrypoint must be a string")
+    res = prefect_patch(f"deployments/{deployment_id}", {"entrypoint": entrypoint})
+    logger.info("Updated entrypoint for deployment %s → %s", deployment_id, entrypoint)
     return res
 
 
@@ -1013,6 +1044,12 @@ def traverse_flow_run_graph_v2(flow_run_id: str):
         for node in flow_graph_data["nodes"]:
             run_id, node_data = node
             if current_run_id == run_id:
+                # Prefect hardcodes flow-run labels as `<flow_name> / <flow_run_name>`
+                # server-side (see prefect/server/database/query_components.py:648).
+                # Strip the prefix so subflow labels look like task-run labels — e.g.
+                # `dbtjob-dbt-run` instead of `dbtjob_v2_runner / dbtjob-dbt-run`.
+                if node_data.get("kind") == "flow-run" and " / " in node_data.get("label", ""):
+                    node_data["label"] = node_data["label"].split(" / ", 1)[1]
                 res.append(node_data)
                 for child in node_data["children"]:
                     runs_queue.put(child["id"])

@@ -101,6 +101,7 @@ def deployment_to_json(deployment: dict) -> dict:
         "cron": "",
         "isScheduleActive": False,
         "parameters": deployment["parameters"],
+        "entrypoint": deployment.get("entrypoint"),
     }
     if deployment.get("schedules") and len(deployment["schedules"]) > 0:
         retval["cron"] = deployment["schedules"][0]["schedule"]["cron"]
