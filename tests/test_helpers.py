@@ -23,7 +23,7 @@ def test_command_from_dbt_blockname():
 
 
 def test_deployment_to_json_1():
-    """tests deployment_to_json"""
+    """tests deployment_to_json — with schedule and entrypoint"""
     r = deployment_to_json(
         {
             "name": "THE_NAME",
@@ -41,6 +41,7 @@ def test_deployment_to_json_1():
                 "key1": "value1",
                 "key2": "value2",
             },
+            "entrypoint": "proxy/prefect_flows_runner.py:deployment_schedule_flow_v5",
         }
     )
     assert r == {
@@ -53,11 +54,12 @@ def test_deployment_to_json_1():
             "key1": "value1",
             "key2": "value2",
         },
+        "entrypoint": "proxy/prefect_flows_runner.py:deployment_schedule_flow_v5",
     }
 
 
 def test_deployment_to_json_2():
-    """tests deployment_to_json"""
+    """tests deployment_to_json — no schedule, no entrypoint key present"""
     r = deployment_to_json(
         {
             "name": "THE_NAME",
@@ -79,4 +81,5 @@ def test_deployment_to_json_2():
             "key1": "value1",
             "key2": "value2",
         },
+        "entrypoint": None,
     }

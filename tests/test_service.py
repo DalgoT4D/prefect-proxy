@@ -1242,6 +1242,7 @@ def test_get_deployments_by_filter_prefect_post():
                 "cron": "0 0 0 0 * 0 0",
                 "isScheduleActive": True,
                 "parameters": {"param1": "value1"},
+                "entrypoint": None,
             }
         ]
 
