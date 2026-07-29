@@ -1061,14 +1061,24 @@ def get_flow_run_logs(flow_run_id: str, task_run_id: str, limit: int, offset: in
         raise TypeError("flow_run_id must be a string")
     if not isinstance(offset, int):
         raise TypeError("offset must be an integer")
-    # flow_run_ids = traverse_flow_run_graph(flow_run_id, [])
+
+    # Include subflow IDs so logs emitted inside subflows (e.g. dbtjob_v2_runner)
+    # are returned alongside parent logs.
+    all_flow_run_ids = [flow_run_id]
+    try:
+        subflow_task_runs = traverse_flow_run_graph_v2(flow_run_id)
+        for run in subflow_task_runs:
+            if run.get("kind") == "flow-run":
+                all_flow_run_ids.append(run["id"])
+    except Exception:
+        pass  # fall back to parent-only on graph fetch failure
 
     logs = prefect_post(
         "logs/filter",
         {
             "logs": {
                 "operator": "and_",
-                "flow_run_id": {"any_": [flow_run_id]},
+                "flow_run_id": {"any_": all_flow_run_ids},
                 **({"task_run_id": {"any_": [task_run_id]}} if task_run_id != "" else {}),
             },
             "sort": "TIMESTAMP_ASC",
