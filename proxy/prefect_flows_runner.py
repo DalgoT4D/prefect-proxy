@@ -424,6 +424,7 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
             " --profiles-dir profiles --no-use-colors"
         ],
         working_dir=str(project_dir),
+        stream_output=False,
     ).run()
 
     # 6. Parse macro output.
@@ -508,12 +509,13 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         command = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
         argv = shlex.split(command)[1:]
 
-        commands = [" ".join([edr_bin, *argv, "--s3-bucket-name", edr_config["s3_bucket"]])]
-        job_env={
+        task_config["commands"] = [
+            " ".join([edr_bin, *argv, "--s3-bucket-name", edr_config["s3_bucket"]])
+        ]
+        job_env = {
             "AWS_ACCESS_KEY_ID": edr_config["aws_access_key_id"],
             "AWS_SECRET_ACCESS_KEY": edr_config["aws_secret_access_key"],
         }
-
 
     shell_op = ShellOperation(
         commands=task_config["commands"],
