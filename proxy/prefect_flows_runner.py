@@ -474,10 +474,16 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
             )
 
     # 7. Build elementary output: dbt's warehouse creds + elementary schema.
-    dbt_output = profile_dict[dbt_profile_name]["outputs"][target]
-    elementary_profile["elementary"]["outputs"][target] = {
-        **dbt_output,
-        "schema": elementary_schema,
+    # Always normalise to DBT_TARGET ('default') regardless of which target the
+    # macro was run against. This keeps --profile-target default (stored in the
+    # OrgTask) consistent with what we write here.
+    dbt_output = profile_dict[dbt_profile_name]["outputs"][DBT_TARGET]
+    elementary_profile["elementary"]["target"] = DBT_TARGET
+    elementary_profile["elementary"]["outputs"] = {
+        DBT_TARGET: {
+            **dbt_output,
+            "schema": elementary_schema,
+        }
     }
 
     # 8. Write.
