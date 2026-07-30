@@ -524,6 +524,17 @@ async def get_secret_block_by_name(blockname: str):
     return {"block_id": _block_id(secret_block), "block_name": cleaned_blockname}
 
 
+async def get_secret_block_contents(blockname: str):
+    """Load a Secret block and return its value. Raises PrefectException if not found."""
+    cleaned_blockname = cleaned_name_for_prefectblock(blockname)
+    try:
+        secret_block: Secret = await Secret.load(cleaned_blockname)
+    except ValueError as error:
+        raise PrefectException(f"no secret block named {cleaned_blockname}") from error
+
+    return secret_block.get()
+
+
 async def create_secret_block(payload: PrefectSecretBlockCreate):
     """Create a prefect block of type secret"""
     try:

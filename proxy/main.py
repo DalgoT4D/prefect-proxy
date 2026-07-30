@@ -35,6 +35,7 @@ from proxy.service import (
     retry_flow_run,
     create_secret_block,
     get_secret_block_by_name,
+    get_secret_block_contents,
     upsert_secret_block,
     _create_dbt_cli_profile,
     update_dbt_cli_profile,
@@ -363,6 +364,21 @@ async def put_dbtcore_schema(payload: DbtCoreSchemaUpdate):
 
 
 # =============================================================================
+@app.get("/proxy/blocks/secret/{blockname}/contents")
+async def get_secret_block_contents_route(blockname: str):
+    """Return the value stored in a Secret block."""
+    if not isinstance(blockname, str):
+        raise TypeError("blockname is invalid")
+    try:
+        result = await get_secret_block_contents(blockname)
+    except PrefectException as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(status_code=400, detail="failed to fetch secret block contents") from error
+    return result
+
+
 @app.get("/proxy/blocks/secret/{blockname}")
 async def get_secret_block(blockname: str):
     """Look up a Secret block by name. Returns {block_id, block_name} or 404
