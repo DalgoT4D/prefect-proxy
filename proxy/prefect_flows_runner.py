@@ -411,33 +411,23 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
     # Idempotent; safe if already installed. Fails loudly if packages.yml
     # doesn't declare elementary (surface: user hasn't set up elementary yet).
     logger.info("running dbt deps")
-    subprocess.run(
-        [dbt_bin, "deps", "--profiles-dir", "profiles"],
-        cwd=str(project_dir),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+    ShellOperation(
+        commands=[f"{dbt_bin} deps --profiles-dir profiles"],
+        working_dir=str(project_dir),
+    ).run()
 
     # 5. Run the macro.
     logger.info("running elementary.generate_elementary_cli_profile macro")
-    result = subprocess.run(
-        [
-            dbt_bin,
-            "run-operation",
-            "elementary.generate_elementary_cli_profile",
-            "--profiles-dir",
-            "profiles",
-            "--no-use-colors",
+    macro_output = ShellOperation(
+        commands=[
+            f"{dbt_bin} run-operation elementary.generate_elementary_cli_profile"
+            " --profiles-dir profiles --no-use-colors"
         ],
-        cwd=str(project_dir),
-        capture_output=True,
-        text=True,
-        check=True,
-    )
+        working_dir=str(project_dir),
+    ).run()
 
     # 6. Parse macro output.
-    elementary_profile = _extract_elementary_profile_from_macro_output(result.stdout.splitlines())
+    elementary_profile = _extract_elementary_profile_from_macro_output(macro_output)
     target = elementary_profile["elementary"].get("target", "default")
 
     # BQ emits the schema under `dataset` — normalize to `schema`.
@@ -473,6 +463,7 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
 @flow(name="shellopjob", flow_run_name="shellop-{task_slug}")
 def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """loads and runs the shell operation"""
+    job_env = {}
 
     if task_config["slug"] == "git-pull":
         secret_block_name = task_config["env"].get("secret-git-pull-url-block", "")
@@ -504,11 +495,6 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         task_config["commands"] = updated_cmds
 
     elif task_config["slug"] == "generate-edr":
-        # Generates profiles.yml + elementary_profiles/profiles.yml on-the-fly
-        # and then runs `edr send-report` directly via subprocess (no shell).
-        # Self-contained: works on EKS pods and local workers as long as the
-        # dbt project is on disk at task_config["working_dir"] (git-clone step
-        # earlier in the pipeline).
         _prepare_elementary_profile(
             task_config["working_dir"],
             task_config["env"]["dbt-profile-secret-block"],
@@ -517,40 +503,23 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
         raw = Secret.load("edr-s3-creds").get()
         edr_config = raw if isinstance(raw, dict) else json.loads(raw)
 
-        # Same binary-resolution as dbt subprocess calls in _prepare_elementary_profile:
-        # <sys.executable's dir>/edr. Works in both EKS (pip global) and local venv.
         edr_bin = os.path.join(os.path.dirname(sys.executable), "edr")
-
-        # task_config["commands"][0] is: "edr send-report --profiles-dir elementary_profiles ..."
-        # Drop the first token ("edr") — we've resolved the binary — and pass
-        # the rest as argv. Replace TODAYS_DATE.
         todays_date = datetime.today().strftime("%Y-%m-%d")
         command = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
         argv = shlex.split(command)[1:]
 
-        # Pass AWS creds via env vars (not CLI args) so they don't appear in
-        # CalledProcessError.cmd if the subprocess fails and Prefect logs it.
-        edr_env = os.environ.copy()
-        edr_env["AWS_ACCESS_KEY_ID"] = edr_config["aws_access_key_id"]
-        edr_env["AWS_SECRET_ACCESS_KEY"] = edr_config["aws_secret_access_key"]
+        commands = [" ".join([edr_bin, *argv, "--s3-bucket-name", edr_config["s3_bucket"]])]
+        job_env={
+            "AWS_ACCESS_KEY_ID": edr_config["aws_access_key_id"],
+            "AWS_SECRET_ACCESS_KEY": edr_config["aws_secret_access_key"],
+        }
 
-        subprocess.run(
-            [
-                edr_bin,
-                *argv,
-                "--s3-bucket-name",
-                edr_config["s3_bucket"],
-            ],
-            cwd=task_config["working_dir"],
-            env=edr_env,
-            check=True,
-        )
-        return
 
     shell_op = ShellOperation(
         commands=task_config["commands"],
         working_dir=task_config["working_dir"],
         shell=(task_config["env"]["shell"] if "shell" in task_config["env"] else "/bin/bash"),
+        env=job_env,
     )
     return shell_op.run()
 
