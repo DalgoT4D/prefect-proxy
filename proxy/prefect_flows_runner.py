@@ -437,6 +437,42 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
     else:
         elementary_schema = elementary_profile["elementary"]["outputs"][target]["schema"]
 
+    # If schema is null, elementary is likely gated on `+enabled: "{{ target.name in ['prod'] }}"`.
+    # Disabled models are excluded from dbt's graph so the macro can't resolve the schema.
+    # Retry with a synthetic 'prod' target (identical creds) so target.name == 'prod'
+    # re-enables elementary and the macro returns the correct schema.
+    if elementary_schema is None:
+        logger.info(
+            "elementary schema is null for target '%s' — retrying macro with target 'prod'",
+            DBT_TARGET,
+        )
+        profile_dict[dbt_profile_name]["outputs"]["prod"] = profile_dict[dbt_profile_name]["outputs"][
+            DBT_TARGET
+        ].copy()
+        (profiles_dir / "profiles.yml").write_text(yaml.safe_dump(profile_dict))
+
+        macro_output = ShellOperation(
+            commands=[
+                f"{dbt_bin} run-operation elementary.generate_elementary_cli_profile"
+                " --profiles-dir profiles --target prod --no-use-colors"
+            ],
+            working_dir=str(project_dir),
+            stream_output=False,
+        ).run()
+        elementary_profile = _extract_elementary_profile_from_macro_output(macro_output)
+        target = elementary_profile["elementary"].get("target", "prod")
+
+        if elementary_profile["elementary"]["outputs"][target]["type"] == "bigquery":
+            elementary_schema = elementary_profile["elementary"]["outputs"][target]["dataset"]
+        else:
+            elementary_schema = elementary_profile["elementary"]["outputs"][target]["schema"]
+
+        if elementary_schema is None:
+            raise RuntimeError(
+                "elementary schema resolved to null even with target 'prod'. "
+                "Ensure models.elementary.+schema is set in dbt_project.yml."
+            )
+
     # 7. Build elementary output: dbt's warehouse creds + elementary schema.
     dbt_output = profile_dict[dbt_profile_name]["outputs"][target]
     elementary_profile["elementary"]["outputs"][target] = {
