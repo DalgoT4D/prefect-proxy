@@ -438,14 +438,17 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
     ).run()
 
     # 6. Parse macro output.
+    # The macro sets `target:` to whatever --target flag was passed, but the
+    # actual output key inside `outputs:` is always "default". Use the first
+    # key to avoid a KeyError when target != the output key name.
     elementary_profile = _extract_elementary_profile_from_macro_output(macro_output)
-    target = elementary_profile["elementary"].get("target", "prod")
+    output_key = next(iter(elementary_profile["elementary"]["outputs"]))
 
     # BQ emits the schema under `dataset` — normalize to `schema`.
-    if elementary_profile["elementary"]["outputs"][target]["type"] == "bigquery":
-        elementary_schema = elementary_profile["elementary"]["outputs"][target]["dataset"]
+    if elementary_profile["elementary"]["outputs"][output_key]["type"] == "bigquery":
+        elementary_schema = elementary_profile["elementary"]["outputs"][output_key]["dataset"]
     else:
-        elementary_schema = elementary_profile["elementary"]["outputs"][target]["schema"]
+        elementary_schema = elementary_profile["elementary"]["outputs"][output_key]["schema"]
 
     if elementary_schema is None:
         raise RuntimeError(
