@@ -399,6 +399,15 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
 
     profiles_dir = project_dir / "profiles"
     profiles_dir.mkdir(parents=True, exist_ok=True)
+    # Add a 'prod' output (identical creds) so the elementary macro runs with
+    # target.name == 'prod'. Projects that gate elementary on
+    # `+enabled: "{{ target.name in ['prod'] }}"` exclude elementary models
+    # from dbt's graph for any other target, causing the macro to return
+    # schema: null or raise an error. Running as 'prod' keeps elementary
+    # enabled without executing any models.
+    profile_dict[dbt_profile_name]["outputs"]["prod"] = profile_dict[dbt_profile_name]["outputs"][
+        DBT_TARGET
+    ].copy()
     (profiles_dir / "profiles.yml").write_text(yaml.safe_dump(profile_dict))
     logger.info(f"wrote {profiles_dir / 'profiles.yml'}")
 
@@ -416,12 +425,13 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
         working_dir=str(project_dir),
     ).run()
 
-    # 5. Run the macro.
+    # 5. Run the macro with --target prod so target.name == 'prod', keeping
+    # elementary enabled for projects that gate it on target name.
     logger.info("running elementary.generate_elementary_cli_profile macro")
     macro_output = ShellOperation(
         commands=[
             f"{dbt_bin} run-operation elementary.generate_elementary_cli_profile"
-            " --profiles-dir profiles --no-use-colors"
+            " --profiles-dir profiles --target prod --no-use-colors"
         ],
         working_dir=str(project_dir),
         stream_output=False,
@@ -429,7 +439,7 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
 
     # 6. Parse macro output.
     elementary_profile = _extract_elementary_profile_from_macro_output(macro_output)
-    target = elementary_profile["elementary"].get("target", "default")
+    target = elementary_profile["elementary"].get("target", "prod")
 
     # BQ emits the schema under `dataset` — normalize to `schema`.
     if elementary_profile["elementary"]["outputs"][target]["type"] == "bigquery":
@@ -437,41 +447,11 @@ def _prepare_elementary_profile(working_dir: str, dbt_profile_secret_block_name:
     else:
         elementary_schema = elementary_profile["elementary"]["outputs"][target]["schema"]
 
-    # If schema is null, elementary is likely gated on `+enabled: "{{ target.name in ['prod'] }}"`.
-    # Disabled models are excluded from dbt's graph so the macro can't resolve the schema.
-    # Retry with a synthetic 'prod' target (identical creds) so target.name == 'prod'
-    # re-enables elementary and the macro returns the correct schema.
     if elementary_schema is None:
-        logger.info(
-            "elementary schema is null for target '%s' — retrying macro with target 'prod'",
-            DBT_TARGET,
+        raise RuntimeError(
+            "elementary schema resolved to null even with target 'prod'. "
+            "Ensure models.elementary.+schema is set in dbt_project.yml."
         )
-        profile_dict[dbt_profile_name]["outputs"]["prod"] = profile_dict[dbt_profile_name]["outputs"][
-            DBT_TARGET
-        ].copy()
-        (profiles_dir / "profiles.yml").write_text(yaml.safe_dump(profile_dict))
-
-        macro_output = ShellOperation(
-            commands=[
-                f"{dbt_bin} run-operation elementary.generate_elementary_cli_profile"
-                " --profiles-dir profiles --target prod --no-use-colors"
-            ],
-            working_dir=str(project_dir),
-            stream_output=False,
-        ).run()
-        elementary_profile = _extract_elementary_profile_from_macro_output(macro_output)
-        target = elementary_profile["elementary"].get("target", "prod")
-
-        if elementary_profile["elementary"]["outputs"][target]["type"] == "bigquery":
-            elementary_schema = elementary_profile["elementary"]["outputs"][target]["dataset"]
-        else:
-            elementary_schema = elementary_profile["elementary"]["outputs"][target]["schema"]
-
-        if elementary_schema is None:
-            raise RuntimeError(
-                "elementary schema resolved to null even with target 'prod'. "
-                "Ensure models.elementary.+schema is set in dbt_project.yml."
-            )
 
     # 7. Build elementary output: dbt's warehouse creds + elementary schema.
     # Always normalise to DBT_TARGET ('default') regardless of which target the
