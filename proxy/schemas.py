@@ -13,6 +13,7 @@ class AirbyteServerCreate(BaseModel):
     serverHost: str
     serverPort: str
     apiVersion: str
+    useSSL: bool = False
 
 
 class AirbyteServerUpdate(BaseModel):
@@ -24,6 +25,7 @@ class AirbyteServerUpdate(BaseModel):
     apiVersion: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
+    useSSL: Optional[bool] = None
 
 
 class AirbyteServerBlockResponse(BaseModel):

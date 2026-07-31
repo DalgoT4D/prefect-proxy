@@ -238,6 +238,7 @@ async def create_airbyte_server_block(payload: AirbyteServerCreate):
         server_host=payload.serverHost,
         server_port=payload.serverPort,
         api_version=payload.apiVersion,
+        use_ssl=payload.useSSL,
     )
     try:
         block_name_for_save = cleaned_name_for_prefectblock(payload.blockName)
@@ -270,6 +271,8 @@ async def update_airbyte_server_block(payload: AirbyteServerUpdate):
             airbyteservercblock.username = payload.username
         if payload.password:
             airbyteservercblock.password = payload.password
+        if payload.useSSL is not None:
+            airbyteservercblock.use_ssl = payload.useSSL
 
         await airbyteservercblock.save(payload.blockName, overwrite=True)
     except Exception as error:
