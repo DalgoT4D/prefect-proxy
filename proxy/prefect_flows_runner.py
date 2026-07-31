@@ -278,7 +278,8 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
         settings=PrefectDbtSettings(
             project_dir=task_config["project_dir"],
             profiles_dir=str(profiles_dir),
-        )
+        ),
+        _disable_callbacks=True,
     )
 
     # task_config["commands"] arrives as shell strings prefixed with the org's
