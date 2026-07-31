@@ -41,7 +41,6 @@ from prefect_airbyte.flows import (
     run_connection_sync,
     update_connection_schema,
 )
-from prefect_dbt import PrefectDbtRunner, PrefectDbtSettings
 from prefect_dbt.cloud import DbtCloudCredentials
 from prefect_dbt.cloud.jobs import trigger_dbt_cloud_job_run
 from prefect_shell.commands import ShellOperation
@@ -220,16 +219,12 @@ def build_profile_dict(
     retry_delay_seconds=60,
 )
 def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
-    """Run dbt commands via PrefectDbtRunner. Reads the dbt-profile Secret block
+    """Run dbt commands via ShellOperation. Reads the dbt-profile Secret block
     at flow-run start, writes a resolved profiles.yml to the worker's filesystem,
-    then invokes each dbt command as argv.
+    then runs each dbt command as a subprocess.
 
     Block value shape (JSON-encoded):
       {"wtype": ..., "default_schema": ..., "creds": {...}, "extras": {...}}
-
-    Runs as a subflow (not a task) so that PrefectDbtRunner's per-node tasks
-    (model / test / seed / snapshot) nest under this subflow in the graph
-    instead of surfacing at the top-level deployment flow.
 
     Postgres SSL cert content (if present in creds.sslrootcert_content) is
     written to disk at creds.sslrootcert (backend-computed path) or a fallback
@@ -274,23 +269,21 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
 
     (profiles_dir / "profiles.yml").write_text(yaml.safe_dump(profile_dict))
 
-    runner = PrefectDbtRunner(
-        settings=PrefectDbtSettings(
-            project_dir=task_config["project_dir"],
-            profiles_dir=str(profiles_dir),
-        ),
-        _disable_callbacks=True,
-    )
+    dbt_bin = os.path.join(os.path.dirname(sys.executable), "dbt")
+    project_dir = task_config["project_dir"]
 
     # task_config["commands"] arrives as shell strings prefixed with the org's
     # dbt binary path (e.g. "/home/ddp/dbt/venv/bin/dbt run --full-refresh").
-    # PrefectDbtRunner uses the worker's own dbt-core, so we drop the binary
-    # token and pass the rest as argv.
-    result = None
+    # We drop the binary token and substitute the worker's own dbt binary,
+    # then append --profiles-dir and --project-dir explicitly.
     for cmd in task_config["commands"]:
         argv = shlex.split(cmd)[1:]
+        full_cmd = shlex.join([dbt_bin, *argv, "--profiles-dir", str(profiles_dir), "--project-dir", project_dir])
         try:
-            result = runner.invoke(argv)
+            ShellOperation(
+                commands=[full_cmd],
+                working_dir=project_dir,
+            ).run()
         except Exception:  # pylint: disable=broad-exception-caught
             if task_config["slug"] == "dbt-test":
                 return State(
@@ -299,7 +292,6 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
                     message="WARNING: dbt test failed",
                 )
             raise
-    return result
 
 
 # =============================================================================
