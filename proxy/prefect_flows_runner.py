@@ -79,7 +79,7 @@ def _run_post_sync_ops(payload: dict) -> None:
         return
 
     raw = Secret.load(block_name).get()
-    data = json.loads(raw)
+    data = raw if isinstance(raw, dict) else json.loads(raw)
     wtype = data["wtype"]
     creds = data["creds"]
 
