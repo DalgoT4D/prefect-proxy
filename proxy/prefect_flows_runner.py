@@ -66,7 +66,7 @@ DBTCLOUD = "dbt Cloud Job"
 # (Prefect's default is a random <adj>-<animal>).
 
 
-@task(name="post-sync-ops", task_run_name="post-sync-ops")
+@task(name="post-airbyte-sync-transform-ops", task_run_name="post-airbyte-sync-transform-ops")
 def _run_post_sync_ops(payload: dict) -> None:
     """Execute post-sync operations (e.g. type casts) after an Airbyte sync.
     No-op when post_sync_ops is absent or empty."""
@@ -138,7 +138,7 @@ def run_airbyte_connection_flow_v1(payload: dict):
         result = run_connection_sync.with_options(flow_run_name="airbyte-sync")(connection_block)
         logger.info("airbyte connection sync result=")
         logger.info(result)
-        _run_post_sync_ops(payload)
+        # _run_post_sync_ops(payload)
         return result
     except Exception as error:  # pylint: disable=broad-exception-caught
         logger.error(str(error))
