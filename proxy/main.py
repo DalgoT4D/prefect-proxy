@@ -375,7 +375,9 @@ async def get_secret_block_contents_route(blockname: str):
         raise HTTPException(status_code=404, detail=str(error)) from error
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(status_code=400, detail="failed to fetch secret block contents") from error
+        raise HTTPException(
+            status_code=400, detail="failed to fetch secret block contents"
+        ) from error
     return result
 
 

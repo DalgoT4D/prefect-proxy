@@ -66,6 +66,62 @@ DBTCLOUD = "dbt Cloud Job"
 # (Prefect's default is a random <adj>-<animal>).
 
 
+def _run_post_sync_ops(payload: dict) -> None:
+    """Execute post-sync operations (e.g. type casts) after an Airbyte sync.
+    No-op when post_sync_ops is absent or empty."""
+    post_sync_ops = payload.get("post_sync_ops", [])
+    if not post_sync_ops:
+        return
+
+    block_name = payload.get("env", {}).get("dbt-profile-secret-block")
+    if not block_name:
+        logger.error("post_sync_ops present but no dbt-profile-secret-block in env — skipping")
+        return
+
+    raw = Secret.load(block_name).get()
+    data = json.loads(raw)
+    wtype = data["wtype"]
+    creds = data["creds"]
+
+    for op in post_sync_ops:
+        if op.get("type") != "cast":
+            continue
+        sql = op["sql"]
+
+        if wtype == "postgres":
+            import psycopg2  # available via dbt-postgres in pyproject.toml
+
+            conn = psycopg2.connect(
+                host=creds["host"],
+                port=creds.get("port", 5432),
+                dbname=creds["database"],
+                user=creds["user"],
+                password=creds["password"],
+            )
+            try:
+                conn.autocommit = True
+                with conn.cursor() as cur:
+                    cur.execute(sql)
+                logger.info("post-sync cast executed (postgres)")
+            finally:
+                conn.close()
+
+        elif wtype == "bigquery":
+            from google.oauth2.service_account import Credentials
+            from google.cloud import bigquery as bq
+
+            credentials = Credentials.from_service_account_info(creds)
+            client = bq.Client(credentials=credentials, project=creds["project_id"])
+            try:
+                client.query(sql).result()
+                logger.info("post-sync cast executed (bigquery)")
+            finally:
+                client.close()
+
+        else:
+            logger.error("_run_post_sync_ops: unsupported wtype=%s — skipping op", wtype)
+
+
 @flow(flow_run_name="airbyte-sync-trigger", retries=1, retry_delay_seconds=120)
 def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
@@ -81,6 +137,7 @@ def run_airbyte_connection_flow_v1(payload: dict):
         result = run_connection_sync.with_options(flow_run_name="airbyte-sync")(connection_block)
         logger.info("airbyte connection sync result=")
         logger.info(result)
+        _run_post_sync_ops(payload)
         return result
     except Exception as error:  # pylint: disable=broad-exception-caught
         logger.error(str(error))
@@ -278,7 +335,9 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
     # then append --profiles-dir and --project-dir explicitly.
     for cmd in task_config["commands"]:
         argv = shlex.split(cmd)[1:]
-        full_cmd = shlex.join([dbt_bin, *argv, "--profiles-dir", str(profiles_dir), "--project-dir", project_dir])
+        full_cmd = shlex.join(
+            [dbt_bin, *argv, "--profiles-dir", str(profiles_dir), "--project-dir", project_dir]
+        )
         try:
             ShellOperation(
                 commands=[full_cmd],
