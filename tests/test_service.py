@@ -66,7 +66,7 @@ from proxy.service import (
 
 
 class MockAirbyteServer:
-    def __init__(self, server_host, server_port, api_version):
+    def __init__(self, server_host, server_port, api_version, use_ssl=False):
         pass
 
     async def save(self, block_name, **kwargs):

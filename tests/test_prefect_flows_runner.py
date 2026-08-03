@@ -151,22 +151,24 @@ def _make_block_value(wtype="postgres", schema="analytics", creds=None, extras=N
     }
 
 
-@patch("proxy.prefect_flows_runner.PrefectDbtRunner")
+@patch("proxy.prefect_flows_runner.ShellOperation")
 @patch("proxy.prefect_flows_runner.Secret")
-def test_dbtjob_v2_runner_block_value_as_dict(mock_secret, mock_runner_cls, tmp_path):
+def test_dbtjob_v2_runner_block_value_as_dict(mock_secret, mock_shell_cls, tmp_path):
     """Prefect stores block values in a JSON column — .get() may return a dict
     (deserialized) or a JSON string. The dict path must work."""
     block_value = _make_block_value()
     mock_secret.load.return_value.get.return_value = block_value  # dict
-    mock_runner = MagicMock()
-    mock_runner_cls.return_value = mock_runner
 
     task_config = _make_task_config(tmp_path)
     dbtjob_v2_runner.fn(task_config, task_config["slug"])
 
     mock_secret.load.assert_called_once_with("dbt-profile-test")
-    # binary token stripped, remaining shell tokens passed as argv
-    mock_runner.invoke.assert_called_once_with(["run", "--full-refresh"])
+    # binary token from task_config stripped; ShellOperation called once with
+    # a command containing the remaining tokens
+    mock_shell_cls.assert_called_once()
+    cmd = mock_shell_cls.call_args.kwargs["commands"][0]
+    assert "run" in cmd and "--full-refresh" in cmd
+    assert "/venv/bin/dbt" not in cmd  # original binary replaced
 
     # profiles.yml was written with the correct schema
     written = yaml.safe_load((tmp_path / "profiles" / "profiles.yml").read_text())
@@ -174,13 +176,12 @@ def test_dbtjob_v2_runner_block_value_as_dict(mock_secret, mock_runner_cls, tmp_
     assert written["dalgo"]["outputs"][DBT_TARGET]["type"] == "postgres"
 
 
-@patch("proxy.prefect_flows_runner.PrefectDbtRunner")
+@patch("proxy.prefect_flows_runner.ShellOperation")
 @patch("proxy.prefect_flows_runner.Secret")
-def test_dbtjob_v2_runner_block_value_as_json_string(mock_secret, mock_runner_cls, tmp_path):
+def test_dbtjob_v2_runner_block_value_as_json_string(mock_secret, mock_shell_cls, tmp_path):
     """Same runner path must also work when .get() returns a JSON string."""
     block_value = _make_block_value(wtype="bigquery", schema="warehouse")
     mock_secret.load.return_value.get.return_value = json.dumps(block_value)  # string
-    mock_runner_cls.return_value = MagicMock()
 
     task_config = _make_task_config(tmp_path)
     dbtjob_v2_runner.fn(task_config, task_config["slug"])
@@ -190,9 +191,9 @@ def test_dbtjob_v2_runner_block_value_as_json_string(mock_secret, mock_runner_cl
     assert written["dalgo"]["outputs"][DBT_TARGET]["schema"] == "warehouse"
 
 
-@patch("proxy.prefect_flows_runner.PrefectDbtRunner")
+@patch("proxy.prefect_flows_runner.ShellOperation")
 @patch("proxy.prefect_flows_runner.Secret")
-def test_dbtjob_v2_runner_writes_ssl_cert_and_rewrites_path(mock_secret, mock_runner_cls, tmp_path):
+def test_dbtjob_v2_runner_writes_ssl_cert_and_rewrites_path(mock_secret, mock_shell_cls, tmp_path):
     """postgres SSL: cert content lives inside creds.sslrootcert_content;
     runner writes it to creds.sslrootcert path, then rewrites the profile
     output's `sslrootcert` field to that path."""
@@ -206,7 +207,6 @@ def test_dbtjob_v2_runner_writes_ssl_cert_and_rewrites_path(mock_secret, mock_ru
     }
     block_value = _make_block_value(wtype="postgres", creds=creds)
     mock_secret.load.return_value.get.return_value = block_value
-    mock_runner_cls.return_value = MagicMock()
 
     task_config = _make_task_config(tmp_path)
     dbtjob_v2_runner.fn(task_config, task_config["slug"])
@@ -221,17 +221,15 @@ def test_dbtjob_v2_runner_writes_ssl_cert_and_rewrites_path(mock_secret, mock_ru
     assert "sslrootcert_content" not in output
 
 
-@patch("proxy.prefect_flows_runner.PrefectDbtRunner")
+@patch("proxy.prefect_flows_runner.ShellOperation")
 @patch("proxy.prefect_flows_runner.Secret")
 def test_dbtjob_v2_runner_dbt_test_failure_returns_completed_state(
-    mock_secret, mock_runner_cls, tmp_path
+    mock_secret, mock_shell_cls, tmp_path
 ):
     """dbt-test failures don't fail the flow — they return a COMPLETED state
     labelled DBT_TEST_FAILED so downstream tasks continue."""
     mock_secret.load.return_value.get.return_value = _make_block_value()
-    mock_runner = MagicMock()
-    mock_runner.invoke.side_effect = RuntimeError("test failed")
-    mock_runner_cls.return_value = mock_runner
+    mock_shell_cls.return_value.run.side_effect = RuntimeError("test failed")
 
     task_config = _make_task_config(tmp_path, slug="dbt-test")
     result = dbtjob_v2_runner.fn(task_config, "dbt-test")
@@ -240,15 +238,13 @@ def test_dbtjob_v2_runner_dbt_test_failure_returns_completed_state(
     assert "dbt test failed" in result.message.lower()
 
 
-@patch("proxy.prefect_flows_runner.PrefectDbtRunner")
+@patch("proxy.prefect_flows_runner.ShellOperation")
 @patch("proxy.prefect_flows_runner.Secret")
-def test_dbtjob_v2_runner_non_test_failure_reraises(mock_secret, mock_runner_cls, tmp_path):
+def test_dbtjob_v2_runner_non_test_failure_reraises(mock_secret, mock_shell_cls, tmp_path):
     """Non-test failures must propagate — silently swallowing them would hide
     real dbt run/seed/snapshot errors."""
     mock_secret.load.return_value.get.return_value = _make_block_value()
-    mock_runner = MagicMock()
-    mock_runner.invoke.side_effect = RuntimeError("run failed")
-    mock_runner_cls.return_value = mock_runner
+    mock_shell_cls.return_value.run.side_effect = RuntimeError("run failed")
 
     task_config = _make_task_config(tmp_path, slug="dbt-run")
     with pytest.raises(RuntimeError, match="run failed"):
