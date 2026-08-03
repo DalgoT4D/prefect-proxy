@@ -143,9 +143,7 @@ def test_bigquery_executes_sql():
 
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret, patch(
         "google.oauth2.service_account.Credentials.from_service_account_info"
-    ) as mock_creds, patch(
-        "google.cloud.bigquery.Client", return_value=mock_client
-    ):
+    ) as mock_creds, patch("google.cloud.bigquery.Client", return_value=mock_client):
         mock_secret.load.return_value = _secret_block("bigquery", BIGQUERY_CREDS)
         _run_post_sync_ops(
             {
