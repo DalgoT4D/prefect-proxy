@@ -2996,8 +2996,8 @@ wheels = [
 
 [[package]]
 name = "prefect-airbyte"
-version = "0.90+1.gd1a717f"
-source = { git = "https://github.com/Ishankoradia/prefect-airbyte.git?branch=feature%2Fingest-cast#d1a717f3a6b99c35abed2b64e056b6df96b9abb6" }
+version = "0.91"
+source = { git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=v0.91#6e50d4d5a2a6b4d92f7bea7d7406e05def25cb8d" }
 dependencies = [
     { name = "prefect" },
     { name = "tenacity" },
@@ -3095,7 +3095,7 @@ requires-dist = [
     { name = "gunicorn" },
     { name = "pendulum" },
     { name = "prefect", specifier = "==3.6.29" },
-    { name = "prefect-airbyte", git = "https://github.com/Ishankoradia/prefect-airbyte.git?branch=feature%2Fingest-cast" },
+    { name = "prefect-airbyte", git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=v0.91" },
     { name = "prefect-dbt", specifier = "==0.7.24" },
     { name = "prefect-gcp", specifier = "==0.6.17" },
     { name = "prefect-github", specifier = "==0.4.2" },
