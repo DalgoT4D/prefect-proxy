@@ -222,9 +222,7 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
                     try:
                         cur.execute(sql)
                     except Exception as sql_err:  # pylint: disable=broad-exception-caught
-                        run_logger.error(
-                            "postgres cast FAILED on %s: %s", target, sql_err
-                        )
+                        run_logger.error("postgres cast FAILED on %s: %s", target, sql_err)
                         raise
                     run_logger.info("postgres cast succeeded on %s", target)
         finally:
@@ -259,9 +257,7 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
                     run_logger.info("bigquery SQL:\n%s", sql)
                     client.query(sql).result()
                 except Exception as sql_err:  # pylint: disable=broad-exception-caught
-                    run_logger.error(
-                        "bigquery cast FAILED on %s: %s", table_ref, sql_err
-                    )
+                    run_logger.error("bigquery cast FAILED on %s: %s", table_ref, sql_err)
                     raise
                 run_logger.info("bigquery cast succeeded on %s", table_ref)
         finally:
