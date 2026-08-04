@@ -31,7 +31,7 @@ from pathlib import Path
 from time import sleep
 
 import yaml
-from prefect import flow, task
+from prefect import flow, task, get_run_logger
 from prefect.blocks.system import Secret
 from prefect.states import State, StateType
 from prefect_airbyte import AirbyteConnection, AirbyteServer
@@ -70,13 +70,16 @@ DBTCLOUD = "dbt Cloud Job"
 async def _run_post_sync_ops(env: dict, ops: list) -> None:
     """Execute post-sync operations (e.g. type casts) after an Airbyte sync.
     No-op when ops is absent or empty."""
+    run_logger = get_run_logger()
+    run_logger.info("post-sync ops task started: env_keys=%s ops_count=%d", list(env.keys()), len(ops))
     post_sync_ops = ops
     if not post_sync_ops:
+        run_logger.info("no post-sync ops to run — skipping")
         return
 
     block_name = env.get("dbt-profile-secret-block")
     if not block_name:
-        logger.error("post_sync_ops present but no dbt-profile-secret-block in env — skipping")
+        run_logger.error("post_sync_ops present but no dbt-profile-secret-block in env — skipping")
         return
 
     secret = await Secret.aload(block_name)
@@ -87,6 +90,7 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
 
     for op in post_sync_ops:
         if op.get("type") != "cast":
+            run_logger.info("skipping op with unknown type: %s", op.get("type"))
             continue
         sql = op["sql"]
 
@@ -104,7 +108,7 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
                 conn.autocommit = True
                 with conn.cursor() as cur:
                     cur.execute(sql)
-                logger.info("post-sync cast executed (postgres)")
+                run_logger.info("post-sync cast executed (postgres)")
             finally:
                 conn.close()
 
@@ -116,12 +120,12 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
             client = bq.Client(credentials=credentials, project=creds["project_id"])
             try:
                 client.query(sql).result()
-                logger.info("post-sync cast executed (bigquery)")
+                run_logger.info("post-sync cast executed (bigquery)")
             finally:
                 client.close()
 
         else:
-            logger.error("_run_post_sync_ops: unsupported wtype=%s — skipping op", wtype)
+            run_logger.error("_run_post_sync_ops: unsupported wtype=%s — skipping op", wtype)
 
 
 @flow(flow_run_name="airbyte-sync-trigger", retries=1, retry_delay_seconds=120)
