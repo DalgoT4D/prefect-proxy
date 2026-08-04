@@ -66,7 +66,7 @@ DBTCLOUD = "dbt Cloud Job"
 # (Prefect's default is a random <adj>-<animal>).
 
 
-def _run_post_sync_ops(env: dict, ops: list) -> None:
+async def _run_post_sync_ops(env: dict, ops: list) -> None:
     """Execute post-sync operations (e.g. type casts) after an Airbyte sync.
     No-op when ops is absent or empty."""
     post_sync_ops = ops
@@ -78,7 +78,8 @@ def _run_post_sync_ops(env: dict, ops: list) -> None:
         logger.error("post_sync_ops present but no dbt-profile-secret-block in env — skipping")
         return
 
-    raw = Secret.load(block_name).get()
+    secret = await Secret.aload(block_name)
+    raw = secret.get()
     data = raw if isinstance(raw, dict) else json.loads(raw)
     wtype = data["wtype"]
     creds = data["creds"]
@@ -123,18 +124,18 @@ def _run_post_sync_ops(env: dict, ops: list) -> None:
 
 
 @flow(flow_run_name="airbyte-sync-trigger", retries=1, retry_delay_seconds=120)
-def run_airbyte_connection_flow_v1(payload: dict):
+async def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
     try:
-        serverblock = AirbyteServer.load(payload["airbyte_server_block"])
+        serverblock = await AirbyteServer.aload(payload["airbyte_server_block"])
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
             timeout=payload["timeout"] or 15,
         )
-        # Rename the nested prefect_airbyte subflow so it doesn't show up as a
-        # random <adj>-<animal> in the graph.
-        result = run_connection_sync.with_options(flow_run_name="airbyte-sync")(connection_block)
+        result = await run_connection_sync.with_options(flow_run_name="airbyte-sync")(
+            connection_block
+        )
         logger.info("airbyte connection sync result=")
         logger.info(result)
     except Exception as error:  # pylint: disable=broad-exception-caught
@@ -142,7 +143,7 @@ def run_airbyte_connection_flow_v1(payload: dict):
         raise
 
     try:
-        _run_post_sync_ops(env=payload.get("env", {}), ops=payload.get("post_sync_ops", []))
+        await _run_post_sync_ops(env=payload.get("env", {}), ops=payload.get("post_sync_ops", []))
     except Exception as err:  # pylint: disable=broad-exception-caught
         logger.error("post-sync ops failed (sync already succeeded): %s", err)
     return result
@@ -658,7 +659,7 @@ def _run_task_runner(task_config: dict):
 
     elif task_config["type"] == AIRBYTECONNECTION:
         if task_config["slug"] == "airbyte-sync":
-            run_airbyte_connection_flow_v1(task_config)
+            asyncio.run(run_airbyte_connection_flow_v1(task_config))
 
         elif task_config["slug"] == "airbyte-clear":
             run_airbyte_conn_clear(task_config)
