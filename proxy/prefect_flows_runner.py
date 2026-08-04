@@ -102,11 +102,6 @@ _BQ_PARTITION_EXPR = {
 }
 
 
-def _normalize_column_name(name: str) -> str:
-    """Airbyte Destinations V2: non [a-zA-Z0-9_$] chars → underscore, case preserved."""
-    return re.sub(r"[^a-zA-Z0-9_$]", "_", name)
-
-
 def _pg_quote(ident: str) -> str:
     """Postgres double-quote identifier, escaping any embedded double-quote."""
     return '"' + ident.replace('"', '""') + '"'
@@ -118,13 +113,16 @@ def _bq_quote(ident: str) -> str:
 
 
 def _build_postgres_cast_sql(schema: str, table: str, column_casts: dict) -> str:
-    """ALTER TABLE <schema>.<table> ALTER COLUMN <col> TYPE <t> USING <col>::<t>, ..."""
+    """ALTER TABLE <schema>.<table> ALTER COLUMN <col> TYPE <t> USING <col>::<t>, ...
+
+    `column_casts` must already carry Airbyte-normalized column names (backend does this).
+    """
     clauses = []
     for col, cast_type in column_casts.items():
         if cast_type not in POSTGRES_CAST_TYPE_MAP:
             raise ValueError(f"Unsupported cast type for Postgres: {cast_type!r}")
         sql_type = POSTGRES_CAST_TYPE_MAP[cast_type]
-        col_q = _pg_quote(_normalize_column_name(col))
+        col_q = _pg_quote(col)
         clauses.append(f"ALTER COLUMN {col_q} TYPE {sql_type} USING {col_q}::{sql_type}")
     return f"ALTER TABLE {_pg_quote(schema)}.{_pg_quote(table)}\n  " + ",\n  ".join(clauses)
 
@@ -143,7 +141,8 @@ def _build_bigquery_cast_sql(
 
     replace_cols = []
     for col, cast_type in column_casts.items():
-        col_q = _bq_quote(_normalize_column_name(col))
+        # column_casts already carries Airbyte-normalized names (backend does this)
+        col_q = _bq_quote(col)
         replace_cols.append(f"CAST({col_q} AS {BIGQUERY_CAST_TYPE_MAP[cast_type]}) AS {col_q}")
 
     parts = [f"CREATE OR REPLACE TABLE {full_table}"]
@@ -212,11 +211,25 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
             conn.autocommit = True
             with conn.cursor() as cur:
                 for op in cast_ops:
+                    target = f"{op['schema']}.{op['table']}"
                     sql = _build_postgres_cast_sql(op["schema"], op["table"], op["column_casts"])
-                    run_logger.info("executing postgres cast: %s.%s", op["schema"], op["table"])
-                    cur.execute(sql)
+                    run_logger.info(
+                        "postgres cast starting on %s (columns=%s)",
+                        target,
+                        list(op["column_casts"].keys()),
+                    )
+                    run_logger.info("postgres SQL:\n%s", sql)
+                    try:
+                        cur.execute(sql)
+                    except Exception as sql_err:  # pylint: disable=broad-exception-caught
+                        run_logger.error(
+                            "postgres cast FAILED on %s: %s", target, sql_err
+                        )
+                        raise
+                    run_logger.info("postgres cast succeeded on %s", target)
         finally:
             conn.close()
+            run_logger.info("postgres connection closed")
 
     elif wtype == "bigquery":
         from google.oauth2.service_account import Credentials
@@ -228,15 +241,32 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
         try:
             for op in cast_ops:
                 table_ref = f"{project_id}.{op['schema']}.{op['table']}"
-                run_logger.info("fetching table metadata: %s", table_ref)
-                table_meta = client.get_table(table_ref)
-                sql = _build_bigquery_cast_sql(
-                    project_id, op["schema"], op["table"], op["column_casts"], table_meta
+                run_logger.info(
+                    "bigquery cast starting on %s (columns=%s)",
+                    table_ref,
+                    list(op["column_casts"].keys()),
                 )
-                run_logger.info("executing bigquery cast: %s", table_ref)
-                client.query(sql).result()
+                try:
+                    table_meta = client.get_table(table_ref)
+                    run_logger.info(
+                        "bigquery table metadata: partition=%s cluster=%s",
+                        getattr(table_meta, "time_partitioning", None),
+                        getattr(table_meta, "clustering_fields", None),
+                    )
+                    sql = _build_bigquery_cast_sql(
+                        project_id, op["schema"], op["table"], op["column_casts"], table_meta
+                    )
+                    run_logger.info("bigquery SQL:\n%s", sql)
+                    client.query(sql).result()
+                except Exception as sql_err:  # pylint: disable=broad-exception-caught
+                    run_logger.error(
+                        "bigquery cast FAILED on %s: %s", table_ref, sql_err
+                    )
+                    raise
+                run_logger.info("bigquery cast succeeded on %s", table_ref)
         finally:
             client.close()
+            run_logger.info("bigquery client closed")
 
     else:
         run_logger.error("_run_post_sync_ops: unsupported wtype=%s — skipping ops", wtype)

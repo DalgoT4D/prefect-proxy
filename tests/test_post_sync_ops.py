@@ -12,7 +12,6 @@ import pytest
 from proxy.prefect_flows_runner import (
     _build_bigquery_cast_sql,
     _build_postgres_cast_sql,
-    _normalize_column_name,
     _run_post_sync_ops,
 )
 
@@ -55,23 +54,8 @@ def _bq_table_meta(partition_field=None, partition_type="DAY", cluster_fields=No
 
 
 # ---------------------------------------------------------------------------
-# Column normalization
-# ---------------------------------------------------------------------------
-
-
-def test_normalize_column_name_preserves_valid_chars():
-    assert _normalize_column_name("Measure_7") == "Measure_7"
-    assert _normalize_column_name("dollar$sign") == "dollar$sign"
-
-
-def test_normalize_column_name_replaces_specials():
-    assert _normalize_column_name("Measure 7") == "Measure_7"
-    assert _normalize_column_name("column.name") == "column_name"
-    assert _normalize_column_name("user@email") == "user_email"
-
-
-# ---------------------------------------------------------------------------
 # _build_postgres_cast_sql
+# (Column names are assumed already normalized by the backend before storage.)
 # ---------------------------------------------------------------------------
 
 
@@ -92,11 +76,10 @@ def test_postgres_multiple_casts():
     assert "ALTER TABLE" in sql
 
 
-def test_postgres_column_name_normalized():
-    """Column names with spaces get underscored to match Airbyte's destination convention."""
-    sql = _build_postgres_cast_sql("dest", "orders", {"Measure 7": "numeric"})
+def test_postgres_uses_column_name_as_is():
+    """Backend normalizes; builder passes column names through untouched."""
+    sql = _build_postgres_cast_sql("dest", "orders", {"Measure_7": "numeric"})
     assert '"Measure_7"' in sql
-    assert '"Measure 7"' not in sql
 
 
 def test_postgres_unknown_type_raises():
@@ -156,8 +139,9 @@ def test_bigquery_unknown_partition_type_skipped():
     assert "PARTITION BY" not in sql
 
 
-def test_bigquery_column_name_normalized():
-    sql = _build_bigquery_cast_sql("proj", "s", "t", {"Measure 7": "numeric"}, _bq_table_meta())
+def test_bigquery_uses_column_name_as_is():
+    """Backend normalizes; builder passes column names through untouched."""
+    sql = _build_bigquery_cast_sql("proj", "s", "t", {"Measure_7": "numeric"}, _bq_table_meta())
     assert "CAST(`Measure_7` AS NUMERIC) AS `Measure_7`" in sql
 
 
