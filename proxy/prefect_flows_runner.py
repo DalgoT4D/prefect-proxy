@@ -66,7 +66,6 @@ DBTCLOUD = "dbt Cloud Job"
 # (Prefect's default is a random <adj>-<animal>).
 
 
-@task(name="post-airbyte-sync-transform-ops", task_run_name="post-airbyte-sync-transform-ops")
 def _run_post_sync_ops(env: dict, ops: list) -> None:
     """Execute post-sync operations (e.g. type casts) after an Airbyte sync.
     No-op when ops is absent or empty."""
