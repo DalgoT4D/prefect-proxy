@@ -71,7 +71,9 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
     """Execute post-sync operations (e.g. type casts) after an Airbyte sync.
     No-op when ops is absent or empty."""
     run_logger = get_run_logger()
-    run_logger.info("post-sync ops task started: env_keys=%s ops_count=%d", list(env.keys()), len(ops))
+    run_logger.info(
+        "post-sync ops task started: env_keys=%s ops_count=%d", list(env.keys()), len(ops)
+    )
     post_sync_ops = ops
     if not post_sync_ops:
         run_logger.info("no post-sync ops to run — skipping")

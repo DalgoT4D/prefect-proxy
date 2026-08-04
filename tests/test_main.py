@@ -280,9 +280,7 @@ async def test_put_airbyte_connection_exception():
         connectionId="conn-uuid",
         connectionBlockName="conn-uuid",
     )
-    with patch(
-        "proxy.main.upsert_airbyte_connection_block", side_effect=Exception("boom")
-    ):
+    with patch("proxy.main.upsert_airbyte_connection_block", side_effect=Exception("boom")):
         with pytest.raises(HTTPException) as excinfo:
             await put_airbyte_connection(payload)
         assert excinfo.value.status_code == 400
