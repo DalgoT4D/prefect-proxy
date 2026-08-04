@@ -67,14 +67,14 @@ DBTCLOUD = "dbt Cloud Job"
 
 
 @task(name="post-airbyte-sync-transform-ops", task_run_name="post-airbyte-sync-transform-ops")
-def _run_post_sync_ops(payload: dict) -> None:
+def _run_post_sync_ops(env: dict, ops: list) -> None:
     """Execute post-sync operations (e.g. type casts) after an Airbyte sync.
-    No-op when post_sync_ops is absent or empty."""
-    post_sync_ops = payload.get("post_sync_ops", [])
+    No-op when ops is absent or empty."""
+    post_sync_ops = ops
     if not post_sync_ops:
         return
 
-    block_name = payload.get("env", {}).get("dbt-profile-secret-block")
+    block_name = env.get("dbt-profile-secret-block")
     if not block_name:
         logger.error("post_sync_ops present but no dbt-profile-secret-block in env — skipping")
         return
@@ -143,7 +143,7 @@ def run_airbyte_connection_flow_v1(payload: dict):
         raise
 
     try:
-        _run_post_sync_ops(payload)
+        _run_post_sync_ops(env=payload.get("env", {}), ops=payload.get("post_sync_ops", []))
     except Exception as err:  # pylint: disable=broad-exception-caught
         logger.error("post-sync ops failed (sync already succeeded): %s", err)
     return result

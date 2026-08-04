@@ -42,22 +42,22 @@ def _secret_block(wtype: str, creds: dict):
 
 
 def test_noop_when_no_post_sync_ops():
-    """Returns immediately when post_sync_ops is absent."""
+    """Returns immediately when ops is absent."""
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
-        _run_post_sync_ops({})
+        _run_post_sync_ops(env={}, ops=[])
         mock_secret.load.assert_not_called()
 
 
 def test_noop_when_post_sync_ops_empty():
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
-        _run_post_sync_ops({"post_sync_ops": []})
+        _run_post_sync_ops(env={}, ops=[])
         mock_secret.load.assert_not_called()
 
 
 def test_noop_when_no_secret_block_name():
     """Logs warning and returns when env has no secret block key."""
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
-        _run_post_sync_ops({"post_sync_ops": [{"type": "cast", "sql": ALTER_SQL}]})
+        _run_post_sync_ops(env={}, ops=[{"type": "cast", "sql": ALTER_SQL}])
         mock_secret.load.assert_not_called()
 
 
@@ -67,10 +67,8 @@ def test_skips_unknown_op_type():
         mock_secret.load.return_value = _secret_block("postgres", POSTGRES_CREDS)
         with patch("psycopg2.connect") as mock_connect:
             _run_post_sync_ops(
-                {
-                    "env": {"dbt-profile-secret-block": "my-block"},
-                    "post_sync_ops": [{"type": "unknown", "sql": "SELECT 1"}],
-                }
+                env={"dbt-profile-secret-block": "my-block"},
+                ops=[{"type": "unknown", "sql": "SELECT 1"}],
             )
             mock_connect.assert_not_called()
 
@@ -91,10 +89,8 @@ def test_postgres_executes_sql():
     ) as mock_connect:
         mock_secret.load.return_value = _secret_block("postgres", POSTGRES_CREDS)
         _run_post_sync_ops(
-            {
-                "env": {"dbt-profile-secret-block": "my-block"},
-                "post_sync_ops": [{"type": "cast", "sql": ALTER_SQL}],
-            }
+            env={"dbt-profile-secret-block": "my-block"},
+            ops=[{"type": "cast", "sql": ALTER_SQL}],
         )
 
     mock_connect.assert_called_once_with(
@@ -122,10 +118,8 @@ def test_postgres_closes_connection_on_error():
         mock_secret.load.return_value = _secret_block("postgres", POSTGRES_CREDS)
         with pytest.raises(Exception, match="syntax error"):
             _run_post_sync_ops(
-                {
-                    "env": {"dbt-profile-secret-block": "my-block"},
-                    "post_sync_ops": [{"type": "cast", "sql": ALTER_SQL}],
-                }
+                env={"dbt-profile-secret-block": "my-block"},
+                ops=[{"type": "cast", "sql": ALTER_SQL}],
             )
 
     mock_conn.close.assert_called_once()
@@ -146,10 +140,8 @@ def test_bigquery_executes_sql():
     ) as mock_creds, patch("google.cloud.bigquery.Client", return_value=mock_client):
         mock_secret.load.return_value = _secret_block("bigquery", BIGQUERY_CREDS)
         _run_post_sync_ops(
-            {
-                "env": {"dbt-profile-secret-block": "my-block"},
-                "post_sync_ops": [{"type": "cast", "sql": BQ_SQL}],
-            }
+            env={"dbt-profile-secret-block": "my-block"},
+            ops=[{"type": "cast", "sql": BQ_SQL}],
         )
 
     mock_client.query.assert_called_once_with(BQ_SQL)
@@ -168,10 +160,8 @@ def test_bigquery_closes_client_on_error():
         mock_secret.load.return_value = _secret_block("bigquery", BIGQUERY_CREDS)
         with pytest.raises(Exception, match="quota exceeded"):
             _run_post_sync_ops(
-                {
-                    "env": {"dbt-profile-secret-block": "my-block"},
-                    "post_sync_ops": [{"type": "cast", "sql": BQ_SQL}],
-                }
+                env={"dbt-profile-secret-block": "my-block"},
+                ops=[{"type": "cast", "sql": BQ_SQL}],
             )
 
     mock_client.close.assert_called_once()
