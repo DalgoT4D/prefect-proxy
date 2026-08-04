@@ -11,6 +11,7 @@ from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteServerUpdate,
+    AirbyteConnectionCreate,
     DbtCoreCreate,
     DbtProfileCreate,
     DbtProfileUpdate,
@@ -45,7 +46,7 @@ from proxy.service import (
     set_deployment_schedule,
     traverse_flow_run_graph,
     update_airbyte_server_block,
-    update_airbyte_connection_block,
+    upsert_airbyte_connection_block,
     update_postgres_credentials,
     update_bigquery_credentials,
     update_target_configs_schema,
@@ -438,31 +439,78 @@ def test_delete_airbyte_server_block_invalid_blockid():
 
 
 class MockAirbyteConnection:
-    def __init__(self, airbyte_server, connection_id, timeout):
+    def __init__(self, airbyte_server=None, connection_id=None, timeout=15, extra=None):
         self.airbyte_server = airbyte_server
         self.connection_id = connection_id
         self.timeout = timeout
+        self.extra = extra or {}
 
-    async def save(self, block_name):
+    async def save(self, block_name, **kwargs):
         if self.connection_id == "test_error_connection_id":
             raise Exception("test error")
 
     def dict(self):
         return {"_block_document_id": "expected_connection_block_id"}
 
+    def model_dump(self):
+        return {"_block_document_id": "expected_connection_block_id"}
+
 
 # =================================================================================================
+# upsert_airbyte_connection_block
 # =================================================================================================
-def test_update_airbyte_connection_block_must_be_string():
+
+
+@pytest.mark.asyncio
+async def test_upsert_airbyte_connection_block_invalid_payload():
     with pytest.raises(TypeError) as excinfo:
-        update_airbyte_connection_block(123)
-    assert str(excinfo.value) == "blockname must be a string"
+        await upsert_airbyte_connection_block("not-a-payload")
+    assert str(excinfo.value) == "payload must be an AirbyteConnectionCreate"
 
 
-def test_update_airbyte_connection_block_not_implemented():
-    with pytest.raises(PrefectException) as excinfo:
-        update_airbyte_connection_block("blockname")
-    assert str(excinfo.value) == "not implemented"
+@pytest.mark.asyncio
+@patch("proxy.service.AirbyteConnection", new=MockAirbyteConnection)
+async def test_upsert_airbyte_connection_block_happy_path():
+    payload = AirbyteConnectionCreate(
+        serverBlockName="server-block",
+        connectionId="conn-uuid-abc",
+        connectionBlockName="conn-uuid-abc",
+        connectionName="my-conn",
+        extra={"env": {}, "post_sync_ops": []},
+    )
+    with patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock) as mock_load:
+        mock_load.return_value = MockAirbyteServer("h", "1", "v")
+        result = await upsert_airbyte_connection_block(payload)
+    assert result == ("expected_connection_block_id", "conn-uuid-abc")
+
+
+@pytest.mark.asyncio
+async def test_upsert_airbyte_connection_block_missing_server_block():
+    payload = AirbyteConnectionCreate(
+        serverBlockName="does-not-exist",
+        connectionId="conn-uuid-abc",
+        connectionBlockName="conn-uuid-abc",
+    )
+    with patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock) as mock_load:
+        mock_load.side_effect = Exception("block not found")
+        with pytest.raises(PrefectException) as excinfo:
+            await upsert_airbyte_connection_block(payload)
+    assert "no airbyte server block named does-not-exist" in str(excinfo.value)
+
+
+@pytest.mark.asyncio
+@patch("proxy.service.AirbyteConnection", new=MockAirbyteConnection)
+async def test_upsert_airbyte_connection_block_save_failure():
+    payload = AirbyteConnectionCreate(
+        serverBlockName="server-block",
+        connectionId="test_error_connection_id",  # MockAirbyteConnection.save raises on this
+        connectionBlockName="test_error_connection_id",
+    )
+    with patch("proxy.service.AirbyteServer.load", new_callable=AsyncMock) as mock_load:
+        mock_load.return_value = MockAirbyteServer("h", "1", "v")
+        with pytest.raises(PrefectException) as excinfo:
+            await upsert_airbyte_connection_block(payload)
+    assert "failed to upsert airbyte connection block" in str(excinfo.value)
 
 
 # =================================================================================================

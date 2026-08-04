@@ -1,6 +1,6 @@
-"""Unit tests for _run_post_sync_ops() in proxy/prefect_flows.py."""
+"""Unit tests for _run_post_sync_ops() in proxy/prefect_flows_runner.py."""
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -41,32 +41,39 @@ def _secret_block(wtype: str, creds: dict):
 # ---------------------------------------------------------------------------
 
 
-def test_noop_when_no_post_sync_ops():
+@pytest.mark.asyncio
+async def test_noop_when_no_post_sync_ops():
     """Returns immediately when ops is absent."""
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
-        _run_post_sync_ops(env={}, ops=[])
-        mock_secret.load.assert_not_called()
+        mock_secret.aload = AsyncMock()
+        await _run_post_sync_ops(env={}, ops=[])
+        mock_secret.aload.assert_not_called()
 
 
-def test_noop_when_post_sync_ops_empty():
+@pytest.mark.asyncio
+async def test_noop_when_post_sync_ops_empty():
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
-        _run_post_sync_ops(env={}, ops=[])
-        mock_secret.load.assert_not_called()
+        mock_secret.aload = AsyncMock()
+        await _run_post_sync_ops(env={}, ops=[])
+        mock_secret.aload.assert_not_called()
 
 
-def test_noop_when_no_secret_block_name():
+@pytest.mark.asyncio
+async def test_noop_when_no_secret_block_name():
     """Logs warning and returns when env has no secret block key."""
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
-        _run_post_sync_ops(env={}, ops=[{"type": "cast", "sql": ALTER_SQL}])
-        mock_secret.load.assert_not_called()
+        mock_secret.aload = AsyncMock()
+        await _run_post_sync_ops(env={}, ops=[{"type": "cast", "sql": ALTER_SQL}])
+        mock_secret.aload.assert_not_called()
 
 
-def test_skips_unknown_op_type():
+@pytest.mark.asyncio
+async def test_skips_unknown_op_type():
     """Ops with type != 'cast' are silently skipped."""
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
-        mock_secret.load.return_value = _secret_block("postgres", POSTGRES_CREDS)
+        mock_secret.aload = AsyncMock(return_value=_secret_block("postgres", POSTGRES_CREDS))
         with patch("psycopg2.connect") as mock_connect:
-            _run_post_sync_ops(
+            await _run_post_sync_ops(
                 env={"dbt-profile-secret-block": "my-block"},
                 ops=[{"type": "unknown", "sql": "SELECT 1"}],
             )
@@ -78,7 +85,8 @@ def test_skips_unknown_op_type():
 # ---------------------------------------------------------------------------
 
 
-def test_postgres_executes_sql():
+@pytest.mark.asyncio
+async def test_postgres_executes_sql():
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
     mock_conn.cursor.return_value.__enter__ = lambda s: mock_cursor
@@ -87,8 +95,8 @@ def test_postgres_executes_sql():
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret, patch(
         "psycopg2.connect", return_value=mock_conn
     ) as mock_connect:
-        mock_secret.load.return_value = _secret_block("postgres", POSTGRES_CREDS)
-        _run_post_sync_ops(
+        mock_secret.aload = AsyncMock(return_value=_secret_block("postgres", POSTGRES_CREDS))
+        await _run_post_sync_ops(
             env={"dbt-profile-secret-block": "my-block"},
             ops=[{"type": "cast", "sql": ALTER_SQL}],
         )
@@ -104,7 +112,8 @@ def test_postgres_executes_sql():
     mock_conn.close.assert_called_once()
 
 
-def test_postgres_closes_connection_on_error():
+@pytest.mark.asyncio
+async def test_postgres_closes_connection_on_error():
     """Connection is closed even when execute raises."""
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
@@ -115,9 +124,9 @@ def test_postgres_closes_connection_on_error():
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret, patch(
         "psycopg2.connect", return_value=mock_conn
     ):
-        mock_secret.load.return_value = _secret_block("postgres", POSTGRES_CREDS)
+        mock_secret.aload = AsyncMock(return_value=_secret_block("postgres", POSTGRES_CREDS))
         with pytest.raises(Exception, match="syntax error"):
-            _run_post_sync_ops(
+            await _run_post_sync_ops(
                 env={"dbt-profile-secret-block": "my-block"},
                 ops=[{"type": "cast", "sql": ALTER_SQL}],
             )
@@ -130,7 +139,8 @@ def test_postgres_closes_connection_on_error():
 # ---------------------------------------------------------------------------
 
 
-def test_bigquery_executes_sql():
+@pytest.mark.asyncio
+async def test_bigquery_executes_sql():
     mock_client = MagicMock()
     mock_query_job = MagicMock()
     mock_client.query.return_value = mock_query_job
@@ -138,8 +148,8 @@ def test_bigquery_executes_sql():
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret, patch(
         "google.oauth2.service_account.Credentials.from_service_account_info"
     ) as mock_creds, patch("google.cloud.bigquery.Client", return_value=mock_client):
-        mock_secret.load.return_value = _secret_block("bigquery", BIGQUERY_CREDS)
-        _run_post_sync_ops(
+        mock_secret.aload = AsyncMock(return_value=_secret_block("bigquery", BIGQUERY_CREDS))
+        await _run_post_sync_ops(
             env={"dbt-profile-secret-block": "my-block"},
             ops=[{"type": "cast", "sql": BQ_SQL}],
         )
@@ -149,7 +159,8 @@ def test_bigquery_executes_sql():
     mock_client.close.assert_called_once()
 
 
-def test_bigquery_closes_client_on_error():
+@pytest.mark.asyncio
+async def test_bigquery_closes_client_on_error():
     """Client is closed even when query raises."""
     mock_client = MagicMock()
     mock_client.query.side_effect = Exception("quota exceeded")
@@ -157,9 +168,9 @@ def test_bigquery_closes_client_on_error():
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret, patch(
         "google.oauth2.service_account.Credentials.from_service_account_info"
     ), patch("google.cloud.bigquery.Client", return_value=mock_client):
-        mock_secret.load.return_value = _secret_block("bigquery", BIGQUERY_CREDS)
+        mock_secret.aload = AsyncMock(return_value=_secret_block("bigquery", BIGQUERY_CREDS))
         with pytest.raises(Exception, match="quota exceeded"):
-            _run_post_sync_ops(
+            await _run_post_sync_ops(
                 env={"dbt-profile-secret-block": "my-block"},
                 ops=[{"type": "cast", "sql": BQ_SQL}],
             )

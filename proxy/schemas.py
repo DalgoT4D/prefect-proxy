@@ -35,11 +35,13 @@ class AirbyteServerBlockResponse(BaseModel):
 
 
 class AirbyteConnectionCreate(BaseModel):
-    """payload to create an airbyte connection block"""
+    """payload to upsert an airbyte connection block"""
 
     serverBlockName: str
     connectionId: str
     connectionBlockName: str
+    connectionName: str = ""
+    extra: dict = {}
 
 
 class AirbyteConnectionBlockResponse(BaseModel):

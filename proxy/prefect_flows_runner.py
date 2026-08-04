@@ -126,13 +126,22 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
 @flow(flow_run_name="airbyte-sync-trigger", retries=1, retry_delay_seconds=120)
 async def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
+    connection_id = payload["connection_id"]
+
+    # Try loading the persisted AirbyteConnection block (contains post-sync ops in .extra).
+    # If it doesn't exist, fall back to inline construction — connections without cast
+    # config never have a block, and the flow should still work.
     try:
+        connection_block = await AirbyteConnection.aload(connection_id)
+    except ValueError:
         serverblock = await AirbyteServer.aload(payload["airbyte_server_block"])
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
-            connection_id=payload["connection_id"],
+            connection_id=connection_id,
             timeout=payload["timeout"] or 15,
         )
+
+    try:
         result = await run_connection_sync.with_options(flow_run_name="airbyte-sync")(
             connection_block
         )
@@ -143,7 +152,11 @@ async def run_airbyte_connection_flow_v1(payload: dict):
         raise
 
     try:
-        await _run_post_sync_ops(env=payload.get("env", {}), ops=payload.get("post_sync_ops", []))
+        extra = connection_block.extra or {}
+        await _run_post_sync_ops(
+            env=extra.get("env", {}),
+            ops=extra.get("post_sync_ops", []),
+        )
     except Exception as err:  # pylint: disable=broad-exception-caught
         logger.error("post-sync ops failed (sync already succeeded): %s", err)
     return result

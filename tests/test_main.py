@@ -19,6 +19,7 @@ from proxy.main import (
     get_read_deployment,
     post_airbyte_server,
     put_airbyte_server,
+    put_airbyte_connection,
     post_create_deployment_flow_run,
     post_dbtcore,
     post_dbtcli_profile,
@@ -44,6 +45,7 @@ from proxy.main import (
 from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteServerUpdate,
+    AirbyteConnectionCreate,
     DbtCoreCreate,
     DbtCoreCredentialUpdate,
     DbtProfileCreate,
@@ -262,6 +264,46 @@ async def test_put_airbyte_server_success():
     with patch("proxy.main.update_airbyte_server_block", return_value=("12345", "testserver")):
         response = await put_airbyte_server(payload)
         assert response == {"block_id": "12345", "cleaned_block_name": "testserver"}
+
+
+@pytest.mark.asyncio
+async def test_put_airbyte_connection_invalid_payload():
+    with pytest.raises(TypeError) as excinfo:
+        await put_airbyte_connection(None)
+    assert excinfo.value.args[0] == "payload is invalid"
+
+
+@pytest.mark.asyncio
+async def test_put_airbyte_connection_exception():
+    payload = AirbyteConnectionCreate(
+        serverBlockName="server-block",
+        connectionId="conn-uuid",
+        connectionBlockName="conn-uuid",
+    )
+    with patch(
+        "proxy.main.upsert_airbyte_connection_block", side_effect=Exception("boom")
+    ):
+        with pytest.raises(HTTPException) as excinfo:
+            await put_airbyte_connection(payload)
+        assert excinfo.value.status_code == 400
+        assert excinfo.value.detail == "failed to upsert airbyte connection block"
+
+
+@pytest.mark.asyncio
+async def test_put_airbyte_connection_success():
+    payload = AirbyteConnectionCreate(
+        serverBlockName="server-block",
+        connectionId="conn-uuid",
+        connectionBlockName="conn-uuid",
+        connectionName="my-conn",
+        extra={"env": {}, "post_sync_ops": []},
+    )
+    with patch(
+        "proxy.main.upsert_airbyte_connection_block",
+        return_value=("blockid-123", "conn-uuid"),
+    ):
+        response = await put_airbyte_connection(payload)
+        assert response == {"block_id": "blockid-123", "cleaned_block_name": "conn-uuid"}
 
 
 @pytest.mark.asyncio

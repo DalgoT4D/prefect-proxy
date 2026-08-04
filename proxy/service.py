@@ -17,7 +17,7 @@ from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
 from prefect.client.orchestration import get_client
 from prefect.runner.storage import GitRepository
-from prefect_airbyte import AirbyteServer
+from prefect_airbyte import AirbyteServer, AirbyteConnection
 import pendulum
 
 from prefect_gcp import GcpCredentials
@@ -34,6 +34,7 @@ from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteServerUpdate,
+    AirbyteConnectionCreate,
     DbtCoreCreate,
     DeploymentCreate2,
     PrefectSecretBlockCreate,
@@ -294,12 +295,32 @@ def delete_airbyte_server_block(blockid: str):
 # ================================================================================================
 
 
-def update_airbyte_connection_block(blockname: str):
-    """We don't update connection blocks"""
-    if not isinstance(blockname, str):
-        raise TypeError("blockname must be a string")
+async def upsert_airbyte_connection_block(payload: AirbyteConnectionCreate):
+    """Idempotent upsert of an airbyte connection block. Block name = connection_id."""
+    if not isinstance(payload, AirbyteConnectionCreate):
+        raise TypeError("payload must be an AirbyteConnectionCreate")
+    try:
+        server_block = await AirbyteServer.load(payload.serverBlockName)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException(
+            "no airbyte server block named " + payload.serverBlockName
+        ) from error
 
-    raise PrefectException("not implemented")
+    extra = {**payload.extra, "name": payload.connectionName}
+    connection_block = AirbyteConnection(
+        airbyte_server=server_block,
+        connection_id=payload.connectionId,
+        extra=extra,
+    )
+    try:
+        await connection_block.save(payload.connectionBlockName, overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to upsert airbyte connection block") from error
+
+    logger.info("upserted airbyte connection block named %s", payload.connectionBlockName)
+    return _block_id(connection_block), payload.connectionBlockName
 
 
 def delete_airbyte_connection_block(blockid: str) -> dict:
@@ -690,7 +711,7 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     try:
         source = GitRepository(
             url="https://github.com/DalgoT4D/prefect-proxy.git",
-            branch="main",
+            branch="feature/ingest-cast",
         )
         deployment_id = flow.from_source(
             source=source,

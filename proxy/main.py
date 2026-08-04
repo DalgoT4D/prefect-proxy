@@ -46,6 +46,7 @@ from proxy.service import (
     patch_dbt_cloud_creds_block,
     get_dbt_cloud_creds_block,
     update_airbyte_server_block,
+    upsert_airbyte_connection_block,
     set_cancel_queued_flow_run,
     filter_late_flow_runs,
     filter_prefect_workers,
@@ -53,6 +54,7 @@ from proxy.service import (
 from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteServerUpdate,
+    AirbyteConnectionCreate,
     DbtCoreCreate,
     DbtCoreCredentialUpdate,
     DbtCoreSchemaUpdate,
@@ -225,6 +227,22 @@ async def put_airbyte_server(payload: AirbyteServerUpdate):
             status_code=400, detail="failed to update airbyte server block"
         ) from error
     logger.info("Created new airbyte server block with ID: %s", block_id)
+    return {"block_id": block_id, "cleaned_block_name": cleaned_block_name}
+
+
+@app.put("/proxy/blocks/airbyte/connection/")
+async def put_airbyte_connection(payload: AirbyteConnectionCreate):
+    """Upsert an airbyte connection block (create or overwrite)."""
+    if not isinstance(payload, AirbyteConnectionCreate):
+        raise TypeError("payload is invalid")
+    try:
+        block_id, cleaned_block_name = await upsert_airbyte_connection_block(payload)
+    except Exception as error:
+        logger.exception(error)
+        raise HTTPException(
+            status_code=400, detail="failed to upsert airbyte connection block"
+        ) from error
+    logger.info("Upserted airbyte connection block with ID: %s", block_id)
     return {"block_id": block_id, "cleaned_block_name": cleaned_block_name}
 
 
