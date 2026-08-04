@@ -131,6 +131,7 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
 @flow(flow_run_name="airbyte-sync-trigger", retries=1, retry_delay_seconds=120)
 async def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
+    run_logger = get_run_logger()
     connection_id = payload["connection_id"]
 
     # Try loading the persisted AirbyteConnection block (contains post-sync ops in .extra).
@@ -138,7 +139,12 @@ async def run_airbyte_connection_flow_v1(payload: dict):
     # config never have a block, and the flow should still work.
     try:
         connection_block = await AirbyteConnection.aload(connection_id)
+        run_logger.info("loaded AirbyteConnection block for connection %s", connection_id)
     except ValueError:
+        run_logger.info(
+            "no AirbyteConnection block found for connection %s — building inline (no post-sync ops)",
+            connection_id,
+        )
         serverblock = await AirbyteServer.aload(payload["airbyte_server_block"])
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
@@ -150,10 +156,9 @@ async def run_airbyte_connection_flow_v1(payload: dict):
         result = await run_connection_sync.with_options(flow_run_name="airbyte-sync")(
             connection_block
         )
-        logger.info("airbyte connection sync result=")
-        logger.info(result)
+        run_logger.info("airbyte connection sync result=%s", result)
     except Exception as error:  # pylint: disable=broad-exception-caught
-        logger.error(str(error))
+        run_logger.error("airbyte connection sync failed: %s", str(error))
         raise
 
     try:
@@ -163,7 +168,7 @@ async def run_airbyte_connection_flow_v1(payload: dict):
             ops=extra.get("post_sync_ops", []),
         )
     except Exception as err:  # pylint: disable=broad-exception-caught
-        logger.error("post-sync ops failed (sync already succeeded): %s", err)
+        run_logger.error("post-sync ops failed (sync already succeeded): %s", err)
     return result
 
 
