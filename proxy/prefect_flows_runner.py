@@ -123,10 +123,10 @@ def _run_post_sync_ops(env: dict, ops: list) -> None:
 
 
 @flow(flow_run_name="airbyte-sync-trigger", retries=1, retry_delay_seconds=120)
-def run_airbyte_connection_flow_v1(payload: dict):
+async def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
     try:
-        serverblock = AirbyteServer.load(payload["airbyte_server_block"])
+        serverblock = await AirbyteServer.aload(payload["airbyte_server_block"])
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
             connection_id=payload["connection_id"],
@@ -134,7 +134,9 @@ def run_airbyte_connection_flow_v1(payload: dict):
         )
         # Rename the nested prefect_airbyte subflow so it doesn't show up as a
         # random <adj>-<animal> in the graph.
-        result = run_connection_sync.with_options(flow_run_name="airbyte-sync")(connection_block)
+        result = await run_connection_sync.with_options(flow_run_name="airbyte-sync")(
+            connection_block
+        )
         logger.info("airbyte connection sync result=")
         logger.info(result)
     except Exception as error:  # pylint: disable=broad-exception-caught
@@ -658,7 +660,7 @@ def _run_task_runner(task_config: dict):
 
     elif task_config["type"] == AIRBYTECONNECTION:
         if task_config["slug"] == "airbyte-sync":
-            run_airbyte_connection_flow_v1(task_config)
+            asyncio.run(run_airbyte_connection_flow_v1(task_config))
 
         elif task_config["slug"] == "airbyte-clear":
             run_airbyte_conn_clear(task_config)
