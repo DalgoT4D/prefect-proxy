@@ -66,16 +66,119 @@ DBTCLOUD = "dbt Cloud Job"
 # (Prefect's default is a random <adj>-<animal>).
 
 
+# --- Cast SQL building ------------------------------------------------------
+# SQL is generated at flow-run time (not backend-precomputed) so:
+#   - BigQuery: we can preserve the live table's PARTITION BY + CLUSTER BY spec
+#     (fetched via bq_client.get_table), which Airbyte-created tables enforce.
+#   - Postgres: identifier quoting/normalization stays close to execution.
+
+POSTGRES_CAST_TYPE_MAP = {
+    "numeric": "numeric",
+    "integer": "integer",
+    "bigint": "bigint",
+    "boolean": "boolean",
+    "date": "date",
+    "timestamp": "timestamp",
+    "text": "text",
+}
+
+BIGQUERY_CAST_TYPE_MAP = {
+    "numeric": "NUMERIC",
+    "integer": "INT64",
+    "bigint": "INT64",
+    "boolean": "BOOL",
+    "date": "DATE",
+    "timestamp": "TIMESTAMP",
+    "text": "STRING",
+}
+
+# Partition BY expression per BigQuery time-partitioning type (assumes the field
+# is TIMESTAMP, which is Airbyte's convention for `_airbyte_extracted_at`).
+_BQ_PARTITION_EXPR = {
+    "DAY": "DATE({field})",
+    "HOUR": "TIMESTAMP_TRUNC({field}, HOUR)",
+    "MONTH": "TIMESTAMP_TRUNC({field}, MONTH)",
+    "YEAR": "TIMESTAMP_TRUNC({field}, YEAR)",
+}
+
+
+def _normalize_column_name(name: str) -> str:
+    """Airbyte Destinations V2: non [a-zA-Z0-9_$] chars → underscore, case preserved."""
+    return re.sub(r"[^a-zA-Z0-9_$]", "_", name)
+
+
+def _pg_quote(ident: str) -> str:
+    """Postgres double-quote identifier, escaping any embedded double-quote."""
+    return '"' + ident.replace('"', '""') + '"'
+
+
+def _bq_quote(ident: str) -> str:
+    """BigQuery backtick-quote identifier, escaping any embedded backtick."""
+    return "`" + ident.replace("`", "\\`") + "`"
+
+
+def _build_postgres_cast_sql(schema: str, table: str, column_casts: dict) -> str:
+    """ALTER TABLE <schema>.<table> ALTER COLUMN <col> TYPE <t> USING <col>::<t>, ..."""
+    clauses = []
+    for col, cast_type in column_casts.items():
+        if cast_type not in POSTGRES_CAST_TYPE_MAP:
+            raise ValueError(f"Unsupported cast type for Postgres: {cast_type!r}")
+        sql_type = POSTGRES_CAST_TYPE_MAP[cast_type]
+        col_q = _pg_quote(_normalize_column_name(col))
+        clauses.append(f"ALTER COLUMN {col_q} TYPE {sql_type} USING {col_q}::{sql_type}")
+    return f"ALTER TABLE {_pg_quote(schema)}.{_pg_quote(table)}\n  " + ",\n  ".join(clauses)
+
+
+def _build_bigquery_cast_sql(
+    project_id: str, schema: str, table: str, column_casts: dict, table_meta
+) -> str:
+    """CREATE OR REPLACE TABLE preserving Airbyte's partition/cluster spec (read
+    from the live table's metadata) + `SELECT * REPLACE (CAST(col) AS col, ...)`
+    to cast only the target columns."""
+    for cast_type in column_casts.values():
+        if cast_type not in BIGQUERY_CAST_TYPE_MAP:
+            raise ValueError(f"Unsupported cast type for BigQuery: {cast_type!r}")
+
+    full_table = f"{_bq_quote(project_id)}.{_bq_quote(schema)}.{_bq_quote(table)}"
+
+    replace_cols = []
+    for col, cast_type in column_casts.items():
+        col_q = _bq_quote(_normalize_column_name(col))
+        replace_cols.append(f"CAST({col_q} AS {BIGQUERY_CAST_TYPE_MAP[cast_type]}) AS {col_q}")
+
+    parts = [f"CREATE OR REPLACE TABLE {full_table}"]
+
+    # Partition BY (day/hour/month/year) — Airbyte uses DAY on `_airbyte_extracted_at`
+    partitioning = getattr(table_meta, "time_partitioning", None)
+    if partitioning and partitioning.field:
+        expr_tmpl = _BQ_PARTITION_EXPR.get(partitioning.type_)
+        if expr_tmpl:
+            parts.append(f"PARTITION BY {expr_tmpl.format(field=_bq_quote(partitioning.field))}")
+
+    # Cluster BY — Airbyte always clusters on `_airbyte_extracted_at` first, then any PKs.
+    cluster_fields = getattr(table_meta, "clustering_fields", None) or []
+    if cluster_fields:
+        parts.append("CLUSTER BY " + ", ".join(_bq_quote(f) for f in cluster_fields))
+
+    parts.append("AS SELECT * REPLACE (\n  " + ",\n  ".join(replace_cols) + "\n)")
+    parts.append(f"FROM {full_table}")
+    return "\n".join(parts)
+
+
+# --- Post-sync ops task -----------------------------------------------------
+
+
 @task(name="post-sync-ops", retries=0)
 async def _run_post_sync_ops(env: dict, ops: list) -> None:
     """Execute post-sync operations (e.g. type casts) after an Airbyte sync.
+    Each op carries raw config; SQL is built here so we can inspect live table
+    metadata (BigQuery partition/cluster spec) at execution time.
     No-op when ops is absent or empty."""
     run_logger = get_run_logger()
     run_logger.info(
         "post-sync ops task started: env_keys=%s ops_count=%d", list(env.keys()), len(ops)
     )
-    post_sync_ops = ops
-    if not post_sync_ops:
+    if not ops:
         run_logger.info("no post-sync ops to run — skipping")
         return
 
@@ -90,44 +193,53 @@ async def _run_post_sync_ops(env: dict, ops: list) -> None:
     wtype = data["wtype"]
     creds = data["creds"]
 
-    for op in post_sync_ops:
-        if op.get("type") != "cast":
-            run_logger.info("skipping op with unknown type: %s", op.get("type"))
-            continue
-        sql = op["sql"]
+    cast_ops = [op for op in ops if op.get("type") == "cast"]
+    if not cast_ops:
+        run_logger.info("no cast ops to run — skipping")
+        return
 
-        if wtype == "postgres":
-            import psycopg2  # available via dbt-postgres in pyproject.toml
+    if wtype == "postgres":
+        import psycopg2  # available via dbt-postgres in pyproject.toml
 
-            conn = psycopg2.connect(
-                host=creds["host"],
-                port=creds.get("port", 5432),
-                dbname=creds["database"],
-                user=creds["user"],
-                password=creds["password"],
-            )
-            try:
-                conn.autocommit = True
-                with conn.cursor() as cur:
+        conn = psycopg2.connect(
+            host=creds["host"],
+            port=creds.get("port", 5432),
+            dbname=creds["database"],
+            user=creds["user"],
+            password=creds["password"],
+        )
+        try:
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                for op in cast_ops:
+                    sql = _build_postgres_cast_sql(op["schema"], op["table"], op["column_casts"])
+                    run_logger.info("executing postgres cast: %s.%s", op["schema"], op["table"])
                     cur.execute(sql)
-                run_logger.info("post-sync cast executed (postgres)")
-            finally:
-                conn.close()
+        finally:
+            conn.close()
 
-        elif wtype == "bigquery":
-            from google.oauth2.service_account import Credentials
-            from google.cloud import bigquery as bq
+    elif wtype == "bigquery":
+        from google.oauth2.service_account import Credentials
+        from google.cloud import bigquery as bq
 
-            credentials = Credentials.from_service_account_info(creds)
-            client = bq.Client(credentials=credentials, project=creds["project_id"])
-            try:
+        credentials = Credentials.from_service_account_info(creds)
+        project_id = creds["project_id"]
+        client = bq.Client(credentials=credentials, project=project_id)
+        try:
+            for op in cast_ops:
+                table_ref = f"{project_id}.{op['schema']}.{op['table']}"
+                run_logger.info("fetching table metadata: %s", table_ref)
+                table_meta = client.get_table(table_ref)
+                sql = _build_bigquery_cast_sql(
+                    project_id, op["schema"], op["table"], op["column_casts"], table_meta
+                )
+                run_logger.info("executing bigquery cast: %s", table_ref)
                 client.query(sql).result()
-                run_logger.info("post-sync cast executed (bigquery)")
-            finally:
-                client.close()
+        finally:
+            client.close()
 
-        else:
-            run_logger.error("_run_post_sync_ops: unsupported wtype=%s — skipping op", wtype)
+    else:
+        run_logger.error("_run_post_sync_ops: unsupported wtype=%s — skipping ops", wtype)
 
 
 @flow(flow_run_name="airbyte-sync-trigger", retries=1, retry_delay_seconds=120)
