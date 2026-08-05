@@ -66,7 +66,7 @@ DBTCLOUD = "dbt Cloud Job"
 # (Prefect's default is a random <adj>-<animal>).
 
 
-@flow(flow_run_name="airbyte-sync-trigger", retries=1, retry_delay_seconds=120)
+@flow(flow_run_name="airbyte-sync-trigger")
 def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
     try:
@@ -214,9 +214,7 @@ def build_profile_dict(
 
 @flow(
     name="dbtjob_v2_runner",
-    flow_run_name="dbtjob-{task_slug}",
-    retries=1,
-    retry_delay_seconds=60,
+    flow_run_name="dbtjob-{task_slug}"
 )
 def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """Run dbt commands via ShellOperation. Reads the dbt-profile Secret block
