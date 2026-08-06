@@ -196,6 +196,39 @@ async def test_noop_when_no_cast_ops():
         mock_connect.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_raises_on_malformed_secret_json():
+    """Secret block value is not valid JSON — task raises JSONDecodeError so the
+    outer flow's error handler catches it (sync result still returned, ops.log
+    surfaces the failure). Preferable to KeyError-in-a-mystery-place."""
+    bad_secret = MagicMock()
+    bad_secret.get.return_value = "not-valid-json{"
+    with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
+        mock_secret.aload = AsyncMock(return_value=bad_secret)
+        with pytest.raises(json.JSONDecodeError):
+            await _run_post_sync_ops.fn(
+                env={"dbt-profile-secret-block": "my-block"},
+                ops=[{"type": "cast", "schema": "s", "table": "t", "column_casts": {"c": "int"}}],
+            )
+
+
+@pytest.mark.asyncio
+async def test_raises_on_missing_wtype_or_creds_in_secret():
+    """Secret block JSON is valid but missing the wtype/creds top-level keys
+    (backend↔proxy contract violation). Raise KeyError explicitly so the log
+    line names the missing field."""
+    incomplete_secret = MagicMock()
+    # Valid JSON but no wtype/creds keys
+    incomplete_secret.get.return_value = json.dumps({"default_schema": "s", "extras": {}})
+    with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
+        mock_secret.aload = AsyncMock(return_value=incomplete_secret)
+        with pytest.raises(KeyError):
+            await _run_post_sync_ops.fn(
+                env={"dbt-profile-secret-block": "my-block"},
+                ops=[{"type": "cast", "schema": "s", "table": "t", "column_casts": {"c": "int"}}],
+            )
+
+
 # ---------------------------------------------------------------------------
 # _run_post_sync_ops — Postgres path
 # ---------------------------------------------------------------------------

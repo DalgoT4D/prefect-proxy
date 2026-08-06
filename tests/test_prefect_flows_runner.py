@@ -265,9 +265,7 @@ def _mock_flow_deps():
     ValueError to trigger the fallback branch)."""
     with patch("proxy.prefect_flows_runner.get_run_logger", return_value=MagicMock()), patch(
         "proxy.prefect_flows_runner.AirbyteConnection"
-    ) as ab_conn_cls, patch(
-        "proxy.prefect_flows_runner.AirbyteServer"
-    ) as ab_server_cls, patch(
+    ) as ab_conn_cls, patch("proxy.prefect_flows_runner.AirbyteServer") as ab_server_cls, patch(
         "proxy.prefect_flows_runner.run_connection_sync"
     ) as run_sync, patch(
         "proxy.prefect_flows_runner._run_post_sync_ops", new_callable=AsyncMock
