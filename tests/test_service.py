@@ -556,7 +556,6 @@ class MockBlock:
         return {"_block_document_id": "expected_block_id"}
 
 
-
 @pytest.mark.asyncio
 async def test_post_deployment_bad_param():
     with pytest.raises(TypeError) as excinfo:

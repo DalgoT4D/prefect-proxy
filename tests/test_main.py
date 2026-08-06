@@ -288,7 +288,6 @@ async def test_put_airbyte_connection_success():
         assert response == {"block_id": "blockid-123", "cleaned_block_name": "conn-uuid"}
 
 
-
 @pytest.mark.asyncio
 async def test_post_secret_block_badparams():
     with pytest.raises(TypeError) as excinfo:
@@ -718,4 +717,3 @@ async def test_post_dataflow_v1_success(mock_post_deployment_v1: AsyncMock):
 
     result = post_dataflow_v1(payload)
     assert result == {"deployment": {"id": "12345"}}
-

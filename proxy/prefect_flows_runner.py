@@ -434,10 +434,7 @@ def build_profile_dict(
     }
 
 
-@flow(
-    name="dbtjob_v2_runner",
-    flow_run_name="dbtjob-{task_slug}"
-)
+@flow(name="dbtjob_v2_runner", flow_run_name="dbtjob-{task_slug}")
 def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """Run dbt commands via ShellOperation. Reads the dbt-profile Secret block
     at flow-run start, writes a resolved profiles.yml to the worker's filesystem,
