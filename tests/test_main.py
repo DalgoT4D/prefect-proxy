@@ -12,7 +12,6 @@ from proxy.main import (
     delete_block,
     delete_deployment,
     get_airbyte_server,
-    get_dbtcli_profile,
     get_flow_run_logs_paginated,
     get_flow_runs,
     get_flowrun,
@@ -21,12 +20,6 @@ from proxy.main import (
     put_airbyte_server,
     put_airbyte_connection,
     post_create_deployment_flow_run,
-    post_dbtcore,
-    post_dbtcli_profile,
-    put_dbtcli_profile,
-    put_dbtcore_postgres,
-    put_dbtcore_bigquery,
-    put_dbtcore_schema,
     get_flow_run_by_id,
     post_secret_block,
     put_secret_block,
@@ -38,24 +31,15 @@ from proxy.main import (
     put_dataflow_v1,
     get_dataflow_scheduled_flow_runs,
     get_long_running_flows,
-    patch_dbt_cloud_creds,
-    get_dbt_cloud_creds,
 )
 
 from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteServerUpdate,
     AirbyteConnectionCreate,
-    DbtCoreCreate,
-    DbtCoreCredentialUpdate,
-    DbtProfileCreate,
-    DbtCoreSchemaUpdate,
     RunDbtCoreOperation,
     PrefectSecretBlockCreate,
     PrefectSecretBlockEdit,
-    DbtCliProfileBlockCreate,
-    DbtCliProfileBlockUpdate,
-    DbtCloudCredsBlockPatch,
     DeploymentFetch,
     FlowRunRequest,
     RunShellOperation,
@@ -303,228 +287,6 @@ async def test_put_airbyte_connection_success():
         response = await put_airbyte_connection(payload)
         assert response == {"block_id": "blockid-123", "cleaned_block_name": "conn-uuid"}
 
-
-@pytest.mark.asyncio
-async def test_post_dbtcore_success():
-    payload = DbtCoreCreate(
-        dbt_core_block_name="test_dbt",
-        profile=DbtProfileCreate(
-            name="test_profile",
-            target="test_target",
-            target_configs_schema="test_schema",
-        ),
-        wtype="postgres",
-        credentials={"TEST_CREDS": "test_creds"},
-        cli_profile_block_name="test_cli_profile",
-        commands=['echo "Hello, World!"'],
-        env={"TEST_ENV": "test_value"},
-        working_dir="test_dir",
-        profiles_dir="test_profiles_dir",
-        project_dir="test_project_dir",
-    )
-    with patch("proxy.main.create_dbt_core_block", return_value=("12345", "test_dbt_cleaned")):
-        response = await post_dbtcore(payload)
-        assert response == {"block_id": "12345", "block_name": "test_dbt_cleaned"}
-
-
-@pytest.mark.asyncio
-async def test_post_dbtcore_failure():
-    payload = DbtCoreCreate(
-        dbt_core_block_name="test_dbt",
-        profile=DbtProfileCreate(
-            name="test_profile",
-            target="test_target",
-            target_configs_schema="test_schema",
-        ),
-        wtype="postgres",
-        credentials={"TEST_CREDS": "test_creds"},
-        cli_profile_block_name="test_cli_profile",
-        commands=['echo "Hello, World!"'],
-        env={"TEST_ENV": "test_value"},
-        working_dir="test_dir",
-        profiles_dir="test_profiles_dir",
-        project_dir="test_project_dir",
-    )
-    with patch("proxy.main.create_dbt_core_block", side_effect=Exception("test error")):
-        with pytest.raises(HTTPException) as excinfo:
-            await post_dbtcore(payload)
-        assert excinfo.value.status_code == 400
-        assert excinfo.value.detail == "failed to create dbt core block"
-
-
-@pytest.mark.asyncio
-async def test_post_dbtcore_invalid_payload():
-    payload = None
-    with pytest.raises(TypeError) as excinfo:
-        await post_dbtcore(payload)
-    assert excinfo.value.args[0] == "payload is invalid"
-
-
-@pytest.mark.asyncio
-async def test_put_dbtcore_postgres_badparams():
-    with pytest.raises(TypeError) as excinfo:
-        await put_dbtcore_postgres(1)
-    assert str(excinfo.value) == "payload is invalid"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.update_postgres_credentials")
-async def test_put_dbtcore_postgres_failure(mock_update: AsyncMock):
-    payload = DbtCoreCredentialUpdate(blockName="block-name", credentials={"cred-key": "cred-val"})
-    mock_update.side_effect = Exception("exception")
-    with pytest.raises(HTTPException) as excinfo:
-        await put_dbtcore_postgres(payload)
-    assert excinfo.value.detail == "failed to update dbt core block credentials [postgres]"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main._create_dbt_cli_profile")
-async def test_post_dbtcli_profile_success(mock__create_dbt_cli_profile: AsyncMock):
-    """tests post_dbtcli_profile"""
-    payload = DbtCliProfileBlockCreate(
-        cli_profile_block_name="block-name",
-        profile={"name": "NAME", "target_configs_schema": "SCHEMA"},
-        wtype="postgres",
-        credentials={},
-    )
-
-    mock__create_dbt_cli_profile.return_value = ("ignore", "block-id", "block-name")
-    result = await post_dbtcli_profile(payload)
-    assert result == {"block_id": "block-id", "block_name": "block-name"}
-
-
-@pytest.mark.asyncio
-@patch("proxy.main._create_dbt_cli_profile")
-async def test_post_dbtcli_profile_raise(mock__create_dbt_cli_profile: AsyncMock):
-    """tests post_dbtcli_profile"""
-    payload = DbtCliProfileBlockCreate(
-        cli_profile_block_name="block-name",
-        profile={"name": "NAME", "target_configs_schema": "SCHEMA"},
-        wtype="postgres",
-        credentials={},
-    )
-    mock__create_dbt_cli_profile.side_effect = Exception("exception")
-    with pytest.raises(HTTPException) as excinfo:
-        await post_dbtcli_profile(payload)
-    assert excinfo.value.detail == "failed to create dbt cli profile block"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.update_dbt_cli_profile")
-async def test_put_dbtcli_profile_success(mock_update_dbt_cli_profile: AsyncMock):
-    """tests put_dbtcli_profile"""
-    payload = DbtCliProfileBlockUpdate(
-        cli_profile_block_name="block-name",
-        profile={"name": "NAME", "target_configs_schema": "SCHEMA"},
-        wtype="postgres",
-        credentials={},
-    )
-
-    mock_update_dbt_cli_profile.return_value = ("ignore", "block-id", "block-name")
-    result = await put_dbtcli_profile(payload)
-    assert result == {"block_id": "block-id", "block_name": "block-name"}
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.update_dbt_cli_profile")
-async def test_put_dbtcli_profile_raise(mock_update_dbt_cli_profile: AsyncMock):
-    """tests put_dbtcli_profile"""
-    payload = DbtCliProfileBlockUpdate(
-        cli_profile_block_name="block-name",
-        profile={"name": "NAME", "target_configs_schema": "SCHEMA"},
-        wtype="postgres",
-        credentials={},
-    )
-    mock_update_dbt_cli_profile.side_effect = Exception("exception")
-    with pytest.raises(HTTPException) as excinfo:
-        await put_dbtcli_profile(payload)
-    assert excinfo.value.detail == "failed to update dbt cli profile block"
-
-
-@pytest.mark.asyncio
-async def test_get_dbt_cli_profile_failure_1():
-    """Tests get_dbt_cli_profile"""
-    with pytest.raises(TypeError) as excinfo:
-        await get_dbtcli_profile(None)
-
-    assert str(excinfo.value) == "cli_profile_block_name is invalid"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.get_dbt_cli_profile")
-async def test_get_dbt_cli_profile_success(mock_get_dbt_cli_profile: AsyncMock):
-    """Tests get_dbt_cli_profile"""
-    mock_get_dbt_cli_profile.return_value = {"key": "value"}
-    result = await get_dbtcli_profile("block-name")
-    assert result["profile"]["key"] == "value"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.get_dbt_cli_profile")
-async def test_get_dbt_cli_profile_failure_2(mock_get_dbt_cli_profile: AsyncMock):
-    """Tests get_dbt_cli_profile"""
-    mock_get_dbt_cli_profile.side_effect = Exception("exception")
-    with pytest.raises(HTTPException) as excinfo:
-        result = await get_dbtcli_profile("block-name")
-    assert excinfo.value.detail == "failed to fetch dbt cli profile block"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.update_postgres_credentials")
-async def test_put_dbtcore_postgres_success(mock_update: AsyncMock):
-    payload = DbtCoreCredentialUpdate(blockName="block-name", credentials={"cred-key": "cred-val"})
-    response = await put_dbtcore_postgres(payload)
-    assert response == {"success": 1}
-
-
-@pytest.mark.asyncio
-async def test_put_dbtcore_bigquery_badparams():
-    with pytest.raises(TypeError) as excinfo:
-        await put_dbtcore_bigquery(1)
-    assert str(excinfo.value) == "payload is invalid"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.update_bigquery_credentials")
-async def test_put_dbtcore_bigquery_failure(mock_update: AsyncMock):
-    payload = DbtCoreCredentialUpdate(blockName="block-name", credentials={"cred-key": "cred-val"})
-    mock_update.side_effect = Exception("exception")
-    with pytest.raises(HTTPException) as excinfo:
-        await put_dbtcore_bigquery(payload)
-    assert excinfo.value.detail == "failed to update dbt core block credentials [bigquery]"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.update_bigquery_credentials")
-async def test_put_dbtcore_bigquery_success(mock_update: AsyncMock):
-    payload = DbtCoreCredentialUpdate(blockName="block-name", credentials={"cred-key": "cred-val"})
-    response = await put_dbtcore_bigquery(payload)
-    assert response == {"success": 1}
-
-
-@pytest.mark.asyncio
-async def test_put_dbtcore_schema_badparams():
-    with pytest.raises(TypeError) as excinfo:
-        await put_dbtcore_schema(1)
-    assert str(excinfo.value) == "payload is invalid"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.update_target_configs_schema")
-async def test_put_dbtcore_schema_failure(mock_update: AsyncMock):
-    payload = DbtCoreSchemaUpdate(blockName="block-name", target_configs_schema="target")
-    mock_update.side_effect = Exception("exception")
-    with pytest.raises(HTTPException) as excinfo:
-        await put_dbtcore_schema(payload)
-    assert excinfo.value.detail == "failed to update dbt core block target_configs_schema"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.update_target_configs_schema")
-async def test_put_dbtcore_schema_success(mock_update: AsyncMock):
-    payload = DbtCoreSchemaUpdate(blockName="block-name", target_configs_schema="target")
-    response = await put_dbtcore_schema(payload)
-    assert response == {"success": 1}
 
 
 @pytest.mark.asyncio
@@ -957,77 +719,3 @@ async def test_post_dataflow_v1_success(mock_post_deployment_v1: AsyncMock):
     result = post_dataflow_v1(payload)
     assert result == {"deployment": {"id": "12345"}}
 
-
-@pytest.mark.asyncio
-@patch("proxy.main.patch_dbt_cloud_creds_block")
-async def test_patch_dbt_cloud_creds_success(mock_patch_dbt_cloud_creds_block: AsyncMock):
-    """tests patch_dbt_cloud_creds"""
-    payload = DbtCloudCredsBlockPatch(
-        block_name="test_block",
-        account_id=1234,
-        api_key="test_api_key",
-    )
-
-    mock_patch_dbt_cloud_creds_block.return_value = ("ignore", "block-id", "block-name")
-    result = await patch_dbt_cloud_creds(payload)
-    assert result == {"block_id": "block-id", "block_name": "block-name"}
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.patch_dbt_cloud_creds_block")
-async def test_patch_dbt_cloud_creds_failure(mock_patch_dbt_cloud_creds_block: AsyncMock):
-    """tests patch_dbt_cloud_creds"""
-    payload = DbtCloudCredsBlockPatch(
-        block_name="test_block",
-        account_id=1234,
-        api_key="test_api_key",
-    )
-    mock_patch_dbt_cloud_creds_block.side_effect = Exception("exception")
-    with pytest.raises(HTTPException) as excinfo:
-        await patch_dbt_cloud_creds(payload)
-    assert excinfo.value.detail == "failed to save dbt cloud credentials block"
-
-
-@pytest.mark.asyncio
-async def test_patch_dbt_cloud_creds_invalid_payload():
-    """tests patch_dbt_cloud_creds with invalid payload"""
-    payload = None
-    with pytest.raises(TypeError) as excinfo:
-        await patch_dbt_cloud_creds(payload)
-    assert excinfo.value.args[0] == "payload is invalid"
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.get_dbt_cloud_creds_block")
-async def test_get_dbt_cloud_creds_success(mock_get_dbt_cloud_creds_block: AsyncMock):
-    """tests get_dbt_cloud_creds"""
-    block_name = "test_block"
-    mock_get_dbt_cloud_creds_block.return_value = {
-        "account_id": "test_account",
-        "api_key": "*******",
-    }
-
-    result = await get_dbt_cloud_creds(block_name)
-    assert result == {"account_id": "test_account", "api_key": "*******"}
-
-
-@pytest.mark.asyncio
-@patch("proxy.main.get_dbt_cloud_creds_block")
-async def test_get_dbt_cloud_creds_failure(mock_get_dbt_cloud_creds_block: AsyncMock):
-    """tests get_dbt_cloud_creds"""
-    block_name = "test_block"
-    mock_get_dbt_cloud_creds_block.side_effect = Exception("exception")
-
-    with pytest.raises(HTTPException) as excinfo:
-        await get_dbt_cloud_creds(block_name)
-    assert excinfo.value.detail == "failed to fetch dbt cloud creds block"
-
-
-@pytest.mark.asyncio
-async def test_get_dbt_cloud_creds_invalid_block_name():
-    """tests get_dbt_cloud_creds with invalid block name"""
-    block_name = None
-
-    with pytest.raises(TypeError) as excinfo:
-        await get_dbt_cloud_creds(block_name)
-    assert excinfo.value.args[0] == "block name is invalid"

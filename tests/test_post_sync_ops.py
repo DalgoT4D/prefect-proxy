@@ -16,6 +16,14 @@ from proxy.prefect_flows_runner import (
 )
 
 
+@pytest.fixture(autouse=True)
+def mock_run_logger():
+    """`_run_post_sync_ops` calls `get_run_logger()` which requires a live task-run
+    context (Prefect 3). Auto-mock so unit tests can call `.fn(...)` directly."""
+    with patch("proxy.prefect_flows_runner.get_run_logger", return_value=MagicMock()):
+        yield
+
+
 POSTGRES_CREDS = {
     "host": "localhost",
     "port": 5432,
@@ -159,7 +167,7 @@ def test_bigquery_unknown_type_raises():
 async def test_noop_when_ops_empty():
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
         mock_secret.aload = AsyncMock()
-        await _run_post_sync_ops(env={}, ops=[])
+        await _run_post_sync_ops.fn(env={}, ops=[])
         mock_secret.aload.assert_not_called()
 
 
@@ -167,7 +175,7 @@ async def test_noop_when_ops_empty():
 async def test_noop_when_no_secret_block_in_env():
     with patch("proxy.prefect_flows_runner.Secret") as mock_secret:
         mock_secret.aload = AsyncMock()
-        await _run_post_sync_ops(
+        await _run_post_sync_ops.fn(
             env={},
             ops=[{"type": "cast", "schema": "s", "table": "t", "column_casts": {"c": "numeric"}}],
         )
@@ -181,7 +189,7 @@ async def test_noop_when_no_cast_ops():
         "psycopg2.connect"
     ) as mock_connect:
         mock_secret.aload = AsyncMock(return_value=_secret_block("postgres", POSTGRES_CREDS))
-        await _run_post_sync_ops(
+        await _run_post_sync_ops.fn(
             env={"dbt-profile-secret-block": "my-block"},
             ops=[{"type": "unknown", "sql": "SELECT 1"}],
         )
@@ -204,7 +212,7 @@ async def test_postgres_executes_generated_sql():
         "psycopg2.connect", return_value=mock_conn
     ) as mock_connect:
         mock_secret.aload = AsyncMock(return_value=_secret_block("postgres", POSTGRES_CREDS))
-        await _run_post_sync_ops(
+        await _run_post_sync_ops.fn(
             env={"dbt-profile-secret-block": "my-block"},
             ops=[
                 {
@@ -245,7 +253,7 @@ async def test_postgres_closes_connection_on_error():
     ):
         mock_secret.aload = AsyncMock(return_value=_secret_block("postgres", POSTGRES_CREDS))
         with pytest.raises(Exception, match="syntax error"):
-            await _run_post_sync_ops(
+            await _run_post_sync_ops.fn(
                 env={"dbt-profile-secret-block": "my-block"},
                 ops=[
                     {
@@ -282,7 +290,7 @@ async def test_bigquery_fetches_metadata_and_executes():
         "google.oauth2.service_account.Credentials.from_service_account_info"
     ), patch("google.cloud.bigquery.Client", return_value=mock_client):
         mock_secret.aload = AsyncMock(return_value=_secret_block("bigquery", BIGQUERY_CREDS))
-        await _run_post_sync_ops(
+        await _run_post_sync_ops.fn(
             env={"dbt-profile-secret-block": "my-block"},
             ops=[
                 {
@@ -317,7 +325,7 @@ async def test_bigquery_closes_client_on_error():
     ), patch("google.cloud.bigquery.Client", return_value=mock_client):
         mock_secret.aload = AsyncMock(return_value=_secret_block("bigquery", BIGQUERY_CREDS))
         with pytest.raises(Exception, match="quota exceeded"):
-            await _run_post_sync_ops(
+            await _run_post_sync_ops.fn(
                 env={"dbt-profile-secret-block": "my-block"},
                 ops=[
                     {
@@ -343,7 +351,7 @@ async def test_bigquery_closes_client_when_get_table_fails():
     ), patch("google.cloud.bigquery.Client", return_value=mock_client):
         mock_secret.aload = AsyncMock(return_value=_secret_block("bigquery", BIGQUERY_CREDS))
         with pytest.raises(Exception, match="table not found"):
-            await _run_post_sync_ops(
+            await _run_post_sync_ops.fn(
                 env={"dbt-profile-secret-block": "my-block"},
                 ops=[
                     {

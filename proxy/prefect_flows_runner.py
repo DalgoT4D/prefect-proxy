@@ -41,8 +41,6 @@ from prefect_airbyte.flows import (
     run_connection_sync,
     update_connection_schema,
 )
-from prefect_dbt.cloud import DbtCloudCredentials
-from prefect_dbt.cloud.jobs import trigger_dbt_cloud_job_run
 from prefect_shell.commands import ShellOperation
 
 from proxy.helpers import CustomLogger
@@ -55,7 +53,6 @@ AIRBYTESERVER = "Airbyte Server"
 AIRBYTECONNECTION = "Airbyte Connection"
 SHELLOPERATION = "Shell Operation"
 DBTCORE = "dbt Core Operation"
-DBTCLOUD = "dbt Cloud Job"
 
 
 # =============================================================================
@@ -778,23 +775,6 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 
 
 # =============================================================================
-# dbt cloud task
-# =============================================================================
-
-
-@task(name="dbtcloudjob_v1", task_run_name="dbtcloudjob-{task_slug}")
-async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
-    """trigger a dbt Cloud job run"""
-    try:
-        dbt_cloud_creds = await DbtCloudCredentials.aload(task_config["dbt_cloud_creds_block"])
-        result = await trigger_dbt_cloud_job_run(dbt_cloud_creds, task_config["dbt_cloud_job_id"])
-        return result
-    except Exception as error:  # pylint: disable=broad-exception-caught
-        logger.error(str(error))
-        raise
-
-
-# =============================================================================
 # dispatcher + deployment entrypoint
 # =============================================================================
 
@@ -806,14 +786,11 @@ def _is_airbyte_sync_task(task_config: dict) -> bool:
 
 def _run_task_runner(task_config: dict):
     """Copy of prefect_flows._run_task with DBTCORE and AIRBYTECONNECTION
-    branches dispatching to local runner-file versions; DBTCLOUD and
-    SHELLOPERATION still delegate to prefect_flows.
+    branches dispatching to local runner-file versions; SHELLOPERATION still
+    delegates to prefect_flows.
     """
     if task_config["type"] == DBTCORE:
         dbtjob_v2_runner(task_config, task_config["slug"])
-
-    elif task_config["type"] == DBTCLOUD:
-        asyncio.run(dbtcloudjob_v1(task_config, task_config["slug"]))
 
     elif task_config["type"] == SHELLOPERATION:
         shellopjob(task_config, task_config["slug"])
