@@ -8,7 +8,7 @@ Covers:
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import yaml
@@ -18,6 +18,7 @@ from proxy.prefect_flows_runner import (
     _build_output,
     build_profile_dict,
     dbtjob_v2_runner,
+    run_airbyte_connection_flow_v1,
 )
 
 
@@ -249,3 +250,106 @@ def test_dbtjob_v2_runner_non_test_failure_reraises(mock_secret, mock_shell_cls,
     task_config = _make_task_config(tmp_path, slug="dbt-run")
     with pytest.raises(RuntimeError, match="run failed"):
         dbtjob_v2_runner.fn(task_config, "dbt-run")
+
+
+# =============================================================================
+# run_airbyte_connection_flow_v1 — block-load + fallback path
+# =============================================================================
+
+
+@pytest.fixture
+def _mock_flow_deps():
+    """Bundles the four mocks every run_airbyte_connection_flow_v1 test needs.
+
+    Yields a dict so tests can adjust individual mocks (e.g. make aload raise
+    ValueError to trigger the fallback branch)."""
+    with patch("proxy.prefect_flows_runner.get_run_logger", return_value=MagicMock()), patch(
+        "proxy.prefect_flows_runner.AirbyteConnection"
+    ) as ab_conn_cls, patch(
+        "proxy.prefect_flows_runner.AirbyteServer"
+    ) as ab_server_cls, patch(
+        "proxy.prefect_flows_runner.run_connection_sync"
+    ) as run_sync, patch(
+        "proxy.prefect_flows_runner._run_post_sync_ops", new_callable=AsyncMock
+    ) as post_sync:
+        # run_connection_sync.with_options(...)(block) → awaitable result
+        run_sync.with_options.return_value = AsyncMock(return_value={"status": "ok"})
+        yield {
+            "ab_conn_cls": ab_conn_cls,
+            "ab_server_cls": ab_server_cls,
+            "run_sync": run_sync,
+            "post_sync": post_sync,
+        }
+
+
+@pytest.mark.asyncio
+async def test_flow_uses_block_extra_when_block_exists(_mock_flow_deps):
+    """When the AirbyteConnection block exists, its `.extra` drives post-sync ops —
+    the fallback inline construction must NOT be reached."""
+    extra = {"env": {"dbt-profile-secret-block": "sec-blk"}, "post_sync_ops": [{"type": "cast"}]}
+    loaded_block = MagicMock(extra=extra)
+    _mock_flow_deps["ab_conn_cls"].aload = AsyncMock(return_value=loaded_block)
+
+    payload = {"connection_id": "conn-1", "airbyte_server_block": "srv-blk", "timeout": 30}
+    result = await run_airbyte_connection_flow_v1.fn(payload)
+
+    assert result == {"status": "ok"}
+    _mock_flow_deps["ab_conn_cls"].aload.assert_awaited_once_with("conn-1")
+    # Fallback path must NOT run when the block loaded successfully
+    _mock_flow_deps["ab_server_cls"].aload.assert_not_called()
+    # post-sync ops called with the block's extra content
+    _mock_flow_deps["post_sync"].assert_awaited_once_with(
+        env=extra["env"], ops=extra["post_sync_ops"]
+    )
+
+
+@pytest.mark.asyncio
+async def test_flow_falls_back_to_inline_when_no_block(_mock_flow_deps):
+    """Backwards compat: legacy connections have no persisted block. The flow
+    must fall back to inline AirbyteConnection construction and skip post-sync
+    ops (extra={} → no ops to run)."""
+    _mock_flow_deps["ab_conn_cls"].aload = AsyncMock(side_effect=ValueError("no block"))
+    _mock_flow_deps["ab_server_cls"].aload = AsyncMock(return_value=MagicMock())
+    # Inline-constructed block has default `extra = {}`
+    inline_block = MagicMock(extra={})
+    _mock_flow_deps["ab_conn_cls"].return_value = inline_block
+
+    payload = {"connection_id": "legacy-conn", "airbyte_server_block": "srv-blk", "timeout": 15}
+    result = await run_airbyte_connection_flow_v1.fn(payload)
+
+    assert result == {"status": "ok"}
+    _mock_flow_deps["ab_server_cls"].aload.assert_awaited_once_with("srv-blk")
+    # post-sync called with empty env+ops (the .get() defaults) — a no-op inside
+    _mock_flow_deps["post_sync"].assert_awaited_once_with(env={}, ops=[])
+
+
+@pytest.mark.asyncio
+async def test_flow_reraises_on_sync_failure_and_skips_post_sync(_mock_flow_deps):
+    """A sync failure must propagate so Prefect marks the flow-run failed.
+    Post-sync ops must NOT run — casting against unsynced data would be a data-integrity bug."""
+    _mock_flow_deps["ab_conn_cls"].aload = AsyncMock(return_value=MagicMock(extra={}))
+    _mock_flow_deps["run_sync"].with_options.return_value = AsyncMock(
+        side_effect=RuntimeError("airbyte sync failed")
+    )
+
+    payload = {"connection_id": "conn-1", "airbyte_server_block": "srv-blk", "timeout": 30}
+    with pytest.raises(RuntimeError, match="airbyte sync failed"):
+        await run_airbyte_connection_flow_v1.fn(payload)
+
+    _mock_flow_deps["post_sync"].assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_flow_swallows_post_sync_errors_and_returns_sync_result(_mock_flow_deps):
+    """If post-sync ops fail after a successful sync, the sync result must still
+    be returned — the data has landed. Failing the flow here would push users to
+    re-run a sync unnecessarily (and potentially double-charge Airbyte credits)."""
+    extra = {"env": {"dbt-profile-secret-block": "sec-blk"}, "post_sync_ops": [{"type": "cast"}]}
+    _mock_flow_deps["ab_conn_cls"].aload = AsyncMock(return_value=MagicMock(extra=extra))
+    _mock_flow_deps["post_sync"].side_effect = RuntimeError("cast SQL failed")
+
+    payload = {"connection_id": "conn-1", "airbyte_server_block": "srv-blk", "timeout": 30}
+    result = await run_airbyte_connection_flow_v1.fn(payload)
+
+    assert result == {"status": "ok"}
+    _mock_flow_deps["post_sync"].assert_awaited_once()
