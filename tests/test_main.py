@@ -11,7 +11,11 @@ from proxy.main import (
     shelloprun,
     delete_block,
     delete_deployment,
+    delete_deployment_flow_run,
     get_airbyte_server,
+    get_flow_run_by_id_poll,
+    get_flow_run_graph,
+    get_flow_run_logs_grouped,
     get_flow_run_logs_paginated,
     get_flow_runs,
     get_flowrun,
@@ -20,6 +24,9 @@ from proxy.main import (
     put_airbyte_server,
     put_airbyte_connection,
     post_create_deployment_flow_run,
+    post_late_flow_runs,
+    post_retry_flow_run,
+    post_schedule_deployment_flow_run,
     get_flow_run_by_id,
     post_secret_block,
     put_secret_block,
@@ -37,7 +44,10 @@ from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteServerUpdate,
     AirbyteConnectionCreate,
+    FilterLateFlowRuns,
+    RetryFlowRunRequest,
     RunDbtCoreOperation,
+    ScheduleFlowRunRequest,
     PrefectSecretBlockCreate,
     PrefectSecretBlockEdit,
     DeploymentFetch,
@@ -717,3 +727,189 @@ async def test_post_dataflow_v1_success(mock_post_deployment_v1: AsyncMock):
 
     result = post_dataflow_v1(payload)
     assert result == {"deployment": {"id": "12345"}}
+
+
+# =============================================================================
+# delete_deployment_flow_run — user deletes a flow-run from UI
+# =============================================================================
+
+
+def test_delete_deployment_flow_run_bad_param():
+    with pytest.raises(TypeError, match="Flow run id must be a string"):
+        delete_deployment_flow_run(123)
+
+
+@patch("proxy.main.delete_flow_run")
+def test_delete_deployment_flow_run_success(mock_delete: Mock):
+    result = delete_deployment_flow_run("f-run-1")
+    mock_delete.assert_called_once_with(flow_run_id="f-run-1")
+    assert result == {"success": 1}
+
+
+@patch("proxy.main.delete_flow_run")
+def test_delete_deployment_flow_run_wraps_service_error(mock_delete: Mock):
+    """Service raises → 400 HTTPException. Prevents leaking Prefect transport
+    errors to the frontend."""
+    mock_delete.side_effect = Exception("prefect down")
+    with pytest.raises(HTTPException) as excinfo:
+        delete_deployment_flow_run("f-run-1")
+    assert excinfo.value.status_code == 400
+    assert "f-run-1" in excinfo.value.detail
+
+
+# =============================================================================
+# post_retry_flow_run — user clicks Retry in UI
+# =============================================================================
+
+
+@patch("proxy.main.retry_flow_run")
+def test_post_retry_flow_run_success(mock_retry: Mock):
+    """Retry endpoint forwards flow_run_id and minutes to the service. minutes
+    comes from payload — if we hardcode a default, users can't schedule custom retries."""
+    payload = RetryFlowRunRequest(minutes=15)
+    result = post_retry_flow_run("f-run-1", payload)
+    mock_retry.assert_called_once_with(flow_run_id="f-run-1", minutes=15)
+    assert result == {"success": 1}
+
+
+@patch("proxy.main.retry_flow_run")
+def test_post_retry_flow_run_wraps_service_error(mock_retry: Mock):
+    mock_retry.side_effect = Exception("boom")
+    payload = RetryFlowRunRequest(minutes=5)
+    with pytest.raises(HTTPException) as excinfo:
+        post_retry_flow_run("f-run-1", payload)
+    assert excinfo.value.status_code == 400
+
+
+# =============================================================================
+# post_late_flow_runs — powers the late-runs alert dashboard
+# =============================================================================
+
+
+@patch("proxy.main.filter_late_flow_runs")
+def test_post_late_flow_runs_success(mock_filter: Mock):
+    """Response wraps the service result under `flow_runs` — this shape is
+    lock-step with the webapp's alert component."""
+    mock_filter.return_value = [{"id": "r1", "name": "run-1"}]
+    result = post_late_flow_runs(FilterLateFlowRuns(deployment_id="d1"))
+    assert result == {"flow_runs": [{"id": "r1", "name": "run-1"}]}
+
+
+@patch("proxy.main.filter_late_flow_runs")
+def test_post_late_flow_runs_wraps_service_error(mock_filter: Mock):
+    mock_filter.side_effect = Exception("boom")
+    with pytest.raises(HTTPException) as excinfo:
+        post_late_flow_runs(FilterLateFlowRuns())
+    assert excinfo.value.status_code == 400
+    assert "late flow runs" in excinfo.value.detail
+
+
+# =============================================================================
+# get_flow_run_graph — powers the run-inspection graph view
+# =============================================================================
+
+
+def test_get_flow_run_graph_bad_param():
+    with pytest.raises(TypeError, match="flow_run_id must be a string"):
+        get_flow_run_graph(42)
+
+
+@patch("proxy.main.get_flow_run_tasks")
+def test_get_flow_run_graph_success(mock_tasks: Mock):
+    mock_tasks.return_value = [{"id": "n1", "kind": "task-run"}]
+    result = get_flow_run_graph("f-run-1")
+    mock_tasks.assert_called_once_with("f-run-1")
+    assert result == [{"id": "n1", "kind": "task-run"}]
+
+
+@patch("proxy.main.get_flow_run_tasks")
+def test_get_flow_run_graph_wraps_service_error(mock_tasks: Mock):
+    mock_tasks.side_effect = Exception("boom")
+    with pytest.raises(HTTPException) as excinfo:
+        get_flow_run_graph("f-run-1")
+    assert excinfo.value.status_code == 400
+    assert "graph" in excinfo.value.detail
+
+
+# =============================================================================
+# get_flow_run_logs_grouped — powers per-task log grouping in UI
+# =============================================================================
+
+
+def test_get_flow_run_logs_grouped_bad_param():
+    with pytest.raises(TypeError, match="flow_run_id must be a string"):
+        get_flow_run_logs_grouped(None)
+
+
+@patch("proxy.main.get_flow_run_logs_v2")
+def test_get_flow_run_logs_grouped_success(mock_logs: Mock):
+    mock_logs.return_value = [{"id": "n1", "logs": []}]
+    result = get_flow_run_logs_grouped("f-run-1")
+    mock_logs.assert_called_once_with("f-run-1")
+    assert result == [{"id": "n1", "logs": []}]
+
+
+@patch("proxy.main.get_flow_run_logs_v2")
+def test_get_flow_run_logs_grouped_wraps_service_error(mock_logs: Mock):
+    mock_logs.side_effect = Exception("boom")
+    with pytest.raises(HTTPException) as excinfo:
+        get_flow_run_logs_grouped("f-run-1")
+    assert excinfo.value.status_code == 400
+
+
+# =============================================================================
+# get_flow_run_by_id_poll — lightweight polling endpoint for run status
+# =============================================================================
+
+
+def test_get_flow_run_by_id_poll_bad_param():
+    with pytest.raises(TypeError, match="Flow run id must be a string"):
+        get_flow_run_by_id_poll(42)
+
+
+@patch("proxy.main.get_flow_run")
+def test_get_flow_run_by_id_poll_skips_task_run_state_derive(mock_get: Mock):
+    """Poll endpoint MUST pass update_state_from_task_runs=False — the whole
+    point of this route is a cheap poll. If we drop that flag, every poll
+    triggers a full task-run graph fetch and the UI slows to a crawl."""
+    mock_get.return_value = {"id": "f-run-1", "state_type": "RUNNING"}
+    result = get_flow_run_by_id_poll("f-run-1")
+    mock_get.assert_called_once_with(flow_run_id="f-run-1", update_state_from_task_runs=False)
+    assert result == {"id": "f-run-1", "state_type": "RUNNING"}
+
+
+# =============================================================================
+# post_schedule_deployment_flow_run — scheduling a deployment run at a future time
+# =============================================================================
+
+
+@pytest.mark.asyncio
+async def test_post_schedule_deployment_flow_run_bad_param():
+    with pytest.raises(TypeError, match="deployment_id must be a string"):
+        await post_schedule_deployment_flow_run(
+            42, ScheduleFlowRunRequest(runParams={}, scheduledTime=None)
+        )
+
+
+@pytest.mark.asyncio
+async def test_post_schedule_deployment_flow_run_forwards_time_and_params():
+    """Both runParams AND scheduledTime must be forwarded to the service. If
+    scheduledTime drops, the run happens immediately instead of at the scheduled
+    time — a user-visible surprise."""
+    payload = ScheduleFlowRunRequest(runParams={"a": 1}, scheduledTime=None)
+    with patch("proxy.main.post_deployment_flow_run", new_callable=AsyncMock) as mock_run:
+        mock_run.return_value = {"flow_run_id": "fr-1"}
+        result = await post_schedule_deployment_flow_run("dep-1", payload)
+        mock_run.assert_awaited_once_with("dep-1", {"a": 1}, None)
+        assert result == {"flow_run_id": "fr-1"}
+
+
+@pytest.mark.asyncio
+async def test_post_schedule_deployment_flow_run_wraps_service_error():
+    payload = ScheduleFlowRunRequest(runParams={}, scheduledTime=None)
+    with patch("proxy.main.post_deployment_flow_run", new_callable=AsyncMock) as mock_run:
+        mock_run.side_effect = Exception("boom")
+        with pytest.raises(HTTPException) as excinfo:
+            await post_schedule_deployment_flow_run("dep-1", payload)
+        assert excinfo.value.status_code == 400
+        assert "failed to create flow_run" in excinfo.value.detail

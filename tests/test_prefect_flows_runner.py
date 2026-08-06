@@ -14,11 +14,19 @@ import pytest
 import yaml
 
 from proxy.prefect_flows_runner import (
+    AIRBYTECONNECTION,
+    DBTCORE,
     DBT_TARGET,
+    SHELLOPERATION,
     _build_output,
+    _run_task_runner,
+    _run_tasks_sequentially,
+    _run_tasks_with_sync_tolerance,
     build_profile_dict,
     dbtjob_v2_runner,
+    deployment_schedule_flow_v5,
     run_airbyte_connection_flow_v1,
+    shellopjob,
 )
 
 
@@ -351,3 +359,231 @@ async def test_flow_swallows_post_sync_errors_and_returns_sync_result(_mock_flow
 
     assert result == {"status": "ok"}
     _mock_flow_deps["post_sync"].assert_awaited_once()
+
+
+# =============================================================================
+# _run_task_runner — dispatch table for the deployment task-type / slug matrix
+# =============================================================================
+
+
+@pytest.fixture
+def _mock_dispatch():
+    """Patches all four sinks _run_task_runner can dispatch to. Yields the
+    mocks so each test can assert exactly which sink was hit."""
+    with patch("proxy.prefect_flows_runner.dbtjob_v2_runner") as dbt, patch(
+        "proxy.prefect_flows_runner.shellopjob"
+    ) as shell, patch(
+        "proxy.prefect_flows_runner.run_airbyte_connection_flow_v1"
+    ) as ab_sync, patch(
+        "proxy.prefect_flows_runner.run_airbyte_conn_clear"
+    ) as ab_clear, patch(
+        "proxy.prefect_flows_runner.run_refresh_schema_flow"
+    ) as refresh, patch(
+        "proxy.prefect_flows_runner.asyncio.run"
+    ) as asyncio_run:
+        # Route coroutines synchronously so we can inspect what asyncio.run was passed
+        asyncio_run.side_effect = lambda coro: coro
+        yield {
+            "dbt": dbt,
+            "shell": shell,
+            "ab_sync": ab_sync,
+            "ab_clear": ab_clear,
+            "refresh": refresh,
+            "asyncio_run": asyncio_run,
+        }
+
+
+def test_run_task_runner_dispatches_dbtcore(_mock_dispatch):
+    """DBTCORE tasks must route to dbtjob_v2_runner. Wrong dispatch → dbt tasks silently skip."""
+    task = {"type": DBTCORE, "slug": "dbt-run"}
+    _run_task_runner(task)
+    _mock_dispatch["dbt"].assert_called_once_with(task, "dbt-run")
+
+
+def test_run_task_runner_dispatches_shell(_mock_dispatch):
+    """SHELLOPERATION tasks must route to shellopjob. Wrong dispatch → git-pull silently skips
+    and dbt runs against stale code."""
+    task = {"type": SHELLOPERATION, "slug": "git-pull"}
+    _run_task_runner(task)
+    _mock_dispatch["shell"].assert_called_once_with(task, "git-pull")
+
+
+def test_run_task_runner_dispatches_airbyte_sync(_mock_dispatch):
+    """The Airbyte sync path — the load-path this whole feature protects."""
+    task = {"type": AIRBYTECONNECTION, "slug": "airbyte-sync"}
+    _run_task_runner(task)
+    _mock_dispatch["ab_sync"].assert_called_once_with(task)
+    _mock_dispatch["asyncio_run"].assert_called_once()
+
+
+def test_run_task_runner_dispatches_airbyte_clear(_mock_dispatch):
+    task = {"type": AIRBYTECONNECTION, "slug": "airbyte-clear"}
+    _run_task_runner(task)
+    _mock_dispatch["ab_clear"].assert_called_once_with(task)
+
+
+def test_run_task_runner_dispatches_update_schema(_mock_dispatch):
+    task = {"type": AIRBYTECONNECTION, "slug": "update-schema", "catalog_diff": {"foo": "bar"}}
+    _run_task_runner(task)
+    _mock_dispatch["refresh"].assert_called_once_with(task, catalog_diff={"foo": "bar"})
+
+
+def test_run_task_runner_raises_on_unknown_airbyte_slug(_mock_dispatch):
+    """Fail loud when an unrecognized AIRBYTECONNECTION slug appears — silently
+    skipping would hide real bugs in the backend's task-config builder."""
+    task = {"type": AIRBYTECONNECTION, "slug": "made-up-slug"}
+    with pytest.raises(ValueError, match="Unsupported AIRBYTECONNECTION slug"):
+        _run_task_runner(task)
+
+
+def test_run_task_runner_raises_on_unknown_type(_mock_dispatch):
+    """Fail loud on unknown top-level type."""
+    task = {"type": "invented-type", "slug": "x"}
+    with pytest.raises(ValueError, match="Unknown task type"):
+        _run_task_runner(task)
+
+
+# =============================================================================
+# _run_tasks_sequentially — fail-fast semantics
+# =============================================================================
+
+
+@patch("proxy.prefect_flows_runner.sleep")
+@patch("proxy.prefect_flows_runner._run_task_runner")
+def test_run_tasks_sequentially_stops_on_first_error(mock_runner, _mock_sleep):
+    """First task raises → second task must NOT be attempted. If broken, downstream
+    tasks run against stale/failed prereqs (e.g. dbt-run after failed git-pull)."""
+    tasks = [{"type": DBTCORE, "slug": "dbt-deps"}, {"type": DBTCORE, "slug": "dbt-run"}]
+    mock_runner.side_effect = [RuntimeError("first task failed"), None]
+
+    with pytest.raises(RuntimeError, match="first task failed"):
+        _run_tasks_sequentially(tasks)
+
+    # Only the first task should have been attempted
+    assert mock_runner.call_count == 1
+
+
+@patch("proxy.prefect_flows_runner.sleep")
+@patch("proxy.prefect_flows_runner._run_task_runner")
+def test_run_tasks_sequentially_happy_path(mock_runner, _mock_sleep):
+    """All tasks called in order when none fail."""
+    t1 = {"type": DBTCORE, "slug": "dbt-deps"}
+    t2 = {"type": DBTCORE, "slug": "dbt-run"}
+    t3 = {"type": DBTCORE, "slug": "dbt-test"}
+
+    _run_tasks_sequentially([t1, t2, t3])
+
+    assert mock_runner.call_count == 3
+    assert [c.args[0] for c in mock_runner.call_args_list] == [t1, t2, t3]
+
+
+# =============================================================================
+# _run_tasks_with_sync_tolerance — best-effort sync then transform
+# =============================================================================
+
+
+@patch("proxy.prefect_flows_runner.sleep")
+@patch("proxy.prefect_flows_runner._run_task_runner")
+def test_run_tasks_with_sync_tolerance_collects_sync_errors_then_skips_transforms(
+    mock_runner, _mock_sleep
+):
+    """If ANY sync fails, transforms must NOT run — casting/dbt against failed
+    sync data corrupts the warehouse. Both syncs are still attempted so all
+    errors surface in one flow run."""
+    sync1 = {"type": AIRBYTECONNECTION, "slug": "airbyte-sync", "connection_id": "c1"}
+    sync2 = {"type": AIRBYTECONNECTION, "slug": "airbyte-sync", "connection_id": "c2"}
+    dbt_run = {"type": DBTCORE, "slug": "dbt-run"}
+
+    mock_runner.side_effect = [
+        RuntimeError("sync 1 failed"),
+        RuntimeError("sync 2 failed"),
+        # dbt-run mustn't be reached
+    ]
+
+    with pytest.raises(RuntimeError, match="2 airbyte sync\\(s\\) failed"):
+        _run_tasks_with_sync_tolerance([sync1, sync2, dbt_run])
+
+    # Both syncs attempted; transform NOT reached
+    assert mock_runner.call_count == 2
+
+
+@patch("proxy.prefect_flows_runner.sleep")
+@patch("proxy.prefect_flows_runner._run_task_runner")
+def test_run_tasks_with_sync_tolerance_happy_path_runs_transforms(mock_runner, _mock_sleep):
+    """All syncs succeed → transforms run after."""
+    sync1 = {"type": AIRBYTECONNECTION, "slug": "airbyte-sync", "connection_id": "c1"}
+    dbt_run = {"type": DBTCORE, "slug": "dbt-run"}
+    dbt_test = {"type": DBTCORE, "slug": "dbt-test"}
+
+    _run_tasks_with_sync_tolerance([sync1, dbt_run, dbt_test])
+
+    assert mock_runner.call_count == 3
+    # syncs first, then transforms — even if input order was mixed
+    slugs = [c.args[0]["slug"] for c in mock_runner.call_args_list]
+    assert slugs.index("airbyte-sync") < slugs.index("dbt-run")
+
+
+# =============================================================================
+# deployment_schedule_flow_v5 — the actual Prefect entrypoint
+# =============================================================================
+
+
+@patch("proxy.prefect_flows_runner._run_tasks_sequentially")
+@patch("proxy.prefect_flows_runner._run_tasks_with_sync_tolerance")
+def test_deployment_schedule_flow_sorts_tasks_by_seq(mock_tolerant, mock_sequential):
+    """Tasks with out-of-order seq must be sorted before dispatch. This ordering
+    is critical: git-pull (seq=1) MUST run before dbt-run (seq=4). If sort
+    breaks, dbt runs against stale code."""
+    tasks_out_of_order = [
+        {"seq": 4, "type": DBTCORE, "slug": "dbt-run"},
+        {"seq": 1, "type": SHELLOPERATION, "slug": "git-pull"},
+        {"seq": 2, "type": DBTCORE, "slug": "dbt-clean"},
+        {"seq": 3, "type": DBTCORE, "slug": "dbt-deps"},
+    ]
+    config = {"tasks": tasks_out_of_order}
+
+    deployment_schedule_flow_v5.fn(config)
+
+    sorted_tasks = mock_sequential.call_args.args[0]
+    assert [t["seq"] for t in sorted_tasks] == [1, 2, 3, 4]
+    mock_tolerant.assert_not_called()
+
+
+@patch("proxy.prefect_flows_runner._run_tasks_sequentially")
+@patch("proxy.prefect_flows_runner._run_tasks_with_sync_tolerance")
+def test_deployment_schedule_flow_picks_tolerance_mode_from_flag(mock_tolerant, mock_sequential):
+    """continue_on_sync_failure=True dispatches to the tolerant runner. Feature
+    flag must actually gate behavior — silently ignoring it means users who
+    opted in still fail-fast on sync errors."""
+    config = {
+        "tasks": [{"seq": 1, "type": AIRBYTECONNECTION, "slug": "airbyte-sync"}],
+        "continue_on_sync_failure": True,
+    }
+    deployment_schedule_flow_v5.fn(config)
+    mock_tolerant.assert_called_once()
+    mock_sequential.assert_not_called()
+
+
+# =============================================================================
+# shellopjob — git-pull secret block injection
+# =============================================================================
+
+
+@patch("proxy.prefect_flows_runner.ShellOperation")
+@patch("proxy.prefect_flows_runner.Secret")
+def test_shellopjob_git_pull_appends_secret_url(mock_secret, mock_shell_cls):
+    """git-pull commands must be rewritten to include the secret block's URL.
+    Without this, git-pull auth fails and dbt runs on stale code."""
+    mock_secret.load.return_value.get.return_value = "https://oauth2:TOKEN@github.com/org/repo"
+
+    task_config = {
+        "slug": "git-pull",
+        "commands": ["git pull"],
+        "env": {"secret-git-pull-url-block": "gh-secret", "shell": "/bin/bash"},
+        "working_dir": "/tmp/dbt",
+    }
+    shellopjob.fn(task_config, "git-pull")
+
+    # ShellOperation.run() got the URL-appended command
+    called_cmds = mock_shell_cls.call_args.kwargs["commands"]
+    assert called_cmds == ["git pull https://oauth2:TOKEN@github.com/org/repo"]

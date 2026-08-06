@@ -14,6 +14,7 @@ from proxy.schemas import (
     AirbyteConnectionCreate,
     DeploymentCreate2,
     DeploymentUpdate2,
+    FilterLateFlowRuns,
     PrefectSecretBlockCreate,
 )
 from proxy.service import (
@@ -50,6 +51,10 @@ from proxy.service import (
     retry_flow_run,
     get_long_running_flow_runs,
     set_cancel_queued_flow_run,
+    delete_flow_run,
+    filter_late_flow_runs,
+    traverse_flow_run_graph_v2,
+    get_flow_run_tasks,
 )
 
 
@@ -1204,3 +1209,225 @@ def test_cannot_cancel_non_queued_run(
         set_cancel_queued_flow_run("valid_flow_run_id", mock_payload)
 
     mock_prefect_post.assert_not_called()
+
+
+# =============================================================================
+# delete_flow_run — admin action from UI
+# =============================================================================
+
+
+def test_delete_flow_run_bad_param():
+    """flow_run_id must be a string — fail-fast before hitting Prefect."""
+    with pytest.raises(TypeError, match="flow_run_id must be a string"):
+        delete_flow_run(123)
+
+
+@patch("proxy.service.prefect_delete")
+def test_delete_flow_run_success(mock_delete: Mock):
+    """Happy path — DELETE flow_runs/{id} is hit exactly once."""
+    delete_flow_run("run-abc")
+    mock_delete.assert_called_once_with("flow_runs/run-abc")
+
+
+@patch("proxy.service.prefect_delete")
+def test_delete_flow_run_wraps_backend_error(mock_delete: Mock):
+    """Backend error → PrefectException. UI surfaces this as a friendly 500
+    rather than leaking the underlying transport error."""
+    mock_delete.side_effect = Exception("boom")
+    with pytest.raises(PrefectException, match="failed to cancel flow-run"):
+        delete_flow_run("run-abc")
+
+
+# =============================================================================
+# filter_late_flow_runs — powers the "late runs" alerting dashboard
+# =============================================================================
+
+
+@patch("proxy.service.prefect_post")
+def test_filter_late_flow_runs_applies_optional_filters(mock_post: Mock):
+    """All optional filters (deployment/pool/queue/limit/time window) must land in
+    the query payload sent to Prefect. If any drop, alerts see the wrong set of runs."""
+    mock_post.return_value = []
+
+    payload = FilterLateFlowRuns(
+        deployment_id="dep-1",
+        work_pool_name="pool-A",
+        work_queue_name="queue-A",
+        limit=25,
+        before_start_time="2026-08-06T00:00:00",
+        after_start_time="2026-08-01T00:00:00",
+        exclude_flow_run_ids=["skip-1", "skip-2"],
+    )
+    filter_late_flow_runs(payload)
+
+    endpoint, query = mock_post.call_args.args
+    assert endpoint == "flow_runs/filter"
+    # State filter is always "Late"
+    assert query["flow_runs"]["state"]["name"]["any_"] == ["Late"]
+    # Excluded IDs propagate
+    assert query["flow_runs"]["id"]["not_any_"] == ["skip-1", "skip-2"]
+    # Optional filters land
+    assert query["deployments"]["id"]["any_"] == ["dep-1"]
+    assert query["work_pools"]["name"]["any_"] == ["pool-A"]
+    assert query["work_pool_queues"]["name"]["any_"] == ["queue-A"]
+    assert query["limit"] == 25
+    # Time window: both before_ and after_ end up on the same nested dict
+    assert "before_" in query["flow_runs"]["expected_start_time"]
+    assert "after_" in query["flow_runs"]["expected_start_time"]
+
+
+@patch("proxy.service.prefect_post")
+def test_filter_late_flow_runs_maps_response_fields(mock_post: Mock):
+    """Prefect response shape → normalized dict the webapp expects. Field names
+    are lock-step with the frontend — silent renames break the alerts UI."""
+    mock_post.return_value = [
+        {
+            "id": "r1",
+            "name": "run-1",
+            "tags": ["daily"],
+            "start_time": "t0",
+            "expected_start_time": "t-1",
+            "total_run_time": 42.0,
+            "estimated_run_time": 50.0,
+            "work_queue_name": "q",
+            "work_pool_name": "pool",
+            "deployment_id": "d",
+        }
+    ]
+    result = filter_late_flow_runs(FilterLateFlowRuns())
+    assert result == [
+        {
+            "id": "r1",
+            "name": "run-1",
+            "tags": ["daily"],
+            "startTime": "t0",
+            "expectedStartTime": "t-1",
+            "totalRunTime": 42.0,
+            "estimatedRunTime": 50.0,
+            "workQueueName": "q",
+            "workPoolName": "pool",
+            "deployment_id": "d",
+        }
+    ]
+
+
+@patch("proxy.service.prefect_post")
+def test_filter_late_flow_runs_wraps_backend_error(mock_post: Mock):
+    """Backend failure → PrefectException so the alert-fetch endpoint returns
+    a clean 500 rather than a raw HTTPError."""
+    mock_post.side_effect = Exception("boom")
+    with pytest.raises(PrefectException, match="failed to fetch late flow_runs"):
+        filter_late_flow_runs(FilterLateFlowRuns())
+
+
+# =============================================================================
+# traverse_flow_run_graph_v2 + get_flow_run_tasks — powers the run-inspection UI
+# =============================================================================
+
+
+def test_traverse_flow_run_graph_v2_bad_param():
+    with pytest.raises(TypeError, match="flow_run_id must be a string"):
+        traverse_flow_run_graph_v2(42)
+
+
+@patch("proxy.service.prefect_get")
+def test_traverse_flow_run_graph_v2_no_root_nodes_returns_empty(mock_get: Mock):
+    """Prefect returns a graph with no root_node_ids → nothing to traverse.
+    Must return [] without crashing on the missing key."""
+    mock_get.return_value = {"nodes": []}  # no root_node_ids
+    assert traverse_flow_run_graph_v2("flow-run-1") == []
+
+
+@patch("proxy.service.prefect_get")
+def test_traverse_flow_run_graph_v2_strips_subflow_label_prefix(mock_get: Mock):
+    """Prefect's server hardcodes flow-run labels as `<flow_name> / <run_name>`.
+    Frontend expects just `<run_name>` so subflow labels line up with task-run labels."""
+    mock_get.return_value = {
+        "root_node_ids": ["n1"],
+        "nodes": [
+            [
+                "n1",
+                {
+                    "id": "n1",
+                    "kind": "flow-run",
+                    "label": "dbtjob_v2_runner / dbtjob-dbt-run",
+                    "start_time": "t0",
+                    "end_time": "t1",
+                    "children": [],
+                },
+            ],
+        ],
+    }
+    result = traverse_flow_run_graph_v2("flow-run-1")
+    assert len(result) == 1
+    assert result[0]["label"] == "dbtjob-dbt-run"  # prefix stripped
+
+
+@patch("proxy.service.prefect_get")
+def test_traverse_flow_run_graph_v2_traverses_children_first(mock_get: Mock):
+    """BFS-style traversal: a node's children get enqueued after it. Children
+    appear in the result AFTER their parent, in the order they were queued."""
+    mock_get.return_value = {
+        "root_node_ids": ["root"],
+        "nodes": [
+            [
+                "root",
+                {
+                    "id": "root",
+                    "kind": "flow-run",
+                    "label": "root-label",
+                    "start_time": "t0",
+                    "end_time": "t1",
+                    "children": [{"id": "child-1"}, {"id": "child-2"}],
+                },
+            ],
+            [
+                "child-1",
+                {
+                    "id": "child-1",
+                    "kind": "task-run",
+                    "label": "child-1",
+                    "start_time": "t0",
+                    "end_time": "t1",
+                    "children": [],
+                },
+            ],
+            [
+                "child-2",
+                {
+                    "id": "child-2",
+                    "kind": "task-run",
+                    "label": "child-2",
+                    "start_time": "t0",
+                    "end_time": "t1",
+                    "children": [],
+                },
+            ],
+        ],
+    }
+    result = traverse_flow_run_graph_v2("flow-run-1")
+    ids = [r["id"] for r in result]
+    assert ids == ["root", "child-1", "child-2"]
+
+
+@patch("proxy.service.prefect_get")
+@patch("proxy.service.traverse_flow_run_graph_v2")
+def test_get_flow_run_tasks_shapes_response(mock_traverse: Mock, mock_get: Mock):
+    """get_flow_run_tasks combines graph nodes with per-run state fetched from
+    Prefect. Missing/extra fields on either side breaks the UI graph view."""
+    mock_traverse.return_value = [
+        {"id": "n1", "kind": "task-run", "label": "task-A", "start_time": "t0", "end_time": "t1"},
+    ]
+    mock_get.return_value = {
+        "state_type": "COMPLETED",
+        "state_name": "Completed",
+        "total_run_time": 3.14,
+        "estimated_run_time": 3.0,
+    }
+    result = get_flow_run_tasks("flow-run-1")
+    assert result[0]["id"] == "n1"
+    assert result[0]["state_type"] == "COMPLETED"
+    assert result[0]["state_name"] == "Completed"
+    assert result[0]["total_run_time"] == 3.14
+    # prefect_get was called with the task_runs endpoint (kind='task-run')
+    mock_get.assert_called_once_with("task_runs/n1")
