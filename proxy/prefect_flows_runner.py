@@ -31,7 +31,7 @@ from pathlib import Path
 from time import sleep
 
 import yaml
-from prefect import flow, task
+from prefect import flow, task, get_run_logger
 from prefect.blocks.system import Secret
 from prefect.states import State, StateType
 from prefect_airbyte import AirbyteConnection, AirbyteServer
@@ -41,8 +41,6 @@ from prefect_airbyte.flows import (
     run_connection_sync,
     update_connection_schema,
 )
-from prefect_dbt.cloud import DbtCloudCredentials
-from prefect_dbt.cloud.jobs import trigger_dbt_cloud_job_run
 from prefect_shell.commands import ShellOperation
 
 from proxy.helpers import CustomLogger
@@ -55,7 +53,6 @@ AIRBYTESERVER = "Airbyte Server"
 AIRBYTECONNECTION = "Airbyte Connection"
 SHELLOPERATION = "Shell Operation"
 DBTCORE = "dbt Core Operation"
-DBTCLOUD = "dbt Cloud Job"
 
 
 # =============================================================================
@@ -66,25 +63,250 @@ DBTCLOUD = "dbt Cloud Job"
 # (Prefect's default is a random <adj>-<animal>).
 
 
+# --- Cast SQL building ------------------------------------------------------
+# SQL is generated at flow-run time (not backend-precomputed) so:
+#   - BigQuery: we can preserve the live table's PARTITION BY + CLUSTER BY spec
+#     (fetched via bq_client.get_table), which Airbyte-created tables enforce.
+#   - Postgres: identifier quoting/normalization stays close to execution.
+
+POSTGRES_CAST_TYPE_MAP = {
+    "numeric": "numeric",
+    "integer": "integer",
+    "bigint": "bigint",
+    "boolean": "boolean",
+    "date": "date",
+    "timestamp": "timestamp",
+    "text": "text",
+}
+
+BIGQUERY_CAST_TYPE_MAP = {
+    "numeric": "NUMERIC",
+    "integer": "INT64",
+    "bigint": "INT64",
+    "boolean": "BOOL",
+    "date": "DATE",
+    "timestamp": "TIMESTAMP",
+    "text": "STRING",
+}
+
+# Partition BY expression per BigQuery time-partitioning type (assumes the field
+# is TIMESTAMP, which is Airbyte's convention for `_airbyte_extracted_at`).
+_BQ_PARTITION_EXPR = {
+    "DAY": "DATE({field})",
+    "HOUR": "TIMESTAMP_TRUNC({field}, HOUR)",
+    "MONTH": "TIMESTAMP_TRUNC({field}, MONTH)",
+    "YEAR": "TIMESTAMP_TRUNC({field}, YEAR)",
+}
+
+
+def _pg_quote(ident: str) -> str:
+    """Postgres double-quote identifier, escaping any embedded double-quote."""
+    return '"' + ident.replace('"', '""') + '"'
+
+
+def _bq_quote(ident: str) -> str:
+    """BigQuery backtick-quote identifier, escaping any embedded backtick."""
+    return "`" + ident.replace("`", "\\`") + "`"
+
+
+def _build_postgres_cast_sql(schema: str, table: str, column_casts: dict) -> str:
+    """ALTER TABLE <schema>.<table> ALTER COLUMN <col> TYPE <t> USING <col>::<t>, ...
+
+    `column_casts` must already carry Airbyte-normalized column names (backend does this).
+    """
+    clauses = []
+    for col, cast_type in column_casts.items():
+        if cast_type not in POSTGRES_CAST_TYPE_MAP:
+            raise ValueError(f"Unsupported cast type for Postgres: {cast_type!r}")
+        sql_type = POSTGRES_CAST_TYPE_MAP[cast_type]
+        col_q = _pg_quote(col)
+        clauses.append(f"ALTER COLUMN {col_q} TYPE {sql_type} USING {col_q}::{sql_type}")
+    return f"ALTER TABLE {_pg_quote(schema)}.{_pg_quote(table)}\n  " + ",\n  ".join(clauses)
+
+
+def _build_bigquery_cast_sql(
+    project_id: str, schema: str, table: str, column_casts: dict, table_meta
+) -> str:
+    """CREATE OR REPLACE TABLE preserving Airbyte's partition/cluster spec (read
+    from the live table's metadata) + `SELECT * REPLACE (CAST(col) AS col, ...)`
+    to cast only the target columns."""
+    for cast_type in column_casts.values():
+        if cast_type not in BIGQUERY_CAST_TYPE_MAP:
+            raise ValueError(f"Unsupported cast type for BigQuery: {cast_type!r}")
+
+    full_table = f"{_bq_quote(project_id)}.{_bq_quote(schema)}.{_bq_quote(table)}"
+
+    replace_cols = []
+    for col, cast_type in column_casts.items():
+        # column_casts already carries Airbyte-normalized names (backend does this)
+        col_q = _bq_quote(col)
+        replace_cols.append(f"CAST({col_q} AS {BIGQUERY_CAST_TYPE_MAP[cast_type]}) AS {col_q}")
+
+    parts = [f"CREATE OR REPLACE TABLE {full_table}"]
+
+    # Partition BY (day/hour/month/year) — Airbyte uses DAY on `_airbyte_extracted_at`
+    partitioning = getattr(table_meta, "time_partitioning", None)
+    if partitioning and partitioning.field:
+        expr_tmpl = _BQ_PARTITION_EXPR.get(partitioning.type_)
+        if expr_tmpl:
+            parts.append(f"PARTITION BY {expr_tmpl.format(field=_bq_quote(partitioning.field))}")
+
+    # Cluster BY — Airbyte always clusters on `_airbyte_extracted_at` first, then any PKs.
+    cluster_fields = getattr(table_meta, "clustering_fields", None) or []
+    if cluster_fields:
+        parts.append("CLUSTER BY " + ", ".join(_bq_quote(f) for f in cluster_fields))
+
+    parts.append("AS SELECT * REPLACE (\n  " + ",\n  ".join(replace_cols) + "\n)")
+    parts.append(f"FROM {full_table}")
+    return "\n".join(parts)
+
+
+# --- Post-sync ops task -----------------------------------------------------
+
+
+@task(name="post-sync-ops", retries=0)
+async def _run_post_sync_ops(env: dict, ops: list) -> None:
+    """Execute post-sync operations (e.g. type casts) after an Airbyte sync.
+    Each op carries raw config; SQL is built here so we can inspect live table
+    metadata (BigQuery partition/cluster spec) at execution time.
+    No-op when ops is absent or empty."""
+    run_logger = get_run_logger()
+    run_logger.info(
+        "post-sync ops task started: env_keys=%s ops_count=%d", list(env.keys()), len(ops)
+    )
+    if not ops:
+        run_logger.info("no post-sync ops to run — skipping")
+        return
+
+    block_name = env.get("dbt-profile-secret-block")
+    if not block_name:
+        run_logger.error("post_sync_ops present but no dbt-profile-secret-block in env — skipping")
+        return
+
+    secret = await Secret.aload(block_name)
+    raw = secret.get()
+    data = raw if isinstance(raw, dict) else json.loads(raw)
+    wtype = data["wtype"]
+    creds = data["creds"]
+
+    cast_ops = [op for op in ops if op.get("type") == "cast"]
+    if not cast_ops:
+        run_logger.info("no cast ops to run — skipping")
+        return
+
+    if wtype == "postgres":
+        import psycopg2  # available via dbt-postgres in pyproject.toml
+
+        conn = psycopg2.connect(
+            host=creds["host"],
+            port=creds.get("port", 5432),
+            dbname=creds["database"],
+            user=creds["user"],
+            password=creds["password"],
+        )
+        try:
+            conn.autocommit = True
+            with conn.cursor() as cur:
+                for op in cast_ops:
+                    target = f"{op['schema']}.{op['table']}"
+                    sql = _build_postgres_cast_sql(op["schema"], op["table"], op["column_casts"])
+                    run_logger.info(
+                        "postgres cast starting on %s (columns=%s)",
+                        target,
+                        list(op["column_casts"].keys()),
+                    )
+                    run_logger.info("postgres SQL:\n%s", sql)
+                    try:
+                        cur.execute(sql)
+                    except Exception as sql_err:  # pylint: disable=broad-exception-caught
+                        run_logger.error("postgres cast FAILED on %s: %s", target, sql_err)
+                        raise
+                    run_logger.info("postgres cast succeeded on %s", target)
+        finally:
+            conn.close()
+            run_logger.info("postgres connection closed")
+
+    elif wtype == "bigquery":
+        from google.oauth2.service_account import Credentials
+        from google.cloud import bigquery as bq
+
+        credentials = Credentials.from_service_account_info(creds)
+        project_id = creds["project_id"]
+        client = bq.Client(credentials=credentials, project=project_id)
+        try:
+            for op in cast_ops:
+                table_ref = f"{project_id}.{op['schema']}.{op['table']}"
+                run_logger.info(
+                    "bigquery cast starting on %s (columns=%s)",
+                    table_ref,
+                    list(op["column_casts"].keys()),
+                )
+                try:
+                    table_meta = client.get_table(table_ref)
+                    run_logger.info(
+                        "bigquery table metadata: partition=%s cluster=%s",
+                        getattr(table_meta, "time_partitioning", None),
+                        getattr(table_meta, "clustering_fields", None),
+                    )
+                    sql = _build_bigquery_cast_sql(
+                        project_id, op["schema"], op["table"], op["column_casts"], table_meta
+                    )
+                    run_logger.info("bigquery SQL:\n%s", sql)
+                    client.query(sql).result()
+                except Exception as sql_err:  # pylint: disable=broad-exception-caught
+                    run_logger.error("bigquery cast FAILED on %s: %s", table_ref, sql_err)
+                    raise
+                run_logger.info("bigquery cast succeeded on %s", table_ref)
+        finally:
+            client.close()
+            run_logger.info("bigquery client closed")
+
+    else:
+        run_logger.error("_run_post_sync_ops: unsupported wtype=%s — skipping ops", wtype)
+
+
 @flow(flow_run_name="airbyte-sync-trigger")
-def run_airbyte_connection_flow_v1(payload: dict):
+async def run_airbyte_connection_flow_v1(payload: dict):
     """run an airbyte sync"""
+    run_logger = get_run_logger()
+    connection_id = payload["connection_id"]
+
+    # Try loading the persisted AirbyteConnection block (contains post-sync ops in .extra).
+    # If it doesn't exist, fall back to inline construction — connections without cast
+    # config never have a block, and the flow should still work.
     try:
-        serverblock = AirbyteServer.load(payload["airbyte_server_block"])
+        connection_block = await AirbyteConnection.aload(connection_id)
+        run_logger.info("loaded AirbyteConnection block for connection %s", connection_id)
+    except ValueError:
+        run_logger.info(
+            "no AirbyteConnection block found for connection %s — building inline (no post-sync ops)",
+            connection_id,
+        )
+        serverblock = await AirbyteServer.aload(payload["airbyte_server_block"])
         connection_block = AirbyteConnection(
             airbyte_server=serverblock,
-            connection_id=payload["connection_id"],
+            connection_id=connection_id,
             timeout=payload["timeout"] or 15,
         )
-        # Rename the nested prefect_airbyte subflow so it doesn't show up as a
-        # random <adj>-<animal> in the graph.
-        result = run_connection_sync.with_options(flow_run_name="airbyte-sync")(connection_block)
-        logger.info("airbyte connection sync result=")
-        logger.info(result)
-        return result
+
+    try:
+        result = await run_connection_sync.with_options(flow_run_name="airbyte-sync")(
+            connection_block
+        )
+        run_logger.info("airbyte connection sync result=%s", result)
     except Exception as error:  # pylint: disable=broad-exception-caught
-        logger.error(str(error))
+        run_logger.error("airbyte connection sync failed: %s", str(error))
         raise
+
+    try:
+        extra = connection_block.extra or {}
+        await _run_post_sync_ops(
+            env=extra.get("env", {}),
+            ops=extra.get("post_sync_ops", []),
+        )
+    except Exception as err:  # pylint: disable=broad-exception-caught
+        run_logger.error("post-sync ops failed (sync already succeeded): %s", err)
+    return result
 
 
 @flow(flow_run_name="airbyte-clear-trigger")
@@ -212,10 +434,7 @@ def build_profile_dict(
     }
 
 
-@flow(
-    name="dbtjob_v2_runner",
-    flow_run_name="dbtjob-{task_slug}"
-)
+@flow(name="dbtjob_v2_runner", flow_run_name="dbtjob-{task_slug}")
 def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
     """Run dbt commands via ShellOperation. Reads the dbt-profile Secret block
     at flow-run start, writes a resolved profiles.yml to the worker's filesystem,
@@ -276,7 +495,9 @@ def dbtjob_v2_runner(task_config: dict, task_slug: str):  # pylint: disable=unus
     # then append --profiles-dir and --project-dir explicitly.
     for cmd in task_config["commands"]:
         argv = shlex.split(cmd)[1:]
-        full_cmd = shlex.join([dbt_bin, *argv, "--profiles-dir", str(profiles_dir), "--project-dir", project_dir])
+        full_cmd = shlex.join(
+            [dbt_bin, *argv, "--profiles-dir", str(profiles_dir), "--project-dir", project_dir]
+        )
         try:
             ShellOperation(
                 commands=[full_cmd],
@@ -551,23 +772,6 @@ def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-arg
 
 
 # =============================================================================
-# dbt cloud task
-# =============================================================================
-
-
-@task(name="dbtcloudjob_v1", task_run_name="dbtcloudjob-{task_slug}")
-async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
-    """trigger a dbt Cloud job run"""
-    try:
-        dbt_cloud_creds = await DbtCloudCredentials.aload(task_config["dbt_cloud_creds_block"])
-        result = await trigger_dbt_cloud_job_run(dbt_cloud_creds, task_config["dbt_cloud_job_id"])
-        return result
-    except Exception as error:  # pylint: disable=broad-exception-caught
-        logger.error(str(error))
-        raise
-
-
-# =============================================================================
 # dispatcher + deployment entrypoint
 # =============================================================================
 
@@ -579,21 +783,18 @@ def _is_airbyte_sync_task(task_config: dict) -> bool:
 
 def _run_task_runner(task_config: dict):
     """Copy of prefect_flows._run_task with DBTCORE and AIRBYTECONNECTION
-    branches dispatching to local runner-file versions; DBTCLOUD and
-    SHELLOPERATION still delegate to prefect_flows.
+    branches dispatching to local runner-file versions; SHELLOPERATION still
+    delegates to prefect_flows.
     """
     if task_config["type"] == DBTCORE:
         dbtjob_v2_runner(task_config, task_config["slug"])
-
-    elif task_config["type"] == DBTCLOUD:
-        asyncio.run(dbtcloudjob_v1(task_config, task_config["slug"]))
 
     elif task_config["type"] == SHELLOPERATION:
         shellopjob(task_config, task_config["slug"])
 
     elif task_config["type"] == AIRBYTECONNECTION:
         if task_config["slug"] == "airbyte-sync":
-            run_airbyte_connection_flow_v1(task_config)
+            asyncio.run(run_airbyte_connection_flow_v1(task_config))
 
         elif task_config["slug"] == "airbyte-clear":
             run_airbyte_conn_clear(task_config)

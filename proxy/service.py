@@ -17,15 +17,10 @@ from prefect.blocks.system import Secret
 from prefect.blocks.core import Block
 from prefect.client.orchestration import get_client
 from prefect.runner.storage import GitRepository
-from prefect_airbyte import AirbyteServer
+from prefect_airbyte import AirbyteServer, AirbyteConnection
 import pendulum
 
 from prefect_gcp import GcpCredentials
-from prefect_dbt.cli.configs import TargetConfigs
-from prefect_dbt.cli.configs import BigQueryTargetConfigs
-from prefect_dbt.cli.commands import DbtCoreOperation
-from prefect_dbt.cli import DbtCliProfile
-from prefect_dbt.cloud.credentials import DbtCloudCredentials
 from dotenv import load_dotenv
 
 
@@ -34,14 +29,11 @@ from proxy.exception import PrefectException
 from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteServerUpdate,
-    DbtCoreCreate,
+    AirbyteConnectionCreate,
     DeploymentCreate2,
     PrefectSecretBlockCreate,
     PrefectSecretBlockEdit,
-    DbtCliProfileBlockCreate,
-    DbtCliProfileBlockUpdate,
     DeploymentUpdate2,
-    DbtCloudCredsBlockPatch,
     CancelQueuedManualJob,
     FilterLateFlowRuns,
     FilterPrefectWorkers,
@@ -294,12 +286,32 @@ def delete_airbyte_server_block(blockid: str):
 # ================================================================================================
 
 
-def update_airbyte_connection_block(blockname: str):
-    """We don't update connection blocks"""
-    if not isinstance(blockname, str):
-        raise TypeError("blockname must be a string")
+async def upsert_airbyte_connection_block(payload: AirbyteConnectionCreate):
+    """Idempotent upsert of an airbyte connection block. Block name = connection_id."""
+    if not isinstance(payload, AirbyteConnectionCreate):
+        raise TypeError("payload must be an AirbyteConnectionCreate")
+    try:
+        server_block = await AirbyteServer.load(payload.serverBlockName)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException(
+            "no airbyte server block named " + payload.serverBlockName
+        ) from error
 
-    raise PrefectException("not implemented")
+    extra = {**payload.extra, "name": payload.connectionName}
+    connection_block = AirbyteConnection(
+        airbyte_server=server_block,
+        connection_id=payload.connectionId,
+        extra=extra,
+    )
+    try:
+        await connection_block.save(payload.connectionBlockName, overwrite=True)
+    except Exception as error:
+        logger.exception(error)
+        raise PrefectException("failed to upsert airbyte connection block") from error
+
+    logger.info("upserted airbyte connection block named %s", payload.connectionBlockName)
+    return _block_id(connection_block), payload.connectionBlockName
 
 
 def delete_airbyte_connection_block(blockid: str) -> dict:
@@ -321,197 +333,6 @@ def delete_shell_block(blockid: str) -> dict:
         raise TypeError("blockid must be a string")
     logger.info("deleting shell operation block %s", blockid)
     return prefect_delete(f"block_documents/{blockid}")
-
-
-# ================================================================================================
-async def get_dbt_cli_profile(cli_profile_block_name: str) -> dict:
-    """look up a dbt cli profile block by name and return block_id"""
-    if not isinstance(cli_profile_block_name, str):
-        raise TypeError("blockname must be a string")
-
-    try:
-        block = await DbtCliProfile.load(cli_profile_block_name)
-        return block.get_profile()
-    except ValueError:
-        # pylint: disable=raise-missing-from
-        raise HTTPException(
-            status_code=404,
-            detail=f"No dbt cli profile block named {cli_profile_block_name}",
-        )
-
-
-async def _create_dbt_cli_profile(
-    payload: DbtCliProfileBlockCreate,
-) -> DbtCliProfile:
-    """credentials are decrypted by now"""
-    if not isinstance(payload, DbtCliProfileBlockCreate):
-        raise TypeError("payload is of wrong type")
-    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
-    if payload.wtype == "postgres":
-        extras = payload.credentials
-        if "schema" in extras:
-            del extras["schema"]
-        extras["user"] = extras["username"]
-        target_configs = TargetConfigs(
-            type="postgres",
-            schema_=payload.profile.target_configs_schema,
-            extras=extras,
-            allow_field_overrides=True,
-            threads=payload.threads if payload.threads else 4,
-        )
-
-    elif payload.wtype == "bigquery":
-        dbcredentials = GcpCredentials(service_account_info=payload.credentials)
-        target_configs = BigQueryTargetConfigs(
-            credentials=dbcredentials,
-            schema_=payload.profile.target_configs_schema,
-            extras={"location": payload.bqlocation, "priority": payload.priority},
-            threads=payload.threads if payload.threads else 4,
-        )
-    else:
-        raise PrefectException("unknown wtype: " + payload.wtype)
-
-    try:
-        dbt_cli_profile = DbtCliProfile(
-            name=payload.profile.name,
-            target=payload.profile.target_configs_schema,
-            target_configs=target_configs,
-        )
-        cleaned_blockname = cleaned_name_for_prefectblock(payload.cli_profile_block_name)
-        await dbt_cli_profile.save(
-            cleaned_blockname,
-            overwrite=True,
-        )
-    except Exception as error:
-        logger.exception(error)
-        raise PrefectException("failed to create dbt cli profile") from error
-
-    return dbt_cli_profile, _block_id(dbt_cli_profile), cleaned_blockname
-
-
-async def update_dbt_cli_profile(payload: DbtCliProfileBlockUpdate):
-    """
-    Update the schema, warehouse credentials or profile in cli profile block
-    """
-    try:
-        dbtcli_block: DbtCliProfile = await DbtCliProfile.load(payload.cli_profile_block_name)
-    except Exception as error:
-        raise PrefectException(
-            "no dbt cli profile block named " + payload.cli_profile_block_name
-        ) from error
-
-    if not isinstance(payload, DbtCliProfileBlockUpdate):
-        raise TypeError("payload is of wrong type")
-
-    try:
-        # schema
-        if payload.profile and payload.profile.target_configs_schema:
-            dbtcli_block.target_configs.schema_ = payload.profile.target_configs_schema
-            dbtcli_block.target = (
-                payload.profile.target_configs_schema
-            )  # by default output(s) target in profiles.yml will be target_configs_schema
-
-        # target
-        if payload.profile and payload.profile.target:
-            dbtcli_block.target = payload.profile.target
-
-        # profile name present in profiles.yml; should be the same as dbt_project.yml
-        if payload.profile and payload.profile.name:
-            dbtcli_block.name = payload.profile.name
-
-        # threads
-        if payload.threads:
-            dbtcli_block.target_configs.threads = payload.threads
-
-        # update credentials
-        if payload.wtype is None:
-            raise TypeError("wtype is required")
-        if payload.wtype == "postgres":
-            if payload.credentials:
-                dbtcli_block.target_configs.extras = payload.credentials
-
-            dbtcli_block.target_configs.extras["user"] = dbtcli_block.target_configs.extras[
-                "username"
-            ]
-            if "schema" in dbtcli_block.target_configs.extras:
-                del dbtcli_block.target_configs.extras["schema"]
-
-        elif payload.wtype == "bigquery":
-            if payload.credentials:
-                dbcredentials = GcpCredentials(service_account_info=payload.credentials)
-                dbtcli_block.target_configs.credentials = dbcredentials
-
-            extras = {}
-            if payload.bqlocation:
-                extras["location"] = payload.bqlocation
-
-            if payload.priority:
-                extras["priority"] = payload.priority
-
-            if len(extras.keys()) > 0:
-                # merge
-                dbtcli_block.target_configs.extras = (
-                    dbtcli_block.target_configs.extras or {}
-                ) | extras
-        else:
-            raise PrefectException("unknown wtype: " + payload.wtype)
-
-        # block names are not editable in prefect
-        # using a different name while saving just creates a new block instead of editing the old one
-        await dbtcli_block.save(
-            overwrite=True,
-        )
-
-    except Exception as error:
-        logger.exception(error)
-        raise PrefectException("failed to update dbt cli profile") from error
-
-    return dbtcli_block, _block_id(dbtcli_block), payload.cli_profile_block_name
-
-
-async def create_dbt_core_block(payload: DbtCoreCreate):
-    """Create a dbt core block in prefect"""
-    if not isinstance(payload, DbtCoreCreate):
-        raise TypeError("payload must be a DbtCoreCreate")
-    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
-
-    cli_profile_block_payload = DbtCliProfileBlockCreate(
-        cli_profile_block_name=payload.cli_profile_block_name,
-        profile=payload.profile,
-        wtype=payload.wtype,
-        credentials=payload.credentials,
-        bqlocation=payload.bqlocation,
-        priority=payload.priority,
-    )
-
-    dbt_cli_profile, _, _ = await _create_dbt_cli_profile(cli_profile_block_payload)
-    dbt_core_operation = DbtCoreOperation(
-        commands=payload.commands,
-        env=payload.env,
-        working_dir=payload.working_dir,
-        profiles_dir=payload.profiles_dir,
-        project_dir=payload.project_dir,
-        dbt_cli_profile=dbt_cli_profile,
-    )
-    cleaned_blockname = cleaned_name_for_prefectblock(payload.dbt_core_block_name)
-    try:
-        await dbt_core_operation.save(cleaned_blockname, overwrite=True)
-    except Exception as error:
-        logger.exception(error)
-        raise PrefectException("failed to create dbt core op block") from error
-
-    logger.info("created dbt core operation block %s", payload.dbt_core_block_name)
-
-    return _block_id(dbt_core_operation), cleaned_blockname
-
-
-def delete_dbt_core_block(block_id: str) -> dict:
-    """Delete a dbt core block in prefect"""
-    if not isinstance(block_id, str):
-        raise TypeError("block_id must be a string")
-
-    logger.info("deleting dbt core operation block %s", block_id)
-    return prefect_delete(f"block_documents/{block_id}")
 
 
 async def get_secret_block_by_name(blockname: str):
@@ -568,108 +389,6 @@ async def upsert_secret_block(payload: PrefectSecretBlockEdit):
         raise PrefectException("Could not edit the secret block") from error
 
     return _block_id(secret_block), cleaned_blockname
-
-
-async def update_postgres_credentials(dbt_blockname, new_extras):
-    """updates the database credentials inside a dbt postgres block"""
-    try:
-        block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
-    except Exception as error:
-        raise PrefectException("no dbt core op block named " + dbt_blockname) from error
-
-    if block.dbt_cli_profile.target_configs.type != "postgres":
-        raise TypeError("wrong blocktype")
-
-    aliases = {
-        "dbname": "database",
-        "username": "user",
-    }
-
-    extras = block.dbt_cli_profile.target_configs.model_dump()["extras"]
-    cleaned_extras = {}
-    # copy existing extras over to cleaned_extras with the right keys
-    for key, value in extras.items():
-        cleaned_extras[aliases.get(key, key)] = value
-
-    # copy new extras over to cleaned_extras with the right keys
-    for key, value in new_extras.items():
-        cleaned_extras[aliases.get(key, key)] = value
-
-    block.dbt_cli_profile.target_configs = TargetConfigs(
-        type=block.dbt_cli_profile.target_configs.type,
-        schema_=block.dbt_cli_profile.target_configs.model_dump()["schema_"],
-        extras=cleaned_extras,
-    )
-
-    try:
-        await block.dbt_cli_profile.save(
-            name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
-            overwrite=True,
-        )
-        await block.save(cleaned_name_for_prefectblock(dbt_blockname), overwrite=True)
-    except Exception as error:
-        logger.exception(error)
-        raise PrefectException("failed to update dbt cli profile [postgres]") from error
-
-
-async def update_bigquery_credentials(dbt_blockname: str, credentials: dict):
-    """updates the database credentials inside a dbt bigquery block"""
-    try:
-        block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
-    except Exception as error:
-        raise PrefectException("no dbt core op block named " + dbt_blockname) from error
-
-    if block.dbt_cli_profile.target_configs.type != "bigquery":
-        raise TypeError("wrong blocktype")
-
-    dbcredentials = GcpCredentials(service_account_info=credentials)
-
-    block.dbt_cli_profile.target_configs = BigQueryTargetConfigs(
-        credentials=dbcredentials,
-        schema_=block.dbt_cli_profile.target_configs.model_dump()["schema_"],
-        extras=block.dbt_cli_profile.target_configs.model_dump()["extras"],
-    )
-
-    try:
-        await block.dbt_cli_profile.save(
-            name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
-            overwrite=True,
-        )
-        await block.save(cleaned_name_for_prefectblock(dbt_blockname), overwrite=True)
-    except Exception as error:
-        logger.exception(error)
-        raise PrefectException("failed to update dbt cli profile [bigquery]") from error
-
-
-async def update_target_configs_schema(dbt_blockname: str, target_configs_schema: str):
-    """updates the target inside a dbt bigquery block"""
-    try:
-        block: DbtCoreOperation = await DbtCoreOperation.load(dbt_blockname)
-    except Exception as error:
-        raise PrefectException("no dbt core op block named " + dbt_blockname) from error
-
-    block.dbt_cli_profile.target_configs.schema_ = target_configs_schema
-    block.dbt_cli_profile.target = target_configs_schema
-
-    # update the dbt command "dbt <command> --target <target>"
-    if len(block.commands) > 0:
-        option_index = block.commands[0].find("--target")
-        if option_index > -1:
-            prefix = block.commands[0][: option_index + len("--target ")]
-            new_command = prefix + target_configs_schema
-            block.commands[0] = new_command
-
-    try:
-        await block.dbt_cli_profile.save(
-            name=cleaned_name_for_prefectblock(block.dbt_cli_profile.name),
-            overwrite=True,
-        )
-        await block.save(cleaned_name_for_prefectblock(dbt_blockname), overwrite=True)
-    except Exception as error:
-        logger.exception(error)
-        raise PrefectException(
-            "failed to update dbt cli profile target_configs schema for " + dbt_blockname
-        ) from error
 
 
 # ================================================================================================
@@ -1316,61 +1035,6 @@ def get_long_running_flow_runs(nhours: int, start_time_str: str):
 def get_current_prefect_version() -> str:
     """Fetch deployment and its details"""
     return prefect_get(f"admin/version")
-
-
-# ================================================================================================
-async def patch_dbt_cloud_creds_block(
-    payload: DbtCloudCredsBlockPatch,
-) -> dict:
-    """credentials are decrypted by now"""
-    if not isinstance(payload, DbtCloudCredsBlockPatch):
-        raise TypeError("payload is of wrong type")
-
-    dbt_cloud_creds_block = None
-    try:
-        # load the block if its created
-        dbt_cloud_creds_block = await DbtCloudCredentials.load(payload.block_name)
-    except Exception:
-        logger.info("no dbt cloud creds block named %s creating a new one", payload.block_name)
-
-    try:
-        if dbt_cloud_creds_block is None:
-            dbt_cloud_creds_block = DbtCloudCredentials(
-                api_key=payload.api_key,
-                account_id=payload.account_id,
-            )
-        else:
-            if payload.api_key:
-                dbt_cloud_creds_block.api_key = payload.api_key
-            if payload.account_id:
-                dbt_cloud_creds_block.account_id = payload.account_id
-
-        cleaned_blockname = cleaned_name_for_prefectblock(payload.block_name)
-        await dbt_cloud_creds_block.save(
-            cleaned_blockname,
-            overwrite=True,
-        )
-
-        return dbt_cloud_creds_block, _block_id(dbt_cloud_creds_block), cleaned_blockname
-    except Exception as error:
-        logger.exception(error)
-        raise PrefectException("failed to create dbt cli profile") from error
-
-
-async def get_dbt_cloud_creds_block(block_name: str) -> dict:
-    """look up a dbt cloud creds block by name and return the configuration"""
-    if not isinstance(block_name, str):
-        raise TypeError("blockname must be a string")
-
-    try:
-        block = await DbtCloudCredentials.load(block_name)
-        return block
-    except ValueError:
-        # pylint: disable=raise-missing-from
-        raise HTTPException(
-            status_code=404,
-            detail=f"No dbt cloud credentials block found named {block_name}",
-        )
 
 
 def set_cancel_queued_flow_run(flow_run_id: str, payload: CancelQueuedManualJob):

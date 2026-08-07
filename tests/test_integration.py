@@ -7,17 +7,13 @@ from proxy.schemas import (
     AirbyteConnectionCreate,
     AirbyteServerBlockResponse,
     AirbyteServerCreate,
-    DbtCoreBlockResponse,
-    DbtCoreCreate,
     FlowRunsResponse,
     PostDeploymentResponse,
 )
 from proxy.service import (
     create_airbyte_server_block,
-    create_dbt_core_block,
     delete_airbyte_connection_block,
     delete_airbyte_server_block,
-    delete_dbt_core_block,
     get_airbyte_server_block_id,
     get_flow_runs_by_deployment_id,
 )
@@ -64,51 +60,6 @@ class TestAirbyteConnection:
         try:
             delete_airbyte_server_block(blockid=TestAirbyteServer.block_id)
             delete_airbyte_connection_block(blockid=TestAirbyteConnection.block_id)
-        except ValidationError as e:
-            raise ValueError(f"Response validation failed: {e.errors()}")
-
-
-@pytest.mark.skip(reason="Integration test")
-class TestDbtConnection:
-    @pytest.mark.asyncio
-    async def test_create_dbt_core_block(self):
-        payload = {
-            "blockName": "test",
-            "profile": {
-                "name": "shri_dbt",
-                "target": "dev",
-                "target_configs_schema": "dev",
-            },
-            "wtype": "postgres",
-            "credentials": {
-                "host": os.getenv("DB_HOST"),
-                "port": 5432,
-                "database": os.getenv("DB_NAME"),
-                "username": os.getenv("DB_USER"),
-                "ssl": False,
-                "password": os.getenv("DB_PASSWORD"),
-            },
-            "commands": ["dbt list"],
-            "working_dir": "/tmp",
-            "env": {"key": "value"},
-            "profiles_dir": "/dir",
-            "project_dir": "/dir",
-        }
-        try:
-            validated_payload = DbtCoreCreate(**payload)
-        except ValidationError as e:
-            raise ValueError(f"Payload validation failed: {e.errors()}")
-
-        try:
-            res = await create_dbt_core_block(validated_payload)
-            DbtCoreBlockResponse(block_id=res)
-            TestDbtConnection.block_id = res
-        except ValidationError as e:
-            raise ValueError(f"Response validation failed: {e.errors()}")
-
-    def test_delete_dbt_core_block(self):
-        try:
-            delete_dbt_core_block(block_id=TestDbtConnection.block_id)
         except ValidationError as e:
             raise ValueError(f"Response validation failed: {e.errors()}")
 
