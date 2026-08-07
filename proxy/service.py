@@ -409,7 +409,7 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     try:
         source = GitRepository(
             url="https://github.com/DalgoT4D/prefect-proxy.git",
-            branch="feature/ingest-cast",
+            branch="main",
         )
         deployment_id = flow.from_source(
             source=source,
