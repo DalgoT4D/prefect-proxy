@@ -55,6 +55,7 @@ logger = CustomLogger("prefect-proxy")
 PREFECT_API_TIMEOUT = int(os.getenv("PREFECT_API_TIMEOUT", "30"))
 PREFECT_API_RETRY = os.getenv("PREFECT_API_RETRY", "false").lower() in ["true", "1", "yes", "y"]
 PREFECT_API_RETRY_DELAY = float(os.getenv("PREFECT_API_RETRY_DELAY", "3.0"))
+PREFECT_PROXY_GIT_BRANCH = os.getenv("PREFECT_PROXY_GIT_BRANCH", "main")
 
 
 def prefect_post(endpoint: str, payload: dict) -> dict:
@@ -409,7 +410,7 @@ def post_deployment_v1(payload: DeploymentCreate2) -> dict:
     try:
         source = GitRepository(
             url="https://github.com/DalgoT4D/prefect-proxy.git",
-            branch="main",
+            branch=PREFECT_PROXY_GIT_BRANCH,
         )
         deployment_id = flow.from_source(
             source=source,
