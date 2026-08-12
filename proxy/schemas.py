@@ -35,11 +35,13 @@ class AirbyteServerBlockResponse(BaseModel):
 
 
 class AirbyteConnectionCreate(BaseModel):
-    """payload to create an airbyte connection block"""
+    """payload to upsert an airbyte connection block"""
 
     serverBlockName: str
     connectionId: str
     connectionBlockName: str
+    connectionName: str = ""
+    extra: dict = {}
 
 
 class AirbyteConnectionBlockResponse(BaseModel):
@@ -55,94 +57,6 @@ class PrefectShellSetup(BaseModel):
     commands: list
     workingDir: str
     env: dict
-
-
-class DbtProfileCreate(BaseModel):
-    """this is part of the dbt block creation payload"""
-
-    name: str
-    target_configs_schema: str  # schema that dbt will write against in the warehouse
-
-
-class DbtCoreCreate(BaseModel):
-    """payload to create a dbt core command block"""
-
-    dbt_core_block_name: str
-
-    cli_profile_block_name: str
-    profile: DbtProfileCreate
-    wtype: str
-    credentials: dict
-    bqlocation: Optional[str] = None
-    priority: Optional[str] = None
-
-    commands: list
-    env: dict
-    working_dir: str
-    profiles_dir: str
-    project_dir: str
-
-
-class DbtCliProfileBlockCreate(BaseModel):
-    """payload to create a dbt cli profile block"""
-
-    cli_profile_block_name: str
-    profile: DbtProfileCreate
-    wtype: str
-    credentials: dict
-    threads: Optional[int] = None
-    bqlocation: Optional[str] = None
-    priority: Optional[str] = None
-
-    model_config = ConfigDict(extra="allow")
-
-
-class DbtProfileUpdate(BaseModel):
-    """schema to update dbt profile"""
-
-    name: Optional[
-        str
-    ] = None  # profile name in profiles.yml that should be the same as in dbt_project.yml
-    target_configs_schema: Optional[
-        str
-    ] = None  # schema that dbt will write against in the warehouse
-    target: Optional[
-        str
-    ] = None  # one of the outputs defined in profiles.yml ; by default we keep this the same as target_configs_schema
-
-
-class DbtCliProfileBlockUpdate(BaseModel):
-    """update a dbt cli profile block's warehouse credentials, schema and target"""
-
-    cli_profile_block_name: str
-    threads: Optional[int] = None
-    wtype: Optional[str] = None
-    profile: Optional[DbtProfileUpdate] = None
-    credentials: Optional[dict] = None
-    bqlocation: Optional[str] = None
-    priority: Optional[str] = None
-
-    model_config = ConfigDict(extra="allow")
-
-
-class DbtCoreCredentialUpdate(BaseModel):
-    """payload to update a dbt core command block's credentials"""
-
-    blockName: str
-    credentials: dict
-
-
-class DbtCoreSchemaUpdate(BaseModel):
-    """payload to update a dbt core command block's schema and target"""
-
-    blockName: str
-    target_configs_schema: str
-
-
-class DbtCoreBlockResponse(BaseModel):
-    """response from the dbt block"""
-
-    block_id: str
 
 
 class DeploymentSchema(BaseModel):
@@ -286,14 +200,6 @@ class ScheduleFlowRunRequest(BaseModel):
 
     runParams: dict
     scheduledTime: Optional[datetime] = None  # by default it will be scheduled to run now
-
-
-class DbtCloudCredsBlockPatch(BaseModel):
-    """payload to create a dbt cloud credentials block"""
-
-    block_name: str
-    account_id: Optional[int] = None
-    api_key: Optional[str] = None
 
 
 class CancelQueuedManualJob(BaseModel):

@@ -2996,8 +2996,8 @@ wheels = [
 
 [[package]]
 name = "prefect-airbyte"
-version = "0.90"
-source = { git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=v0.90#40dc2fb78ded91294c344b82caa6ffadd4a09f3a" }
+version = "0.91"
+source = { git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=v0.91#6e50d4d5a2a6b4d92f7bea7d7406e05def25cb8d" }
 dependencies = [
     { name = "prefect" },
     { name = "tenacity" },
@@ -3095,7 +3095,7 @@ requires-dist = [
     { name = "gunicorn" },
     { name = "pendulum" },
     { name = "prefect", specifier = "==3.6.29" },
-    { name = "prefect-airbyte", git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=v0.90" },
+    { name = "prefect-airbyte", git = "https://github.com/Ishankoradia/prefect-airbyte.git?rev=v0.91" },
     { name = "prefect-dbt", specifier = "==0.7.24" },
     { name = "prefect-gcp", specifier = "==0.6.17" },
     { name = "prefect-github", specifier = "==0.4.2" },

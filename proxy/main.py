@@ -14,12 +14,8 @@ from proxy.service import (
     get_airbyte_server_block,
     get_airbyte_server_block_id,
     create_airbyte_server_block,
-    create_dbt_core_block,
     put_deployment_v1,
     update_deployment_entrypoint,
-    update_postgres_credentials,
-    update_bigquery_credentials,
-    update_target_configs_schema,
     post_deployment_v1,
     get_flow_runs_by_deployment_id,
     get_deployments_by_filter,
@@ -37,15 +33,11 @@ from proxy.service import (
     get_secret_block_by_name,
     get_secret_block_contents,
     upsert_secret_block,
-    _create_dbt_cli_profile,
-    update_dbt_cli_profile,
-    get_dbt_cli_profile,
     delete_flow_run,
     get_long_running_flow_runs,
     get_current_prefect_version,
-    patch_dbt_cloud_creds_block,
-    get_dbt_cloud_creds_block,
     update_airbyte_server_block,
+    upsert_airbyte_connection_block,
     set_cancel_queued_flow_run,
     filter_late_flow_runs,
     filter_prefect_workers,
@@ -53,9 +45,7 @@ from proxy.service import (
 from proxy.schemas import (
     AirbyteServerCreate,
     AirbyteServerUpdate,
-    DbtCoreCreate,
-    DbtCoreCredentialUpdate,
-    DbtCoreSchemaUpdate,
+    AirbyteConnectionCreate,
     RunDbtCoreOperation,
     RunShellOperation,
     DeploymentCreate2,
@@ -64,10 +54,7 @@ from proxy.schemas import (
     RetryFlowRunRequest,
     PrefectSecretBlockCreate,
     PrefectSecretBlockEdit,
-    DbtCliProfileBlockCreate,
-    DbtCloudCredsBlockPatch,
     DeploymentUpdate2,
-    DbtCliProfileBlockUpdate,
     ScheduleFlowRunRequest,
     CancelQueuedManualJob,
     FilterLateFlowRuns,
@@ -228,139 +215,20 @@ async def put_airbyte_server(payload: AirbyteServerUpdate):
     return {"block_id": block_id, "cleaned_block_name": cleaned_block_name}
 
 
-# =============================================================================
-@app.post("/proxy/blocks/dbtcore/")
-async def post_dbtcore(payload: DbtCoreCreate):
-    """
-    create a new dbt_core block with this block name,
-    raise an exception if the name is already in use
-    """
-    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
-    if not isinstance(payload, DbtCoreCreate):
+@app.put("/proxy/blocks/airbyte/connection/")
+async def put_airbyte_connection(payload: AirbyteConnectionCreate):
+    """Upsert an airbyte connection block (create or overwrite)."""
+    if not isinstance(payload, AirbyteConnectionCreate):
         raise TypeError("payload is invalid")
     try:
-        block_id, cleaned_blockname = await create_dbt_core_block(payload)
-    except Exception as error:
-        logger.exception(error)
-        raise HTTPException(status_code=400, detail="failed to create dbt core block") from error
-    logger.info(
-        "Created new dbt_core block with ID: %s and name: %s",
-        block_id,
-        cleaned_blockname,
-    )
-    return {"block_id": block_id, "block_name": cleaned_blockname}
-
-
-@app.post("/proxy/blocks/dbtcli/profile/")
-async def post_dbtcli_profile(payload: DbtCliProfileBlockCreate):
-    """
-    create a new dbt_core block with this block name,
-    raise an exception if the name is already in use
-    """
-    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
-    if not isinstance(payload, DbtCliProfileBlockCreate):
-        raise TypeError("payload is invalid")
-    try:
-        _, block_id, cleaned_blockname = await _create_dbt_cli_profile(payload)
+        block_id, cleaned_block_name = await upsert_airbyte_connection_block(payload)
     except Exception as error:
         logger.exception(error)
         raise HTTPException(
-            status_code=400, detail="failed to create dbt cli profile block"
+            status_code=400, detail="failed to upsert airbyte connection block"
         ) from error
-    logger.info(
-        "Created new dbt cli profile block with ID: %s and name: %s",
-        block_id,
-        cleaned_blockname,
-    )
-    return {"block_id": block_id, "block_name": cleaned_blockname}
-
-
-@app.put("/proxy/blocks/dbtcli/profile/")
-async def put_dbtcli_profile(payload: DbtCliProfileBlockUpdate):
-    """Updates the dbt cli block based on the type of warehouse"""
-    if not isinstance(payload, DbtCliProfileBlockUpdate):
-        raise TypeError("payload is invalid")
-    try:
-        _, block_id, cleaned_blockname = await update_dbt_cli_profile(payload)
-    except Exception as error:
-        logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to update dbt cli profile block"
-        ) from error
-    logger.info(
-        "Updated the dbt cli profile block with ID: %s and name: %s",
-        block_id,
-        cleaned_blockname,
-    )
-    return {"block_id": block_id, "block_name": cleaned_blockname}
-
-
-@app.get("/proxy/blocks/dbtcli/profile/{cli_profile_block_name}")
-async def get_dbtcli_profile(cli_profile_block_name: str):
-    """Fetches the dbt cli block"""
-    if not isinstance(cli_profile_block_name, str):
-        raise TypeError("cli_profile_block_name is invalid")
-    try:
-        profile = await get_dbt_cli_profile(cli_profile_block_name)
-    except Exception as error:
-        logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to fetch dbt cli profile block"
-        ) from error
-    return {"profile": profile}
-
-
-@app.put("/proxy/blocks/dbtcore_edit/postgres/")
-async def put_dbtcore_postgres(payload: DbtCoreCredentialUpdate):
-    """update the credentials inside an existing dbt core op block"""
-    if not isinstance(payload, DbtCoreCredentialUpdate):
-        raise TypeError("payload is invalid")
-    try:
-        await update_postgres_credentials(payload.blockName, payload.credentials)
-    except Exception as error:
-        logger.exception(error)
-        raise HTTPException(
-            status_code=400,
-            detail="failed to update dbt core block credentials [postgres]",
-        ) from error
-
-    logger.info("updated credentials in dbtcore block %s [postgres]", payload.blockName)
-    return {"success": 1}
-
-
-@app.put("/proxy/blocks/dbtcore_edit/bigquery/")
-async def put_dbtcore_bigquery(payload: DbtCoreCredentialUpdate):
-    """update the credentials inside an existing dbt core op block"""
-    if not isinstance(payload, DbtCoreCredentialUpdate):
-        raise TypeError("payload is invalid")
-    try:
-        await update_bigquery_credentials(payload.blockName, payload.credentials)
-    except Exception as error:
-        raise HTTPException(
-            status_code=400,
-            detail="failed to update dbt core block credentials [bigquery]",
-        ) from error
-
-    logger.info("updated credentials in dbtcore block %s [bigquery]", payload.blockName)
-    return {"success": 1}
-
-
-@app.put("/proxy/blocks/dbtcore_edit_schema/")
-async def put_dbtcore_schema(payload: DbtCoreSchemaUpdate):
-    """update the target inside an existing dbt core op block"""
-    if not isinstance(payload, DbtCoreSchemaUpdate):
-        raise TypeError("payload is invalid")
-    try:
-        await update_target_configs_schema(payload.blockName, payload.target_configs_schema)
-    except Exception as error:
-        logger.exception(error)
-        raise HTTPException(
-            status_code=400,
-            detail="failed to update dbt core block target_configs_schema",
-        ) from error
-
-    logger.info("updated target_configs_schema in dbtcore block %s", payload.blockName)
-    return {"success": 1}
+    logger.info("Upserted airbyte connection block with ID: %s", block_id)
+    return {"block_id": block_id, "cleaned_block_name": cleaned_block_name}
 
 
 # =============================================================================
@@ -375,7 +243,9 @@ async def get_secret_block_contents_route(blockname: str):
         raise HTTPException(status_code=404, detail=str(error)) from error
     except Exception as error:
         logger.exception(error)
-        raise HTTPException(status_code=400, detail="failed to fetch secret block contents") from error
+        raise HTTPException(
+            status_code=400, detail="failed to fetch secret block contents"
+        ) from error
     return result
 
 
@@ -851,46 +721,6 @@ def get_long_running_flows(nhours: int, start_time_str: str = ""):
     """Get long-running Flow Runs. the start_time, if provided, must be in ISO-8601 format"""
     flow_runs = get_long_running_flow_runs(nhours, start_time_str)
     return {"flow_runs": flow_runs}
-
-
-# =============================================================================
-@app.patch("/proxy/blocks/dbtcloudcreds/")
-async def patch_dbt_cloud_creds(payload: DbtCloudCredsBlockPatch):
-    """
-    create a new DbtCloudCredentials with this block name,
-    if the name already exists overwrite the new details with this name
-    """
-    # logger.info(payload) DO NOT LOG - CONTAINS SECRETS
-    if not isinstance(payload, DbtCloudCredsBlockPatch):
-        raise TypeError("payload is invalid")
-    try:
-        _, block_id, cleaned_blockname = await patch_dbt_cloud_creds_block(payload)
-    except Exception as error:
-        logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to save dbt cloud credentials block"
-        ) from error
-    logger.info(
-        "Saved new dbt cloud credentials block with ID: %s and name: %s",
-        block_id,
-        cleaned_blockname,
-    )
-    return {"block_id": block_id, "block_name": cleaned_blockname}
-
-
-@app.get("/proxy/blocks/dbtcloudcreds/{block_name}")
-async def get_dbt_cloud_creds(block_name: str):
-    """Fetches the dbt cloud creds block"""
-    if not isinstance(block_name, str):
-        raise TypeError("block name is invalid")
-    try:
-        data = await get_dbt_cloud_creds_block(block_name)
-    except Exception as error:
-        logger.exception(error)
-        raise HTTPException(
-            status_code=400, detail="failed to fetch dbt cloud creds block"
-        ) from error
-    return data
 
 
 @app.post("/proxy/flow_runs/{flow_run_id}/set_state")
