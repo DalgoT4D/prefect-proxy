@@ -1,0 +1,458 @@
+"""
+Reusable flows
+https://docs.prefect.io/2.11.3/concepts/flows/#final-state-determination
+everything under here is incremented by a version compared to flows.py
+"""
+
+import json
+import os
+from time import sleep
+import asyncio
+from datetime import datetime, timedelta
+from prefect import flow, task
+from prefect.blocks.system import Secret
+from prefect.client.schemas.objects import TaskRun
+from prefect.states import State, StateType
+from prefect.tasks import Task
+from prefect_airbyte.flows import (
+    run_connection_sync,
+    reset_connection_streams,
+    update_connection_schema,
+    clear_connection,
+    clear_connection_streams,
+)
+from prefect_airbyte import AirbyteConnection, AirbyteServer
+from prefect_airbyte.connections import ResetStream
+from prefect_dbt.cli.commands import DbtCoreOperation, ShellOperation
+from prefect_dbt.cli import DbtCliProfile
+from prefect_dbt.cloud import DbtCloudCredentials
+from prefect_dbt.cloud.jobs import trigger_dbt_cloud_job_run
+from proxy.helpers import CustomLogger
+
+logger = CustomLogger("prefect-proxy")
+
+
+# django prefect block names
+AIRBYTESERVER = "Airbyte Server"
+AIRBYTECONNECTION = "Airbyte Connection"
+SHELLOPERATION = "Shell Operation"
+DBTCORE = "dbt Core Operation"
+DBTCLOUD = "dbt Cloud Job"
+
+
+# =============================================================================
+# task config for a airbyte sync operation
+# {
+#     type AIRBYTECONNECTION,
+#     slug: str
+#     airbyte_server_block:  str
+#     connection_id: str
+#     timeout: int
+# }
+@flow(retries=1, retry_delay_seconds=120)
+def run_airbyte_connection_flow_v1(payload: dict):
+    """run an airbyte sync"""
+    try:
+        airbyte_server_block = payload["airbyte_server_block"]
+        serverblock = AirbyteServer.load(airbyte_server_block)
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=payload["connection_id"],
+            timeout=payload["timeout"] or 15,
+        )
+        result = run_connection_sync(connection_block)
+        logger.info("airbyte connection sync result=")
+        logger.info(result)
+        return result
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job <num> failed."
+        raise
+
+
+# task config for a airbyte reset operation
+# {
+#     type AIRBYTECONNECTION,
+#     slug: "airbyte-clear"
+#     airbyte_server_block:  str
+#     connection_id: str
+#     timeout: int
+# }
+@flow
+def run_airbyte_conn_clear(payload: dict):
+    """reset an airbyte connection"""
+    try:
+        airbyte_server_block = payload["airbyte_server_block"]
+        serverblock = AirbyteServer.load(airbyte_server_block)
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=payload["connection_id"],
+            timeout=payload["timeout"] or 15,
+        )
+        result = None
+        if "streams" in payload and payload["streams"]:
+            result = clear_connection_streams(connection_block, payload["streams"])
+        else:
+            result = clear_connection(connection_block)
+
+        logger.info("airbyte connection clear result=")
+        logger.info(result)
+        return result
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job <num> failed."
+        raise
+
+
+@flow
+def run_dbtcore_flow_v1(payload: dict):
+    # pylint: disable=broad-exception-caught
+    """Prefect flow to run dbt"""
+    return dbtjob_v1(payload, payload["slug"])
+
+
+@flow
+def run_shell_operation_flow(payload: dict):
+    # pylint: disable=broad-exception-caught
+    """Prefect flow to run shell operation"""
+    return shellopjob(payload, payload["slug"])
+
+
+@flow
+async def run_refresh_schema_flow(payload: dict, catalog_diff: dict):
+    # pylint: disable=broad-exception-caught
+    # """Prefect flow to run refresh schema"""
+    try:
+        airbyte_server_block = payload["airbyte_server_block"]
+        serverblock = await AirbyteServer.aload(airbyte_server_block)
+        connection_block = AirbyteConnection(
+            airbyte_server=serverblock,
+            connection_id=payload["connection_id"],
+            timeout=max(payload.get("timeout", 0), 100),
+        )
+        await update_connection_schema(connection_block, catalog_diff=catalog_diff)
+        return True
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job <num> failed."
+        raise
+
+
+# =============================================================================
+# tasks
+# task config for a dbt core operation
+# {
+# type: DBTCORE,
+#     slug: str
+#     profiles_dir: str
+#     project_dir: str
+#     working_dir: str
+#     env: dict
+#     commands: list
+#     cli_profile_block: str
+#     cli_args: list = []
+#     dbt_cloud_creds_block: str | None ### cloud related
+#     dbt_cloud_job_id: str | None ### cloud related
+#     flow_name: str
+#     flow_run_name: str
+# }
+# Only retry dbt failures that occur early in the run — late failures are
+# almost always real SQL/model errors that won't be fixed by retrying, and
+# retrying a multi-hour run wastes warehouse time.
+DBT_RETRY_IF_FAILED_WITHIN = timedelta(minutes=5)
+
+
+def _retry_if_short_runtime(
+    task: Task, task_run: TaskRun, state: State
+) -> bool:  # pylint: disable=unused-argument
+    start = task_run.start_time
+    end = state.timestamp
+    if start is None or end is None:
+        logger.info("retry-check %s: missing start/end timestamp, not retrying", task_run.name)
+        return False
+    runtime = end - start
+    should_retry = runtime < DBT_RETRY_IF_FAILED_WITHIN
+    logger.info(
+        "retry-check %s: ran for %.1fs (limit %.1fs) -> %s",
+        task_run.name,
+        runtime.total_seconds(),
+        DBT_RETRY_IF_FAILED_WITHIN.total_seconds(),
+        "retrying" if should_retry else "not retrying",
+    )
+    return should_retry
+
+
+@task(
+    name="dbtjob_v1",
+    task_run_name="dbtjob-{task_slug}",
+    retries=1,
+    retry_delay_seconds=60,
+    retry_condition_fn=_retry_if_short_runtime,
+)
+def dbtjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
+    # pylint: disable=broad-exception-caught
+    """
+    each dbt op will run as a task within the parent flow
+    errors are propagated to the flow except those from "dbt test"
+    """
+
+    # load the cli block first
+    cli_profile_block = DbtCliProfile.load(task_config["cli_profile_block"])
+
+    # if the block has an SSL cert stored in extras, write it to disk before running dbt
+    extras = getattr(cli_profile_block.target_configs, "extras", None)
+    if extras and extras.get("sslrootcert_content"):
+        cert_content = extras.pop("sslrootcert_content")
+        cert_path = extras.get("sslrootcert")
+        if not cert_path:
+            cert_path = os.path.join(task_config["project_dir"], "..", "sslrootcert.pem")
+            extras["sslrootcert"] = cert_path
+        os.makedirs(os.path.dirname(cert_path), exist_ok=True)
+        with open(cert_path, "w", encoding="utf-8") as f:
+            f.write(cert_content)
+        logger.info("SSL cert written to %s", cert_path)
+
+    dbt_op: DbtCoreOperation = DbtCoreOperation(
+        commands=task_config["commands"],
+        env=task_config["env"],
+        working_dir=task_config["working_dir"],
+        profiles_dir=task_config["profiles_dir"],
+        project_dir=task_config["project_dir"],
+        dbt_cli_profile=cli_profile_block,
+    )
+    if os.path.exists(dbt_op.profiles_dir / "profiles.yml"):
+        os.unlink(dbt_op.profiles_dir / "profiles.yml")
+
+    try:
+        return dbt_op.run()
+    except Exception:  # skipcq PYL-W0703
+        if task_config["slug"] == "dbt-test":
+            return State(
+                type=StateType.COMPLETED,
+                name="DBT_TEST_FAILED",
+                message="WARNING: dbt test failed",
+            )
+
+        raise
+
+
+# =============================================================================
+# tasks
+# task config for a dbt cloud operation
+# {
+# type: DBTCORE,
+#     slug: str
+#     profiles_dir: str | None
+#     project_dir: str | None
+#     working_dir: str | None
+#     env: dict | None
+#     commands: list | None
+#     cli_profile_block: str | None
+#     cli_args: list = []
+#     dbt_cloud_creds_block: str | None ### cloud related
+#     dbt_cloud_job_id: str | None ### cloud related
+#     flow_name: str
+#     flow_run_name: str
+# }
+@task(name="dbtcloudjob_v1", task_run_name="dbtcloudjob-{task_slug}")
+async def dbtcloudjob_v1(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
+    """Create a dbt Cloud Credentials block and a dbt Cloud Job block"""
+    try:
+        # load the cloud credentials
+        dbt_cloud_creds = await DbtCloudCredentials.aload(task_config["dbt_cloud_creds_block"])
+
+        result = await trigger_dbt_cloud_job_run(dbt_cloud_creds, task_config["dbt_cloud_job_id"])
+
+        return result
+    except Exception as error:  # skipcq PYL-W0703
+        logger.error(str(error))  # "Job <num> failed."
+        raise
+
+
+# =============================================================================
+# task config for a shell operation
+# {
+# type: SHELLOPERATION,
+#     slug: str,
+#     commands: [],
+#     env: {},
+#     workingDir: ""
+# }
+@task(name="shellopjob", task_run_name="shellop-{task_slug}")
+def shellopjob(task_config: dict, task_slug: str):  # pylint: disable=unused-argument
+    # pylint: disable=broad-exception-caught
+    """loads and runs the shell operation"""
+
+    if task_config["slug"] == "git-pull":  # DDP_backend:constants.TASK_GITPULL
+        secret_block_name = task_config["env"].get("secret-git-pull-url-block", "")
+        git_repo_endpoint = ""
+        if secret_block_name and len(secret_block_name) > 0:
+            secret_blk = Secret.load(secret_block_name)
+            git_repo_endpoint = secret_blk.get()
+
+        commands = task_config["commands"]
+        updated_cmds = [f"{cmd} {git_repo_endpoint}" for cmd in commands]
+        task_config["commands"] = updated_cmds
+
+    elif task_config["slug"] == "git-clone":  # DDP_backend:constants.TASK_GITCLONE
+        # working directory should be the org directory for this task
+        secret_block_name = task_config["env"].get("secret-git-pull-url-block", "")
+
+        # clone in the project_directory if provided, else in the working directory
+        project_dir = task_config["env"].get("project_dir", "")
+
+        git_repo_endpoint = task_config["env"].get("gitrepo_url", "")
+        if secret_block_name and len(secret_block_name) > 0:
+            secret_blk = Secret.load(secret_block_name)
+            git_repo_endpoint = secret_blk.get()
+
+        if not git_repo_endpoint:
+            raise ValueError(
+                "Git repository endpoint is not provided in the environment variables or secret block."
+            )
+
+        commands = task_config["commands"]
+        updated_cmds = [f"{cmd} {git_repo_endpoint} {project_dir}" for cmd in commands]
+        task_config["commands"] = updated_cmds
+
+    elif task_config["slug"] == "generate-edr":  # DDP_backend:constants.TASK_GENERATE_EDR
+        # commands = ["edr send-report --bucket-file-path reports/{orgname}.TODAYS_DATE.html --profiles-dir elementary_profiles"]
+        # env = {"PATH": /path/to/dbt/venv, "shell": "/bin/bash"}
+        # Single consolidated Secret block replaces the old trio
+        # (edr-aws-access-key / edr-aws-access-secret / edr-s3-bucket).
+        # Backend scaffolds it via `manage.py sync_edr_secret_block`.
+        raw = Secret.load("edr-s3-creds").get()
+        edr_config = raw if isinstance(raw, dict) else json.loads(raw)
+        aws_access_key = edr_config["aws_access_key_id"]
+        aws_access_secret = edr_config["aws_secret_access_key"]
+        edr_s3_bucket = edr_config["s3_bucket"]
+        # object key for the report
+        todays_date = datetime.today().strftime("%Y-%m-%d")
+        task_config["commands"][0] = task_config["commands"][0].replace("TODAYS_DATE", todays_date)
+        # prepend the binary for edr cli
+        task_config["commands"][0] = task_config["env"]["PATH"] + "/" + task_config["commands"][0]
+        # append the aws credentials and bucket name to the command
+        task_config["commands"][
+            0
+        ] += f" --aws-access-key-id {aws_access_key} --aws-secret-access-key {aws_access_secret} --s3-bucket-name {edr_s3_bucket}"
+
+    shell_op = ShellOperation(
+        commands=task_config["commands"],
+        working_dir=task_config["working_dir"],
+        shell=(task_config["env"]["shell"] if "shell" in task_config["env"] else "/bin/bash"),
+    )
+    return shell_op.run()
+
+
+# =============================================================================
+# deployment_parmas:
+# {
+#     config: {
+#         tasks: [
+#             {
+#                 "type": DBTCORE,
+#                 "slug": "dbt-run", # coming from django master task table
+#                 "seq": 1,
+#                 "commands": [],
+#                 "env": {},
+#                 "working_dir": ",
+#                 "profiles_dir": "",
+#                 "project_dir": "",
+#                 "cli_profile_block": "",
+#                 "cli_args": [],
+#             }
+#         ]
+#     }
+# }
+def _is_airbyte_sync_task(task_config: dict) -> bool:
+    """Check if a task is an airbyte sync task"""
+    return task_config["type"] == AIRBYTECONNECTION and task_config["slug"] == "airbyte-sync"
+
+
+def _run_task(task_config: dict):
+    """Execute a single task based on its type and slug"""
+    if task_config["type"] == DBTCORE:
+        dbtjob_v1(task_config, task_config["slug"])
+
+    elif task_config["type"] == DBTCLOUD:
+        asyncio.run(dbtcloudjob_v1(task_config, task_config["slug"]))
+
+    elif task_config["type"] == SHELLOPERATION:
+        shellopjob(task_config, task_config["slug"])
+
+    elif task_config["type"] == AIRBYTECONNECTION:
+        if task_config["slug"] == "airbyte-sync":
+            run_airbyte_connection_flow_v1(task_config)
+
+        elif task_config["slug"] == "airbyte-clear":
+            run_airbyte_conn_clear(task_config)
+
+        elif task_config["slug"] == "update-schema":
+            asyncio.run(
+                run_refresh_schema_flow(
+                    task_config, catalog_diff=task_config.get("catalog_diff", {})
+                )
+            )
+
+        else:
+            raise ValueError(f"Unsupported AIRBYTECONNECTION slug: {task_config['slug']}")
+
+    else:
+        raise ValueError(f"Unknown task type: {task_config['type']}")
+
+
+def _run_tasks_sequentially(tasks: list):
+    """Original behavior: run all tasks sequentially, fail fast on any error"""
+    try:
+        for task_config in tasks:
+            _run_task(task_config)
+            sleep(10)
+    except Exception as error:  # skipcq PYL-W0703
+        logger.exception(error)
+        raise
+
+
+def _run_tasks_with_sync_tolerance(tasks: list):
+    """Run all airbyte syncs first (collecting errors), then run the rest sequentially"""
+    sync_tasks = [t for t in tasks if _is_airbyte_sync_task(t)]
+    other_tasks = [t for t in tasks if not _is_airbyte_sync_task(t)]
+
+    # run all airbyte syncs, collecting errors
+    sync_errors = []
+    for task_config in sync_tasks:
+        try:
+            _run_task(task_config)
+        except Exception as error:  # skipcq PYL-W0703
+            logger.error(
+                "Airbyte sync failed for connection %s: %s", task_config.get("connection_id"), error
+            )
+            sync_errors.append(error)
+        sleep(10)
+
+    # if any sync failed, raise before running transforms
+    if sync_errors:
+        raise RuntimeError(
+            f"{len(sync_errors)} airbyte sync(s) failed: " + "; ".join(str(e) for e in sync_errors)
+        )
+
+    # run remaining tasks sequentially, fail fast
+    try:
+        for task_config in other_tasks:
+            _run_task(task_config)
+            sleep(10)
+    except Exception as error:  # skipcq PYL-W0703
+        logger.exception(error)
+        raise
+
+
+@flow
+def deployment_schedule_flow_v4(
+    config: dict,
+    dbt_blocks: list | None = None,  # pylint: disable=unused-argument
+    airbyte_blocks: list | None = None,  # pylint: disable=unused-argument
+):
+    # pylint: disable=broad-exception-caught
+    """modification so dbt test failures are not propagated as flow failures"""
+    config["tasks"].sort(key=lambda blk: blk["seq"])
+
+    if config.get("continue_on_sync_failure"):
+        _run_tasks_with_sync_tolerance(config["tasks"])
+    else:
+        _run_tasks_sequentially(config["tasks"])
