@@ -135,3 +135,5 @@ secrets/
 logs/
 
 Docker/.env.*
+
+profiles.toml
